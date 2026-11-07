@@ -1,3 +1,24 @@
+# Media client fork
+
+Personal Google TV client based on [Moonfin 3.0.0](https://github.com/Moonfin-Client/Moonfin-Core/releases/tag/3.0.0) (`eb43b626f`). Development lives on the `media` branch; `upstream` points to Moonfin-Client/Moonfin-Core.
+
+The normal browsing experience takes its visual direction from the Media web app: colors, button styles, spacing, scroll-edge fades, prominent directors, and restrained focus scaling. A later TV mode will offer random themed surfing with a short history; revisiting an entry advances it by elapsed time. Media opens normal browsing, with TV available inside the client and through a separate launcher shortcut.
+
+## Local TV preview on macOS
+
+Install Flutter 3.47 or newer, full Xcode, and CocoaPods. Then:
+
+```sh
+flutter pub get
+./run-macos-tv.sh
+```
+
+This runs the actual app in debug mode with its TV layout. Use arrow keys to navigate, Enter to select, and Escape to go back. In Appearance, select **Material** interface style to match Android TV; automatic style follows the Mac host. In the running terminal, press `r` for hot reload, `R` for hot restart, and `q` to quit.
+
+The macOS Debug target uses ad-hoc signing and a separate preview bundle ID, so local development does not require Moonfin's signing team or share the upstream app's local data. Mac preview validates shared UI behavior; Android playback, HDR, remote behavior, and device performance still need Google TV checks.
+
+---
+
 <h1 align="center">Moonfin</h1>
 <h3 align="center">Premium Jellyfin, Emby & Plex client for mobile, tablet, desktop, TV, and web</h3>
 

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")"
+exec flutter run -d macos --dart-define=MOONFIN_FORCE_TV=true "$@"
