@@ -6,16 +6,18 @@ The normal browsing experience takes its visual direction from the Media web app
 
 ## Local TV preview on macOS
 
-Install Flutter 3.47 or newer, full Xcode, and CocoaPods. Then:
+Install Flutter 3.47 or newer. The primary styling loop runs the real app's TV UI in a local browser, without Xcode or an Apple account:
 
 ```sh
 flutter pub get
-./run-macos-tv.sh
+./run-tv-preview.sh
 ```
 
-This runs the actual app in debug mode with its TV layout. Use arrow keys to navigate, Enter to select, and Escape to go back. In Appearance, select **Material** interface style to match Android TV; automatic style follows the Mac host. In the running terminal, press `r` for hot reload, `R` for hot restart, and `q` to quit.
+Once Flutter reports ready, open <http://127.0.0.1:8788/> in Chrome and sign into your Jellyfin server. The address stays fixed so browser-local login and preferences survive server restarts. Use arrow keys to navigate, Enter to select, and Escape to go back. In the running terminal, press `r` for hot reload, `R` for hot restart, and `q` to quit. The server listens on loopback only.
 
-The macOS Debug target uses ad-hoc signing and a separate preview bundle ID, so local development does not require Moonfin's signing team or share the upstream app's local data. Mac preview validates shared UI behavior; Android playback, HDR, remote behavior, and device performance still need Google TV checks.
+For an optional native Mac preview, install full Xcode and CocoaPods, then run `./run-macos-tv.sh`. In Appearance, select **Material** interface style to match Android TV; automatic style follows the Mac host. The macOS Debug target is configured for ad-hoc signing and a separate preview bundle ID, but its native build has not been verified. Apple's direct Xcode downloads and the App Store currently require an Apple account.
+
+Browser preview validates the shared UI and navigation. Its player and renderer differ from Android; playback, HDR, remote behavior, and device performance still need Google TV checks.
 
 ---
 
