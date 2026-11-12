@@ -418,7 +418,8 @@ void registerPlaybackModule() {
     if (item is! AggregatedItem) return null;
     final seriesId = item.seriesId;
     if (seriesId == null || seriesId.isEmpty) return null;
-    final raw = item.rawData['MediaStreams'] as List? ?? const [];
+    final raw = manager.currentResolution?.mediaStreams ??
+        item.rawData['MediaStreams'] as List? ?? const [];
     return (
       seriesId: seriesId,
       streams: raw
@@ -428,13 +429,6 @@ void registerPlaybackModule() {
           .toList(),
     );
   }
-
-  manager.onSubtitleTrackChanged = (itemId, index) {
-    _getIt<UserPreferences>().setItemSubtitleStreamIndex(itemId, index);
-  };
-  manager.onAudioTrackChanged = (itemId, index) {
-    _getIt<UserPreferences>().setItemAudioStreamIndex(itemId, index);
-  };
 
   manager.onSecondarySubtitleTrackSelected = (itemId, index, stream) async {
     final streams = manager.currentResolution?.mediaStreams
@@ -465,9 +459,12 @@ void registerPlaybackModule() {
     );
   };
 
-  // This choice carries to the next episode, so it takes the selected signal
-  // rather than the changed ones above, which also fire without the viewer.
+  // Only a viewer selection is remembered. Automatic changes, including
+  // startup/off notifications, must not become overrides of language defaults.
   manager.onSubtitleTrackSelected = (itemId, index) {
+    prefs.setItemSubtitleStreamIndex(
+      itemId, index, streams: manager.currentResolution?.mediaStreams ?? const [],
+    );
     final series = seriesStreams('subtitle');
     if (series == null) return;
     final pref = createSeriesTrackPreferenceFromStream(
@@ -480,6 +477,9 @@ void registerPlaybackModule() {
     _getIt<UserPreferences>().setSeriesSubtitlePreference(series.seriesId, pref);
   };
   manager.onAudioTrackSelected = (itemId, index) {
+    prefs.setItemAudioStreamIndex(
+      itemId, index, streams: manager.currentResolution?.mediaStreams ?? const [],
+    );
     final series = seriesStreams('audio');
     if (series == null) return;
     final pref = createSeriesTrackPreferenceFromStream(

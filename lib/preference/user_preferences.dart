@@ -14,6 +14,7 @@ import '../playback/audio_capability_profile.dart';
 import '../util/device_performance.dart';
 import '../util/idiom/app_ui_idiom.dart';
 import '../util/language_matching.dart';
+import '../util/item_track_selection.dart';
 import '../util/platform_detection.dart';
 import 'home_section_config.dart';
 import 'preference_constants.dart';
@@ -355,6 +356,7 @@ class UserPreferences extends ChangeNotifier {
         ? serverAudio.toLowerCase()
         : sysIso3; // fallback to system language
     _setIfMissing(defaultAudioLanguage, audioToSet);
+    _setIfMissing(preferDefaultAudioTrack, config.playDefaultAudioTrack);
 
     // defaultSubtitleLanguage
     final serverSubtitle = config.subtitleLanguagePreference;
@@ -4281,23 +4283,56 @@ class UserPreferences extends ChangeNotifier {
     notifyListeners();
   }
 
-  int getItemSubtitleStreamIndex(String itemId) {
-    final pref = Preference<int>(
-      key: 'pref_item_subtitle_index_$itemId',
-      defaultValue: -2,
+  int getItemSubtitleStreamIndex(
+    String itemId, {
+    required List<Map<String, dynamic>> streams,
+  }) => _getItemTrackIndex('subtitle', itemId, streams);
+
+  Future<void> setItemSubtitleStreamIndex(
+    String itemId,
+    int? index, {
+    List<Map<String, dynamic>> streams = const [],
+  }) => _setItemTrackIndex('subtitle', itemId, index, streams);
+
+  Preference<String> _itemTrackPreference(String kind, String itemId) {
+    final scope = _activeProfileScopeSuffix();
+    return Preference<String>(
+      key: 'pref_item_track_${kind}_${scope == null ? itemId : '${scope}_$itemId'}',
+      defaultValue: '',
     );
-    return _store.get(pref);
   }
 
-  Future<void> setItemSubtitleStreamIndex(String itemId, int? index) async {
-    final pref = Preference<int>(
-      key: 'pref_item_subtitle_index_$itemId',
-      defaultValue: -2,
-    );
-    if (index == null) {
+  int _getItemTrackIndex(
+    String kind, String itemId, List<Map<String, dynamic>> streams,
+  ) {
+    final raw = _store.get(_itemTrackPreference(kind, itemId));
+    // Legacy pref_item_*_index numbers contain no identity. Preserve them for
+    // rollback, but never interpret them against a different stream list.
+    if (raw.isEmpty) return -2;
+    try {
+      final saved = jsonDecode(raw);
+      if (saved is! Map<String, dynamic>) return -2;
+      final typed = streams.where(
+        (stream) => stream['Type'] == (kind == 'audio' ? 'Audio' : 'Subtitle'),
+      ).toList();
+      return restoreItemTrackSelection(saved, typed) ?? -2;
+    } on FormatException {
+      return -2;
+    }
+  }
+
+  Future<void> _setItemTrackIndex(
+    String kind, String itemId, int? index, List<Map<String, dynamic>> streams,
+  ) async {
+    final pref = _itemTrackPreference(kind, itemId);
+    final typed = streams.where(
+      (stream) => stream['Type'] == (kind == 'audio' ? 'Audio' : 'Subtitle'),
+    ).toList();
+    final selection = itemTrackSelection(typed, index);
+    if (selection == null) {
       await _store.delete(pref);
     } else {
-      await _store.set(pref, index);
+      await _store.set(pref, jsonEncode(selection));
     }
     notifyListeners();
   }
@@ -4337,26 +4372,16 @@ class UserPreferences extends ChangeNotifier {
         : '$_itemSecondarySubtitleSelectionPrefix${suffix}_$itemId';
   }
 
-  int getItemAudioStreamIndex(String itemId) {
-    final pref = Preference<int>(
-      key: 'pref_item_audio_index_$itemId',
-      defaultValue: -2,
-    );
-    return _store.get(pref);
-  }
+  int getItemAudioStreamIndex(
+    String itemId, {
+    required List<Map<String, dynamic>> streams,
+  }) => _getItemTrackIndex('audio', itemId, streams);
 
-  Future<void> setItemAudioStreamIndex(String itemId, int? index) async {
-    final pref = Preference<int>(
-      key: 'pref_item_audio_index_$itemId',
-      defaultValue: -2,
-    );
-    if (index == null) {
-      await _store.delete(pref);
-    } else {
-      await _store.set(pref, index);
-    }
-    notifyListeners();
-  }
+  Future<void> setItemAudioStreamIndex(
+    String itemId,
+    int? index, {
+    List<Map<String, dynamic>> streams = const [],
+  }) => _setItemTrackIndex('audio', itemId, index, streams);
 
   static final hiddenContinueWatchingItems = Preference<String>(
     key: 'hidden_continue_watching_items',

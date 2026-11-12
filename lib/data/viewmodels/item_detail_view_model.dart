@@ -249,12 +249,18 @@ class ItemDetailViewModel extends ChangeNotifier {
   String? _localPersonId;
   String? get localPersonId => _localPersonId;
 
+  List<Map<String, dynamic>> get _playbackStreams =>
+      (_item?.rawData['MediaStreams'] as List? ?? const [])
+          .whereType<Map>()
+          .map((stream) => stream.cast<String, dynamic>())
+          .toList();
+
   int? _selectedAudioIndex;
   int? get selectedAudioIndex => _selectedAudioIndex;
   set selectedAudioIndex(int? value) {
     if (_selectedAudioIndex != value) {
       _selectedAudioIndex = value;
-      GetIt.instance<UserPreferences>().setItemAudioStreamIndex(itemId, value);
+      GetIt.instance<UserPreferences>().setItemAudioStreamIndex(itemId, value, streams: _playbackStreams);
       notifyListeners();
     }
   }
@@ -264,7 +270,7 @@ class ItemDetailViewModel extends ChangeNotifier {
   set selectedSubtitleIndex(int? value) {
     if (_selectedSubtitleIndex != value) {
       _selectedSubtitleIndex = value;
-      GetIt.instance<UserPreferences>().setItemSubtitleStreamIndex(itemId, value);
+      GetIt.instance<UserPreferences>().setItemSubtitleStreamIndex(itemId, value, streams: _playbackStreams);
       notifyListeners();
     }
   }
@@ -959,9 +965,9 @@ class ItemDetailViewModel extends ChangeNotifier {
       }
       _lyrics = LyricsData.empty;
       final prefs = GetIt.instance<UserPreferences>();
-      final savedSubIndex = prefs.getItemSubtitleStreamIndex(itemId);
+      final savedSubIndex = prefs.getItemSubtitleStreamIndex(itemId, streams: _playbackStreams);
       _selectedSubtitleIndex = savedSubIndex == -2 ? null : savedSubIndex;
-      final savedAudioIndex = prefs.getItemAudioStreamIndex(itemId);
+      final savedAudioIndex = prefs.getItemAudioStreamIndex(itemId, streams: _playbackStreams);
       _selectedAudioIndex = savedAudioIndex == -2 ? null : savedAudioIndex;
       _state = ItemDetailState.ready;
       notifyListeners();
