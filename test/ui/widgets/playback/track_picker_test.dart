@@ -66,6 +66,13 @@ class _PgsBackend extends _Backend implements AsyncPgsSubtitleBackend {
 class _Manager extends PlaybackManager {
   _Manager(this._backend, {this.resolution, this.primaryIndex, this.secondaryIndex});
 
+  int timingSession = 0;
+  bool burnedIn = false;
+  @override
+  int get subtitleDelaySessionId => timingSession;
+  @override
+  bool get subtitleIsBurnedIn => burnedIn;
+
   final PlayerBackend _backend;
   final StreamResolutionResult? resolution;
   final int? primaryIndex;
@@ -175,6 +182,39 @@ void main() {
     Navigator.of(tester.element(find.byType(Dialog))).pop();
     await tester.pumpAndSettle();
     expect(events, [true, false, true, false]);
+  });
+
+  testWidgets('an open delay bar cannot change the next programme', (tester) async {
+    final backend = _Backend();
+    final manager = _Manager(backend);
+    addTearDown(manager.dispose);
+    await openPicker(tester, manager);
+    await tester.tap(find.text(l10n.audioDelay));
+    await tester.pumpAndSettle();
+    manager.timingSession++;
+    await tester.tap(find.byTooltip(l10n.delayPlusMs(100)));
+    await tester.pumpAndSettle();
+    expect(backend.audioDelays, isEmpty);
+    expect(TrackPicker.audioDelay, 0);
+    expect(find.byType(Dialog), findsNothing);
+  });
+
+  testWidgets('a track picker from the previous programme cannot open its delay', (tester) async {
+    final manager = _Manager(_Backend());
+    addTearDown(manager.dispose);
+    await openPicker(tester, manager);
+    manager.timingSession++;
+    await tester.tap(find.text(l10n.audioDelay));
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsNothing);
+  });
+
+  testWidgets('burned-in captions do not offer ineffective timing controls', (tester) async {
+    final manager = _Manager(_Backend())..burnedIn = true;
+    addTearDown(manager.dispose);
+    await openPicker(tester, manager, audio: false);
+    expect(find.text(l10n.subtitleDelay), findsNothing);
+    expect(find.text(l10n.off), findsOneWidget);
   });
 
   testWidgets('the secondary subtitle delay opens in the same bar', (

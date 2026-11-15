@@ -77,6 +77,12 @@ abstract final class TrackPicker {
     final l10n = AppLocalizations.of(context);
     final prefs = GetIt.instance<UserPreferences>();
     final item = manager.queueService.currentItem;
+    final delaySession = manager.subtitleDelaySessionId;
+    final openedBackend = manager.backend;
+    bool isCurrentPlayback() =>
+        manager.subtitleDelaySessionId == delaySession &&
+        identical(manager.backend, openedBackend) &&
+        identical(manager.queueService.currentItem, item);
     final canDownloadRemote =
         !audio &&
         !secondary &&
@@ -141,7 +147,7 @@ abstract final class TrackPicker {
           ),
       ],
     ];
-    if (!context.mounted) return;
+    if (!context.mounted || !isCurrentPlayback()) return;
 
     final backend = manager.backend;
     final authoredPgs =
@@ -169,7 +175,8 @@ abstract final class TrackPicker {
         secondaryAppearance?.supportsSecondarySubtitleColor ??
         secondaryControls?.supportsSecondarySubtitleStyle ==
             true;
-    final delayLimits = !showControls
+    final burnedIn = !audio && !secondary && manager.subtitleIsBurnedIn;
+    final delayLimits = !showControls || burnedIn
         ? null
         : secondary
         ? secondaryControls?.supportsSecondarySubtitleDelay == true
@@ -201,6 +208,7 @@ abstract final class TrackPicker {
     if (!audio &&
         showControls &&
         !authoredPgs &&
+        !burnedIn &&
         (secondary || streams.any(isTextSubtitleStream)) &&
         (!secondary ||
             supportsSecondarySize ||
@@ -299,7 +307,7 @@ abstract final class TrackPicker {
         footer: footer,
       ),
     );
-    if (result == null || !context.mounted) return;
+    if (result == null || !context.mounted || !isCurrentPlayback()) return;
     if (delayLimits != null && result == options.length - 1) {
       await _whileOpen(
         onDialogOpenChanged,
@@ -311,9 +319,17 @@ abstract final class TrackPicker {
             label: secondary ? l10n.secondaryDelayAdjustment : delayLabel,
             minDelay: delayLimits.$1,
             maxDelay: delayLimits.$2,
-            onDelayChanged: (d) => secondary
-                ? unawaited(manager.setSecondarySubtitleDelay(d))
-                : _applyDelay(manager, audio: audio, delay: d),
+            onDelayChanged: (d) {
+              if (!isCurrentPlayback()) {
+                Navigator.of(context, rootNavigator: useRootNavigator).pop();
+                return;
+              }
+              if (secondary) {
+                unawaited(manager.setSecondarySubtitleDelay(d));
+              } else {
+                _applyDelay(manager, audio: audio, delay: d);
+              }
+            },
             formatDelay: formatDelay,
           ),
         ),

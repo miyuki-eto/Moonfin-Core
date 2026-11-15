@@ -653,6 +653,12 @@ class PlaybackManager implements AudioOwnable {
       _liveRecoveryStatusController.stream;
   StreamResolutionResult? get currentResolution => _currentResolution;
 
+  /// Changes when a new playback resets timing, including returning to an item.
+  int get subtitleDelaySessionId => _subtitleDelaySessionId;
+
+  /// Burned-in captions cannot be retimed or restyled by the client.
+  bool get subtitleIsBurnedIn => _subtitleIsBurnedIntoVideo(_subtitleStreamIndex);
+
   /// Item that gained a stream on the server after this session resolved. The
   /// resolution still lists what the item had at play time, so a selector
   /// reading it would leave the new track out.

@@ -3,7 +3,7 @@ import 'package:moonfin_design/moonfin_design.dart';
 
 import 'retro_tv_dial.dart';
 
-enum RetroTvAction { details, watch, startOver, previous }
+enum RetroTvAction { details, watch, startOver, audio, subtitles, previous }
 
 String retroChannelLabel(RetroChannel channel) =>
     'CH ${channel.number.toString().padLeft(2, '0')}  ·  ${channel.station.label}';

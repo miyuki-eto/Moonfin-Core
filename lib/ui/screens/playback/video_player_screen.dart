@@ -2902,6 +2902,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         final previous = session.previousChannel;
         if (previous != null) _tuneRetroTvChannel(previous);
         return;
+      case RetroTvAction.audio:
+      case RetroTvAction.subtitles:
+        if (session.busy) return;
+        _hideRetroTvCard();
+        _showTrackSelector(audio: action == RetroTvAction.audio);
+        return;
       case RetroTvAction.watch:
         if (session.busy || !_manager.commitPreview()) return;
         _hideRetroTvCard();

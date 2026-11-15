@@ -38,6 +38,8 @@ class _RetroTvActionMenuState extends State<RetroTvActionMenu> {
       'Watch from beginning',
       Icons.restart_alt_rounded,
     ),
+    (RetroTvAction.audio, 'Audio', Icons.audiotrack_rounded),
+    (RetroTvAction.subtitles, 'Subtitles', Icons.subtitles_outlined),
     (RetroTvAction.previous, 'Previous Channel', Icons.undo_rounded),
   ];
   final _nodes = List.generate(_actions.length, (_) => FocusNode());
@@ -61,7 +63,10 @@ class _RetroTvActionMenuState extends State<RetroTvActionMenu> {
   bool _enabled(RetroTvAction action) => switch (action) {
     RetroTvAction.details => true,
     RetroTvAction.previous => widget.previousAvailable,
-    RetroTvAction.watch || RetroTvAction.startOver => widget.actionsEnabled,
+    RetroTvAction.watch ||
+    RetroTvAction.startOver ||
+    RetroTvAction.audio ||
+    RetroTvAction.subtitles => widget.actionsEnabled,
   };
 
   @override
