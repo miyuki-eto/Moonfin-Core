@@ -289,7 +289,7 @@ class _AdminActivityScreenState extends State<AdminActivityScreen> {
 
   Widget _buildBody(ThemeData theme, AppLocalizations l10n) {
     if (_entries.isEmpty && _isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: LoadingThrobber());
     }
 
     if (_entries.isEmpty && _error != null) {
@@ -331,7 +331,7 @@ class _AdminActivityScreenState extends State<AdminActivityScreen> {
             }
             return const Padding(
               padding: EdgeInsets.all(16),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: LoadingThrobber()),
             );
           }
           final item = listItems[index];

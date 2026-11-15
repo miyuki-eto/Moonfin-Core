@@ -915,7 +915,7 @@ class UserPreferences extends ChangeNotifier {
 
   /// Whether a media bar trailer may play here. A device on the reduced tier
   /// keeps the still image, because the decoder is what takes it down.
-  bool resolveMediaBarTrailerPreview() => inlinePreviewAllowed(
+  bool resolveMediaBarTrailerPreview() => !PlatformDetection.isTizen && inlinePreviewAllowed(
     userEnabled: get(mediaBarTrailerPreview),
     tier: resolveDevicePerformanceTier(),
   );
@@ -1219,7 +1219,7 @@ class UserPreferences extends ChangeNotifier {
 
   static final posterSize = EnumPreference(
     key: 'poster_size',
-    defaultValue: PosterSize.medium,
+    defaultValue: PlatformDetection.isTV ? PosterSize.large : PosterSize.medium,
     values: PosterSize.values,
   );
 
@@ -1800,7 +1800,8 @@ class UserPreferences extends ChangeNotifier {
   /// because it syncs to that server's profile.
   static final detailScreenStyle = EnumPreference(
     key: 'pref_detail_screen_style',
-    defaultValue: DetailScreenStyle.modern,
+    defaultValue: PlatformDetection.isTV
+        ? DetailScreenStyle.nouveau : DetailScreenStyle.modern,
     values: DetailScreenStyle.values,
   );
 
@@ -2042,7 +2043,7 @@ class UserPreferences extends ChangeNotifier {
 
   static final navbarPosition = EnumPreference(
     key: 'pref_navbar_position',
-    defaultValue: NavbarPosition.top,
+    defaultValue: PlatformDetection.isTV ? NavbarPosition.left : NavbarPosition.top,
     values: NavbarPosition.values,
   );
 
@@ -2105,7 +2106,7 @@ class UserPreferences extends ChangeNotifier {
   /// like [detailScreenStyle].
   static final libraryStyle = EnumPreference(
     key: 'pref_library_style',
-    defaultValue: LibraryStyle.classic,
+    defaultValue: PlatformDetection.isTV ? LibraryStyle.docked : LibraryStyle.classic,
     values: LibraryStyle.values,
   );
 
@@ -2130,7 +2131,7 @@ class UserPreferences extends ChangeNotifier {
 
   static final libraryCardTitles = Preference(
     key: 'pref_library_card_titles',
-    defaultValue: true,
+    defaultValue: !PlatformDetection.isTV,
   );
 
   static final useDetailedSubHeadings = Preference(
@@ -2980,7 +2981,7 @@ class UserPreferences extends ChangeNotifier {
     key: 'mediaBarMode',
     defaultValue: PlatformDetection.useMobileUi
         ? mediaBarModeGallery
-        : mediaBarModeMoonfin,
+        : (PlatformDetection.isTV ? mediaBarModeBanner : mediaBarModeMoonfin),
   );
 
   static final mediaBarContentType = Preference(
@@ -3090,6 +3091,7 @@ class UserPreferences extends ChangeNotifier {
 
   /// The preview a focused home card plays, off when the switch is off.
   String resolveMediaPreviewMode() {
+    if (PlatformDetection.isTizen) return mediaPreviewOff;
     if (!get(episodePreviewEnabled)) return mediaPreviewOff;
     return get(mediaPreviewMode) == mediaPreviewTrailer
         ? mediaPreviewTrailer
@@ -3795,14 +3797,14 @@ class UserPreferences extends ChangeNotifier {
   static EnumPreference<LibrarySortBy> librarySortBy(String libraryId) =>
       EnumPreference(
         key: 'library_sort_by_$libraryId',
-        defaultValue: LibrarySortBy.name,
+        defaultValue: PlatformDetection.isTV ? LibrarySortBy.dateAdded : LibrarySortBy.name,
         values: LibrarySortBy.values,
       );
 
   static EnumPreference<SortDirection> librarySortDirection(String libraryId) =>
       EnumPreference(
         key: 'library_sort_dir_$libraryId',
-        defaultValue: SortDirection.ascending,
+        defaultValue: PlatformDetection.isTV ? SortDirection.descending : SortDirection.ascending,
         values: SortDirection.values,
       );
 

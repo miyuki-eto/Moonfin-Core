@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:moonfin_design/moonfin_design.dart';
 
+import '../../settings_visibility.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../preference/bottom_nav_tabs.dart';
 import '../../../preference/preference_constants.dart';
@@ -19,7 +20,7 @@ import 'bottom_nav_theme.dart';
 import 'libraries_sheet.dart';
 
 /// The bottom navbar hub: who is signed in, everything that isn't on the bar,
-/// and the way into settings.
+/// and the available account/server actions.
 Future<void> showBottomNavbarHub({
   required BuildContext context,
   required BottomNavController controller,
@@ -195,38 +196,43 @@ class _BottomNavbarHub extends StatelessWidget {
               ),
             ),
           ],
-          const SizedBox(height: 16),
-          Material(
-            color: onBar.withValues(alpha: 0.05),
-            borderRadius: AppRadius.circular(18),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                if (controller.friendsVisible)
-                  _HubRow(
-                    icon: Icons.people_alt_rounded,
-                    label: l10n.friends,
-                    theme: theme,
-                    trailing: _countBadge(controller.friendsBadge),
-                    onTap: onFriends,
-                  ),
-                if (controller.messagesVisible)
-                  _HubRow(
-                    icon: Icons.info_outline_rounded,
-                    label: l10n.serverMessages,
-                    theme: theme,
-                    trailing: _countBadge(controller.unreadMessages),
-                    onTap: onMessages,
-                  ),
-                _HubRow(
-                  icon: Icons.settings_rounded,
-                  label: l10n.settings,
-                  theme: theme,
-                  onTap: onSettings,
-                ),
-              ],
+          if (controller.friendsVisible ||
+              controller.messagesVisible ||
+              showAppSettings) ...[
+            const SizedBox(height: 16),
+            Material(
+              color: onBar.withValues(alpha: 0.05),
+              borderRadius: AppRadius.circular(18),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  if (controller.friendsVisible)
+                    _HubRow(
+                      icon: Icons.people_alt_rounded,
+                      label: l10n.friends,
+                      theme: theme,
+                      trailing: _countBadge(controller.friendsBadge),
+                      onTap: onFriends,
+                    ),
+                  if (controller.messagesVisible)
+                    _HubRow(
+                      icon: Icons.info_outline_rounded,
+                      label: l10n.serverMessages,
+                      theme: theme,
+                      trailing: _countBadge(controller.unreadMessages),
+                      onTap: onMessages,
+                    ),
+                  if (showAppSettings)
+                    _HubRow(
+                      icon: Icons.settings_rounded,
+                      label: l10n.settings,
+                      theme: theme,
+                      onTap: onSettings,
+                    ),
+                ],
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

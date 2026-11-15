@@ -16,6 +16,12 @@ QueryExecutor openConnection() {
       return NativeDatabase(file);
     }
 
+    if (PlatformDetection.isTizen) {
+      // Tizen supplies SQLite; sqlite3_flutter_libs has no Tizen plugin.
+      open.overrideForAll(_openSystemSqlite);
+      return NativeDatabase(file);
+    }
+
     if (PlatformDetection.isLinux) {
       // Desktop libraries (KDE/GNOME) load the system libsqlite3 at startup,
       // which collides with the bundled sqlite and crashes sqlite3_initialize.

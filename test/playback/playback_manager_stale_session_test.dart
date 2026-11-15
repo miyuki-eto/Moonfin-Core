@@ -90,6 +90,9 @@ class _TestBackend extends Fake implements PlayerBackend {
   }
 
   @override
+  Future<void> waitForTracksReady() async {}
+
+  @override
   Future<void> stop() async {
     stopCalls++;
     playing = false;
@@ -98,10 +101,42 @@ class _TestBackend extends Fake implements PlayerBackend {
   @override
   Future<void> setSubtitleRendererMode(SubtitleRendererMode mode) async {}
 
+  @override
+  Future<void> disableSubtitleTrack() async {}
+
   Future<void> setRepeatMode(RepeatMode mode) async {}
 
   @override
   void dispose() => _errors.close();
+}
+
+class _PreloadingBackend extends _TestBackend
+    implements PreviewStreamPreloader {
+  final preloaded = <(String, Duration)>[];
+  final discarded = <String>[];
+
+  @override
+  void preloadPreviewSource(
+    String url, {
+    String? container,
+    required Duration startPosition,
+  }) => preloaded.add((url, startPosition));
+
+  bool parkEnabled = false;
+  final parked = <String>[];
+
+  @override
+  bool parkPreviewSource(String url) {
+    if (!parkEnabled) return false;
+    parked.add(url);
+    return true;
+  }
+
+  @override
+  bool hasPreviewFrame(String url, Duration position) => parked.contains(url);
+
+  @override
+  void discardPreviewSource(String url) => discarded.add(url);
 }
 
 class _TestResolver extends MediaStreamResolver {
@@ -109,9 +144,13 @@ class _TestResolver extends MediaStreamResolver {
   final List<String?> requestedMediaSourceIds = <String?>[];
   final List<int?> requestedStartTicks = <int?>[];
   final List<bool> requestedDirectPlay = <bool>[];
+  final List<int?> requestedSubtitleIndices = <int?>[];
   StreamPlayMethod playMethod = StreamPlayMethod.directStream;
+  StreamPlayMethod Function(Object item)? playMethodFor;
+  Future<void> Function(Object item)? waitForResolution;
   bool isLocalMedia = false;
   List<Map<String, dynamic>> mediaStreams = const [];
+  int? defaultSubtitleIndex;
 
   @override
   Future<StreamResolutionResult> resolve(
@@ -126,20 +165,23 @@ class _TestResolver extends MediaStreamResolver {
     bool enableDirectStream = true,
     bool enableTranscoding = true,
   }) async {
-    calls++;
+    final call = ++calls;
     requestedMediaSourceIds.add(mediaSourceId);
     requestedStartTicks.add(startTimeTicks);
     requestedDirectPlay.add(enableDirectPlay);
+    requestedSubtitleIndices.add(subtitleStreamIndex);
+    await waitForResolution?.call(mediaItem as Object);
     final type = (mediaItem as Map<String, dynamic>)['Type'];
     final isLive = type == 'TvChannel' || type == 'LiveTvChannel';
     return StreamResolutionResult(
-      streamUrl: 'https://example.test/session-$calls',
-      mediaSourceId: 'source-$calls',
-      liveStreamId: isLive ? 'live-$calls' : null,
-      playSessionId: 'session-$calls',
-      playMethod: playMethod,
+      streamUrl: 'https://example.test/session-$call',
+      mediaSourceId: 'source-$call',
+      liveStreamId: isLive ? 'live-$call' : null,
+      playSessionId: 'session-$call',
+      playMethod: playMethodFor?.call(mediaItem as Object) ?? playMethod,
       isLocalMedia: isLocalMedia,
       mediaStreams: mediaStreams,
+      selectedSubtitleStreamIndex: subtitleStreamIndex ?? defaultSubtitleIndex,
     );
   }
 }
@@ -162,6 +204,7 @@ class _TestService implements PlayerService {
 
   final bool stallProgress;
   final List<String> events = <String>[];
+  final List<int?> startPositions = <int?>[];
   final List<_ProgressRequest> progressRequests = <_ProgressRequest>[];
   final reportedVolumes = <(int?, bool?)>[];
   final List<StreamResolutionResult> stoppedResolutions =
@@ -178,6 +221,7 @@ class _TestService implements PlayerService {
     int? subtitleStreamIndex,
   }) async {
     events.add('start:${resolution.playSessionId}');
+    startPositions.add(positionTicks);
   }
 
   @override
@@ -238,6 +282,460 @@ PlaybackManager _manager(
   ..setPlayerService(service);
 
 void main() {
+  for (final allowSubtitles in [false, true]) {
+    test('preview bitmap subtitles opt-in: $allowSubtitles', () async {
+      final backend = _TestBackend();
+      final resolver = _TestResolver()
+        ..mediaStreams = const [
+          {'Type': 'Video', 'Index': 0, 'Codec': 'h264'},
+          {'Type': 'Audio', 'Index': 1, 'Language': 'eng'},
+          {'Type': 'Subtitle', 'Index': 2, 'Language': 'eng',
+           'Codec': 'PGSSUB', 'DeliveryMethod': 'Encode'},
+        ]
+        ..defaultSubtitleIndex = 2;
+      final service = _TestService();
+      final manager = _manager(backend, resolver, service);
+      addTearDown(manager.dispose);
+      manager.subtitleTrackSelector = (_, _, _, _, _) => 2;
+      await manager.playItems([
+        {'Id': 'bitmap', 'Type': 'Movie'},
+      ], preview: true, allowPreviewSubtitleTranscoding: allowSubtitles);
+      expect(manager.subtitleStreamIndex, allowSubtitles ? 2 : -1);
+      expect(service.events, isEmpty);
+      await manager.stop();
+    });
+  }
+
+  testWidgets(
+    'only one adjacent preview buffers and both resolutions are reusable',
+    (tester) async {
+      final backend = _PreloadingBackend();
+      final resolver = _TestResolver();
+      final service = _TestService();
+      final manager = _manager(backend, resolver, service);
+      addTearDown(manager.dispose);
+      final current = {'Id': 'current', 'Type': 'Movie'};
+      final next = {'Id': 'next', 'Type': 'Movie'};
+      final previous = {'Id': 'previous', 'Type': 'Movie'};
+      const offset = Duration(minutes: 7);
+      await manager.playItems([current], startPosition: offset, preview: true);
+      manager.preparePreviewNeighbors([(next, offset), (previous, offset)]);
+      await tester.pump();
+      expect(resolver.calls, 3);
+      expect(backend.preloaded, [('https://example.test/session-2', offset)]);
+
+      await manager.playItems([previous], startPosition: offset, preview: true);
+      expect(resolver.calls, 3);
+      expect(backend.playedUrls.last, 'https://example.test/session-3');
+      expect(service.transcodingStops.map((r) => r.playSessionId), [
+        'session-2',
+        'session-1',
+      ]);
+      expect(service.events, isEmpty);
+
+      manager.preparePreviewNeighbors([(current, offset)]);
+      await tester.pump();
+      await manager.playItems([current], startPosition: offset, preview: true);
+      expect(resolver.calls, 4);
+      expect(backend.playedUrls.last, backend.preloaded.last.$1);
+      expect(service.events, isEmpty);
+      await manager.stop();
+      expect(service.events, isEmpty);
+    },
+  );
+
+  testWidgets('lookahead can buffer a direct file beside a warm encoder', (
+    tester,
+  ) async {
+    final backend = _PreloadingBackend();
+    final service = _TestService();
+    final current = {'Id': 'current', 'Type': 'Movie'};
+    final next = {'Id': 'next', 'Type': 'Movie'};
+    final file = {'Id': 'file', 'Type': 'Episode'};
+    final transcode = {'Id': 'transcode', 'Type': 'Movie'};
+    final resolver = _TestResolver()
+      ..playMethodFor = (item) => identical(item, file)
+          ? StreamPlayMethod.directPlay
+          : StreamPlayMethod.transcode;
+    final manager = _manager(backend, resolver, service);
+    addTearDown(manager.dispose);
+    const offset = Duration(minutes: 7);
+    await manager.playItems([current], startPosition: offset, preview: true);
+    manager.preparePreviewNeighbors(
+      [(next, offset)],
+      lookahead: (file, offset),
+    );
+    await tester.pump();
+    expect(backend.preloaded.map((entry) => entry.$1), [
+      'https://example.test/session-2',
+      'https://example.test/session-3',
+    ]);
+
+    await manager.playItems([next], startPosition: offset, preview: true);
+    manager.preparePreviewNeighbors(
+      [(file, offset)],
+      lookahead: (transcode, offset),
+    );
+    await tester.pump();
+    expect(resolver.calls, 4);
+    expect(backend.preloaded, hasLength(3));
+
+    await manager.playItems([file], startPosition: offset, preview: true);
+    expect(resolver.calls, 4);
+    expect(backend.playedUrls.last, 'https://example.test/session-3');
+    await manager.stop();
+    expect(service.events, isEmpty);
+  });
+
+  testWidgets('a quick tune can use metadata before the encoder handoff', (
+    tester,
+  ) async {
+    final backend = _PreloadingBackend()..parkEnabled = true;
+    final resolver = _TestResolver()..playMethod = StreamPlayMethod.transcode;
+    final service = _TestService();
+    final manager = _manager(backend, resolver, service);
+    addTearDown(manager.dispose);
+    final first = {'Id': 'first', 'Type': 'Movie'};
+    final second = {'Id': 'second', 'Type': 'Movie'};
+    final next = {'Id': 'next', 'Type': 'Movie'};
+    const offset = Duration(minutes: 7);
+    await manager.playItems([first], startPosition: offset, preview: true);
+    await manager.playItems([second], startPosition: offset, preview: true);
+    manager.preparePreviewNeighbors([(next, offset), (first, offset)]);
+    await tester.pump();
+
+    expect(backend.parked, ['https://example.test/session-1']);
+    expect(resolver.calls, 3);
+    expect(service.transcodingStops, isEmpty);
+    expect(backend.preloaded, isEmpty);
+    await manager.playItems([next], startPosition: offset, preview: true);
+    expect(resolver.calls, 3);
+    expect(backend.playedUrls.last, 'https://example.test/session-3');
+    await manager.stop();
+    expect(service.events, isEmpty);
+  });
+
+  testWidgets('a parked encoder is handed off to the next channel', (
+    tester,
+  ) async {
+    final backend = _PreloadingBackend()..parkEnabled = true;
+    final resolver = _TestResolver()..playMethod = StreamPlayMethod.transcode;
+    final service = _TestService();
+    final manager = _manager(backend, resolver, service);
+    addTearDown(manager.dispose);
+    final first = {'Id': 'first', 'Type': 'Movie'};
+    final second = {'Id': 'second', 'Type': 'Movie'};
+    final next = {'Id': 'next', 'Type': 'Movie'};
+    const offset = Duration(minutes: 7);
+    await manager.playItems([first], startPosition: offset, preview: true);
+    await manager.playItems([second], startPosition: offset, preview: true);
+    manager.preparePreviewNeighbors([(next, offset), (first, offset)]);
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(backend.preloaded, isEmpty);
+    expect(service.transcodingStops, isEmpty);
+
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(service.transcodingStops.single.playSessionId, 'session-1');
+    expect(backend.preloaded.single.$1, 'https://example.test/session-3');
+    await manager.playItems([next], startPosition: offset, preview: true);
+    expect(resolver.calls, 3);
+    expect(backend.playedUrls.last, 'https://example.test/session-3');
+    await manager.stop();
+    expect(service.events, isEmpty);
+  });
+
+  testWidgets('lookahead can warm an encoder behind a direct file', (
+    tester,
+  ) async {
+    final backend = _PreloadingBackend()..parkEnabled = true;
+    final service = _TestService();
+    final current = {'Id': 'current', 'Type': 'Movie'};
+    final file = {'Id': 'file', 'Type': 'Episode'};
+    final next = {'Id': 'next', 'Type': 'Movie'};
+    final resolver = _TestResolver()
+      ..playMethodFor = (item) => identical(item, file)
+          ? StreamPlayMethod.directPlay
+          : StreamPlayMethod.transcode;
+    final manager = _manager(backend, resolver, service);
+    addTearDown(manager.dispose);
+    const offset = Duration(minutes: 7);
+    await manager.playItems([current], startPosition: offset, preview: true);
+    manager.preparePreviewNeighbors([(file, offset)], lookahead: (next, offset));
+    await tester.pump();
+    expect(backend.preloaded.map((entry) => entry.$1), [
+      'https://example.test/session-2',
+      'https://example.test/session-3',
+    ]);
+
+    await manager.playItems([file], startPosition: offset, preview: true);
+    expect(backend.parked, isEmpty);
+    expect(service.transcodingStops.single.playSessionId, 'session-1');
+    manager.preparePreviewNeighbors([(next, offset), (current, offset)]);
+    await manager.playItems([next], startPosition: offset, preview: true);
+    expect(backend.playedUrls.last, 'https://example.test/session-3');
+    await manager.stop();
+    expect(service.events, isEmpty);
+  });
+
+  testWidgets('returning adopts the parked stream at an advanced position', (
+    tester,
+  ) async {
+    final backend = _PreloadingBackend()..parkEnabled = true;
+    final resolver = _TestResolver();
+    final service = _TestService();
+    final manager = _manager(backend, resolver, service);
+    addTearDown(manager.dispose);
+    final first = {'Id': 'first', 'Type': 'Movie'};
+    final second = {'Id': 'second', 'Type': 'Episode'};
+    const initial = Duration(minutes: 7);
+    const livePosition = Duration(minutes: 7, seconds: 4);
+    await manager.playItems([first], startPosition: initial, preview: true);
+    manager.preparePreviewNeighbors([(second, initial)]);
+    await tester.pump();
+    await manager.playItems([second], startPosition: initial, preview: true);
+    manager.preparePreviewNeighbors([(first, livePosition)]);
+    await tester.pump();
+    await manager.playItems(
+      [first],
+      startPosition: livePosition,
+      preview: true,
+    );
+
+    expect(resolver.calls, 2);
+    expect(backend.playedUrls.last, backend.playedUrls.first);
+    expect(backend.startPositions.last, livePosition);
+    expect(service.transcodingStops, isEmpty);
+    await manager.stop();
+    expect(service.transcodingStops.map((r) => r.playSessionId).toSet(), {
+      'session-1',
+      'session-2',
+    });
+    expect(service.events, isEmpty);
+  });
+
+  testWidgets(
+    'warm transcode applies the destination track preferences before tuning',
+    (tester) async {
+      final backend = _PreloadingBackend();
+      final resolver = _TestResolver()..playMethod = StreamPlayMethod.transcode;
+      final service = _TestService();
+      final manager = _manager(backend, resolver, service);
+      addTearDown(manager.dispose);
+      final current = {'Id': 'current', 'Type': 'Movie'};
+      final next = {'Id': 'next', 'Type': 'Episode'};
+      const offset = Duration(minutes: 7);
+      manager.audioTrackSelector = (item, _, _, preview) =>
+          preview && identical(item, next) ? 2 : null;
+      manager.subtitleTrackSelector = (item, _, _, _, preview) =>
+          preview && identical(item, next) ? 4 : null;
+      await manager.playItems([current], startPosition: offset, preview: true);
+      manager.preparePreviewNeighbors([(next, offset)]);
+      await tester.pump();
+      expect(resolver.calls, 3);
+      expect(backend.preloaded, [('https://example.test/session-3', offset)]);
+
+      await manager.playItems([next], startPosition: offset, preview: true);
+      expect(resolver.calls, 3);
+      expect(manager.audioStreamIndex, 2);
+      expect(manager.subtitleStreamIndex, 4);
+      expect(backend.playedUrls.last, backend.preloaded.single.$1);
+      expect(service.events, isEmpty);
+      await manager.stop();
+    },
+  );
+
+  testWidgets(
+    'preview tunes release encodings and report only after commitment',
+    (tester) async {
+      final backend = _TestBackend();
+      final service = _TestService();
+      final manager = _manager(backend, _TestResolver(), service);
+      addTearDown(manager.dispose);
+      final first = {'Id': 'first', 'Type': 'Movie'};
+      final second = {'Id': 'second', 'Type': 'Episode'};
+      const offset = Duration(minutes: 10);
+      await manager.playItems([first], startPosition: offset, preview: true);
+      await tester.pump(const Duration(seconds: 15));
+      await manager.playItems([second], startPosition: offset, preview: true);
+      expect(service.events, isEmpty);
+      expect(service.transcodingStops.single.playSessionId, 'session-1');
+      expect(manager.lastPlayedItem, isNull);
+      expect(backend.startPositions, [offset, offset]);
+
+      const watchedPosition = Duration(minutes: 11);
+      backend.currentPosition = watchedPosition;
+      expect(manager.commitPreview(), isTrue);
+      expect(manager.commitPreview(), isFalse);
+      expect(service.events, ['start:session-2']);
+      expect(service.startPositions, [watchedPosition.inMicroseconds * 10]);
+      expect(manager.lastPlayedItem, same(second));
+      expect(backend.playedUrls, hasLength(2));
+
+      await tester.pump(const Duration(seconds: 10));
+      await manager.stop();
+      expect(service.events, [
+        'start:session-2',
+        'progress:session-2:immediate',
+        'progress:session-2:immediate',
+        'stop:session-2',
+      ]);
+    },
+  );
+
+  test(
+    'starting over discards the preview and reports a new session at zero',
+    () async {
+      final backend = _TestBackend();
+      final service = _TestService();
+      final manager = _manager(backend, _TestResolver(), service);
+      addTearDown(manager.dispose);
+      final item = {'Id': 'movie', 'Type': 'Movie'};
+      const offset = Duration(minutes: 12);
+      await manager.playItems([item], startPosition: offset, preview: true);
+      await manager.playItems([item]);
+      expect(backend.startPositions, [offset, Duration.zero]);
+      expect(service.events, ['start:session-2']);
+      expect(service.transcodingStops.single.playSessionId, 'session-1');
+      await manager.stop();
+      expect(service.events, ['start:session-2', 'stop:session-2']);
+    },
+  );
+
+  test(
+    'a rejected preview open retries even if the backend has a playhead',
+    () async {
+      final backend = _TestBackend();
+      final resolver = _TestResolver();
+      final service = _TestService();
+      final manager = _manager(backend, resolver, service);
+      addTearDown(manager.dispose);
+      final gate = Completer<void>();
+      backend.playGate = gate;
+
+      final opening = manager.playItems(
+        [
+          {'Id': 'rejected', 'Type': 'Movie'},
+        ],
+        startPosition: const Duration(minutes: 3),
+        preview: true,
+      );
+      await pumpEventQueue(times: 5);
+      expect(backend.playedUrls, hasLength(1));
+      gate.completeError(StateError('open rejected'));
+      await opening;
+
+      expect(resolver.requestedDirectPlay, [true, false]);
+      expect(manager.bringupState.phase, PlaybackBringupPhase.ready);
+      expect(service.transcodingStops.first.playSessionId, 'session-1');
+      expect(service.events, isEmpty);
+      await manager.stop();
+    },
+  );
+
+  testWidgets('retro tunes and preloads avoid an automatic subtitle burn-in', (
+    tester,
+  ) async {
+    final backend = _PreloadingBackend();
+    final resolver = _TestResolver()
+      ..playMethod = StreamPlayMethod.transcode
+      ..defaultSubtitleIndex = 4
+      ..mediaStreams = [
+        {
+          'Type': 'Subtitle',
+          'Index': 4,
+          'Codec': 'pgssub',
+          'DeliveryMethod': 'Encode',
+        },
+      ];
+    final service = _TestService();
+    final manager = _manager(backend, resolver, service)
+      ..subtitleTrackSelector = (_, _, _, _, _) => 4;
+    addTearDown(manager.dispose);
+    final first = {'Id': 'first', 'Type': 'Movie'};
+    final next = {'Id': 'next', 'Type': 'Movie'};
+    const offset = Duration(minutes: 3);
+
+    await manager.playItems([first], startPosition: offset, preview: true);
+    expect(resolver.requestedSubtitleIndices, [null, -1]);
+    expect(backend.playedUrls, ['https://example.test/session-2']);
+
+    manager.preparePreviewNeighbors([(next, offset)]);
+    await tester.pump();
+    await manager.playItems([next], startPosition: offset, preview: true);
+    expect(resolver.requestedSubtitleIndices, [null, -1, null, -1]);
+    expect(backend.playedUrls.last, 'https://example.test/session-4');
+    expect(service.events, isEmpty);
+
+    await manager.playItems(
+      [first],
+      subtitleStreamIndex: 4,
+      subtitleSelectionExplicit: true,
+    );
+    expect(resolver.requestedSubtitleIndices.last, 4);
+    await manager.stop();
+  });
+
+  testWidgets('a tune bypasses a stalled speculative lookup', (tester) async {
+    final backend = _PreloadingBackend();
+    final resolver = _TestResolver();
+    final service = _TestService();
+    final manager = _manager(backend, resolver, service);
+    addTearDown(manager.dispose);
+    final current = {'Id': 'current', 'Type': 'Movie'};
+    final next = {'Id': 'next', 'Type': 'Movie'};
+    final gate = Completer<void>();
+    var firstLookup = true;
+    resolver.waitForResolution = (item) async {
+      if (identical(item, next) && firstLookup) {
+        firstLookup = false;
+        await gate.future;
+      }
+    };
+    const offset = Duration(minutes: 7);
+    await manager.playItems([current], startPosition: offset, preview: true);
+    manager.preparePreviewNeighbors([(next, offset)]);
+    final opening = manager.playItems(
+      [next],
+      startPosition: offset,
+      preview: true,
+    );
+    await tester.pump();
+    expect(backend.playedUrls, hasLength(1));
+    await tester.pump(const Duration(milliseconds: 751));
+    await opening;
+
+    expect(backend.playedUrls.last, 'https://example.test/session-3');
+    expect(manager.bringupState.phase, PlaybackBringupPhase.ready);
+    gate.complete();
+    await tester.pump();
+    expect(backend.preloaded, isEmpty);
+    expect(service.events, isEmpty);
+    await manager.stop();
+  });
+
+  test('leaving a preview during startup never reports playback', () async {
+    final backend = _TestBackend();
+    final service = _TestService();
+    final manager = _manager(backend, _TestResolver(), service);
+    addTearDown(manager.dispose);
+    final gate = Completer<void>();
+    backend.playGate = gate;
+    final opening = manager.playItems([
+      {'Id': 'preview', 'Type': 'Movie'},
+    ], preview: true);
+    try {
+      await pumpEventQueue(times: 5);
+      expect(backend.playedUrls, hasLength(1));
+      await manager.stop();
+    } finally {
+      gate.complete();
+      await opening;
+    }
+    expect(service.events, isEmpty);
+    expect(service.transcodingStops, isNotEmpty);
+    expect(manager.commitPreview(), isFalse);
+  });
+
   for (final type in <String>['Movie', 'Episode']) {
     test(
       '$type background stop preserves queue and fresh-resolves position',

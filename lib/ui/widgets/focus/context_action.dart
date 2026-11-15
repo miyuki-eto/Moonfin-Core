@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../../../config/app_features.dart';
+
 import 'package:dio/dio.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
@@ -85,7 +88,9 @@ Future<void> _hideFromResumeOrReset(
 ) async {
   if (!item.isAudioLike) {
     try {
-      if (await mutations.hideFromResume(item.id)) return;
+      if (await mutations.hideFromResume(item.id)) {
+        return;
+      }
     } catch (_) {
       return;
     }
@@ -106,10 +111,11 @@ List<ItemContextAction> contextActionsFor(
   final mutations = GetIt.instance<ItemMutationRepository>();
   final client = GetIt.instance<MediaServerClient>();
   final currentUser = GetIt.instance<UserRepository>().currentUser;
-  final isAdminUser = currentUser?.isAdministrator ?? false;
-  final isSameServerItem = currentUser?.serverId == item.serverId;
+  final isAdminUser =
+      AppFeatures.has(AppFeature.administration) &&
+      (currentUser?.isAdministrator ?? false);
   final requiresCollectionPermission =
-      client.serverType == ServerType.jellyfin && isSameServerItem;
+      client.serverType == ServerType.jellyfin;
   final canManageCollections =
       !requiresCollectionPermission ||
       currentUser?.canManageCollections == true ||
@@ -128,255 +134,311 @@ List<ItemContextAction> contextActionsFor(
 
   if (isMediaType) {
     final prefs = GetIt.instance<UserPreferences>();
-    final defaultAction =
-        prefs.get(UserPreferences.continueWatchingDefaultAction);
+    final defaultAction = prefs.get(
+      UserPreferences.continueWatchingDefaultAction,
+    );
     final flipTopAction =
         isContinueWatchingOrNextUp &&
         defaultAction == ContinueWatchingDefaultAction.play;
 
     if (flipTopAction) {
-      actions.add(ItemContextAction(
-        icon: Icons.info_outline,
-        label: l10n.goToDetailsScreen,
-        onSelect: () async {
-          if (!context.mounted) return;
-          context.push(
-            Destinations.itemOrPhoto(
-              item.id,
-              serverId: item.serverId,
-              type: item.type,
-              channelId: item.channelId,
-            ),
-          );
-        },
-      ));
+      actions.add(
+        ItemContextAction(
+          icon: Icons.info_outline,
+          label: l10n.goToDetailsScreen,
+          onSelect: () async {
+            if (!context.mounted) {
+              return;
+            }
+            context.push(
+              Destinations.itemOrPhoto(
+                item.id,
+                serverId: item.serverId,
+                type: item.type,
+                channelId: item.channelId,
+              ),
+            );
+          },
+        ),
+      );
     } else {
       // First so a remote lands on it with no extra presses. The detail screen
       // does the playing, which keeps the next episode lookup for a series and
       // the external player preference working the way the Play button does.
-      actions.add(ItemContextAction(
-        icon: Icons.play_arrow,
-        label: watchStateOf(item).hasProgress ? l10n.resume : l10n.play,
-        onSelect: () async {
-          if (!context.mounted) return;
-          context.push(
-            Destinations.item(item.id, serverId: item.serverId, autoPlay: true),
-          );
-        },
-      ));
+      actions.add(
+        ItemContextAction(
+          icon: Icons.play_arrow,
+          label: watchStateOf(item).hasProgress ? l10n.resume : l10n.play,
+          onSelect: () async {
+            if (!context.mounted) {
+              return;
+            }
+            context.push(
+              Destinations.item(
+                item.id,
+                serverId: item.serverId,
+                autoPlay: true,
+              ),
+            );
+          },
+        ),
+      );
     }
 
     if (canPlayFromServer(item)) {
-      actions.add(ItemContextAction(
-        icon: Icons.cloud_outlined,
-        label: l10n.playFromServer,
-        onSelect: () async {
-          if (!context.mounted) return;
-          GetIt.instance<PlaybackManager>().streamFromServerOnce(item.id);
-          context.push(
-            Destinations.item(item.id, serverId: item.serverId, autoPlay: true),
-          );
-        },
-      ));
+      actions.add(
+        ItemContextAction(
+          icon: Icons.cloud_outlined,
+          label: l10n.playFromServer,
+          onSelect: () async {
+            if (!context.mounted) {
+              return;
+            }
+            GetIt.instance<PlaybackManager>().streamFromServerOnce(item.id);
+            context.push(
+              Destinations.item(
+                item.id,
+                serverId: item.serverId,
+                autoPlay: true,
+              ),
+            );
+          },
+        ),
+      );
     }
 
-    actions.add(ItemContextAction(
-      icon: item.isPlayed
-          ? Icons.visibility_off_outlined
-          : Icons.visibility_outlined,
-      label: item.isPlayed
-          ? l10n.contextMenuMarkUnwatched
-          : l10n.contextMenuMarkWatched,
-      onSelect: () async {
-        await mutations.setPlayed(item.id, isPlayed: !item.isPlayed);
-        onChanged?.call();
-      },
-    ));
+    actions.add(
+      ItemContextAction(
+        icon: item.isPlayed
+            ? Icons.visibility_off_outlined
+            : Icons.visibility_outlined,
+        label: item.isPlayed
+            ? l10n.contextMenuMarkUnwatched
+            : l10n.contextMenuMarkWatched,
+        onSelect: () async {
+          await mutations.setPlayed(item.id, isPlayed: !item.isPlayed);
+          onChanged?.call();
+        },
+      ),
+    );
 
-    final hasProgress = item.playbackPositionTicks != null &&
+    final hasProgress =
+        item.playbackPositionTicks != null &&
         item.playbackPositionTicks! > 0 &&
         !item.isPlayed;
     if (hasProgress) {
-      actions.add(ItemContextAction(
-        icon: Icons.visibility_off_outlined,
-        label: l10n.contextMenuHideFromContinueWatching,
-        onSelect: () async {
-          final prefs = GetIt.instance<UserPreferences>();
-          if (item.seriesId != null && item.seriesId!.isNotEmpty) {
-            await prefs.hideFromContinueWatching(item.seriesId!);
-          } else {
-            await prefs.hideFromContinueWatching(item.id);
-          }
-          await _hideFromResumeOrReset(mutations, item);
-          onChanged?.call();
-        },
-      ));
+      actions.add(
+        ItemContextAction(
+          icon: Icons.visibility_off_outlined,
+          label: l10n.contextMenuHideFromContinueWatching,
+          onSelect: () async {
+            final prefs = GetIt.instance<UserPreferences>();
+            if (item.seriesId != null && item.seriesId!.isNotEmpty) {
+              await prefs.hideFromContinueWatching(item.seriesId!);
+            } else {
+              await prefs.hideFromContinueWatching(item.id);
+            }
+            await _hideFromResumeOrReset(mutations, item);
+            onChanged?.call();
+          },
+        ),
+      );
     }
 
     final isEpisode = type == 'Episode';
     final hasSeries = item.seriesId != null && item.seriesId!.isNotEmpty;
     if (isEpisode && hasSeries) {
-      actions.add(ItemContextAction(
-        icon: Icons.visibility_off_outlined,
-        label: l10n.contextMenuHideFromNextUp,
-        onSelect: () async {
-          final prefs = GetIt.instance<UserPreferences>();
-          await prefs.hideFromNextUp(item.seriesId!);
-          await prefs.hideFromContinueWatching(item.seriesId!);
-          await _hideFromResumeOrReset(mutations, item);
-          onChanged?.call();
-        },
-      ));
+      actions.add(
+        ItemContextAction(
+          icon: Icons.visibility_off_outlined,
+          label: l10n.contextMenuHideFromNextUp,
+          onSelect: () async {
+            final prefs = GetIt.instance<UserPreferences>();
+            await prefs.hideFromNextUp(item.seriesId!);
+            await prefs.hideFromContinueWatching(item.seriesId!);
+            await _hideFromResumeOrReset(mutations, item);
+            onChanged?.call();
+          },
+        ),
+      );
     }
 
-    actions.add(ItemContextAction(
-      icon: item.isFavorite ? Icons.favorite : Icons.favorite_border,
-      label: item.isFavorite
-          ? l10n.contextMenuRemoveFromFavorites
-          : l10n.contextMenuAddToFavorites,
-      onSelect: () async {
-        await mutations.setFavorite(item.id, isFavorite: !item.isFavorite);
-        onChanged?.call();
-      },
-    ));
+    actions.add(
+      ItemContextAction(
+        icon: item.isFavorite ? Icons.favorite : Icons.favorite_border,
+        label: item.isFavorite
+            ? l10n.contextMenuRemoveFromFavorites
+            : l10n.contextMenuAddToFavorites,
+        onSelect: () async {
+          await mutations.setFavorite(item.id, isFavorite: !item.isFavorite);
+          onChanged?.call();
+        },
+      ),
+    );
 
     if (canManageCollections) {
-      actions.add(ItemContextAction(
-        icon: Icons.collections_bookmark,
-        label: l10n.contextMenuAddToCollection,
-        onSelect: () async {
-          if (!context.mounted) return;
-          final added = await AddToCollectionDialog.show(
-            context,
-            itemIds: [item.id],
-            serverId: item.serverId,
-          );
-          if (added == true) {
-            onChanged?.call();
-          }
-        },
-      ));
+      actions.add(
+        ItemContextAction(
+          icon: Icons.collections_bookmark,
+          label: l10n.contextMenuAddToCollection,
+          onSelect: () async {
+            if (!context.mounted) {
+              return;
+            }
+            final added = await AddToCollectionDialog.show(
+              context,
+              itemIds: [item.id],
+              serverId: item.serverId,
+            );
+            if (added == true) {
+              onChanged?.call();
+            }
+          },
+        ),
+      );
 
       // Only for the collection whose page this menu was opened from. An item
       // can belong to several, and pulling it out of one the user isn't
       // looking at would be a surprise.
       if (collectionRemoval != null) {
-        actions.add(ItemContextAction(
-          icon: Icons.playlist_remove,
-          label: l10n.contextMenuRemoveFromCollection,
-          onSelect: () => _confirmAndRemoveFromCollection(
-            context,
-            item,
-            collectionRemoval,
-            onChanged: onChanged,
+        actions.add(
+          ItemContextAction(
+            icon: Icons.playlist_remove,
+            label: l10n.contextMenuRemoveFromCollection,
+            onSelect: () => _confirmAndRemoveFromCollection(
+              context,
+              item,
+              collectionRemoval,
+              onChanged: onChanged,
+            ),
           ),
-        ));
+        );
       }
     }
 
-    actions.add(ItemContextAction(
-      icon: Icons.playlist_add,
-      label: l10n.addToPlaylist,
-      onSelect: () async {
-        if (!context.mounted) return;
-        final added = await AddToPlaylistDialog.show(
-          context,
-          itemIds: [item.id],
-          serverId: item.serverId,
-        );
-        if (added == true) {
-          onChanged?.call();
-        }
-      },
-    ));
-
-    if (isAdminUser) {
-      actions.add(ItemContextAction(
-        icon: Icons.refresh,
-        label: l10n.adminRefreshMetadata,
-        onSelect: () async {
-          try {
-            await mutations.refreshMetadata(item.id);
-            refreshHomeRows(followUp: true);
-            if (!context.mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(l10n.adminMetadataRefreshRequested)),
-            );
-            onChanged?.call();
-          } on DioException catch (e) {
-            final status = e.response?.statusCode;
-            final data = e.response?.data;
-            final serverMessage = data is String
-                ? data
-                : (data is Map<String, dynamic>
-                      ? (data['message'] ?? data['Message'])?.toString()
-                      : null);
-            final fallback = switch (status) {
-              401 => 'Unauthorized',
-              403 => 'Forbidden',
-              404 => 'Not found',
-              _ => 'HTTP ${status ?? 'error'}',
-            };
-            if (!context.mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  l10n.adminMetadataRefreshFailed(
-                    (serverMessage != null && serverMessage.isNotEmpty)
-                        ? serverMessage
-                        : fallback,
-                  ),
-                ),
-              ),
-            );
-          } catch (e) {
-            if (!context.mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  l10n.adminMetadataRefreshFailed(describeError(e, l10n)),
-                ),
-              ),
-            );
-          }
-        },
-      ));
-
-      if (canIdentifyItemType(type)) {
-        actions.add(ItemContextAction(
-          icon: Icons.search_outlined,
-          label: l10n.adminMetadataIdentify,
+    if (AppFeatures.has(AppFeature.playlists)) {
+      actions.add(
+        ItemContextAction(
+          icon: Icons.playlist_add,
+          label: l10n.addToPlaylist,
           onSelect: () async {
-            if (!context.mounted) return;
-            final isTVChild = item.type == 'Episode' || item.type == 'Season';
-            final hasSeriesId =
-                item.seriesId != null && item.seriesId!.isNotEmpty;
-            final targetItemId =
-                (isTVChild && hasSeriesId) ? item.seriesId! : item.id;
-            final targetItemType =
-                (isTVChild && hasSeriesId) ? 'Series' : item.type;
-            final targetItemName = (isTVChild && hasSeriesId)
-                ? (item.seriesName ?? item.name)
-                : item.name;
-
-            final applied = await IdentifyDialog.show(
+            if (!context.mounted) {
+              return;
+            }
+            final added = await AddToPlaylistDialog.show(
               context,
-              itemId: targetItemId,
-              itemType: targetItemType,
-              itemName: targetItemName,
-              itemYear: isTVChild ? null : item.productionYear,
+              itemIds: [item.id],
+              serverId: item.serverId,
             );
-            if (applied == true) {
+            if (added == true) {
               onChanged?.call();
             }
           },
-        ));
-      }
+        ),
+      );
     }
 
+    if (isAdminUser) {
+      actions.add(
+        ItemContextAction(
+          icon: Icons.refresh,
+          label: l10n.adminRefreshMetadata,
+          onSelect: () async {
+            try {
+              await mutations.refreshMetadata(item.id);
+              refreshHomeRows(followUp: true);
+              if (!context.mounted) {
+                return;
+              }
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(l10n.adminMetadataRefreshRequested)),
+              );
+              onChanged?.call();
+            } on DioException catch (e) {
+              final status = e.response?.statusCode;
+              final data = e.response?.data;
+              final serverMessage = data is String
+                  ? data
+                  : (data is Map<String, dynamic>
+                        ? (data['message'] ?? data['Message'])?.toString()
+                        : null);
+              final fallback = switch (status) {
+                401 => 'Unauthorized',
+                403 => 'Forbidden',
+                404 => 'Not found',
+                _ => 'HTTP ${status ?? 'error'}',
+              };
+              if (!context.mounted) {
+                return;
+              }
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    l10n.adminMetadataRefreshFailed(
+                      (serverMessage != null && serverMessage.isNotEmpty)
+                          ? serverMessage
+                          : fallback,
+                    ),
+                  ),
+                ),
+              );
+            } catch (e) {
+              if (!context.mounted) {
+                return;
+              }
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    l10n.adminMetadataRefreshFailed(describeError(e, l10n)),
+                  ),
+                ),
+              );
+            }
+          },
+        ),
+      );
+
+      if (canIdentifyItemType(type)) {
+        actions.add(
+          ItemContextAction(
+            icon: Icons.search_outlined,
+            label: l10n.adminMetadataIdentify,
+            onSelect: () async {
+              if (!context.mounted) {
+                return;
+              }
+              final isTVChild = item.type == 'Episode' || item.type == 'Season';
+              final hasSeriesId =
+                  item.seriesId != null && item.seriesId!.isNotEmpty;
+              final targetItemId = (isTVChild && hasSeriesId)
+                  ? item.seriesId!
+                  : item.id;
+              final targetItemType = (isTVChild && hasSeriesId)
+                  ? 'Series'
+                  : item.type;
+              final targetItemName = (isTVChild && hasSeriesId)
+                  ? (item.seriesName ?? item.name)
+                  : item.name;
+
+              final applied = await IdentifyDialog.show(
+                context,
+                itemId: targetItemId,
+                itemType: targetItemType,
+                itemName: targetItemName,
+                itemYear: isTVChild ? null : item.productionYear,
+              );
+              if (applied == true) {
+                onChanged?.call();
+              }
+            },
+          ),
+        );
+      }
+    }
   }
 
-  final canChangeArtwork = (isMediaType ||
+  final canChangeArtwork =
+      (isMediaType ||
           type == 'Folder' ||
           type == 'CollectionFolder' ||
           type == 'UserView' ||
@@ -387,31 +449,38 @@ List<ItemContextAction> contextActionsFor(
       isAdminUser;
 
   if (canChangeArtwork) {
-    actions.add(ItemContextAction(
-      icon: Icons.image_outlined,
-      label: l10n.changeArtwork,
-      onSelect: () async {
-        if (!context.mounted) return;
-        final changed = await ChangeArtworkDialog.show(
-          context,
-          item: item,
-        );
-        if (changed == true) {
-          onChanged?.call();
-        }
-      },
-    ));
+    actions.add(
+      ItemContextAction(
+        icon: Icons.image_outlined,
+        label: l10n.changeArtwork,
+        onSelect: () async {
+          if (!context.mounted) {
+            return;
+          }
+          final changed = await ChangeArtworkDialog.show(context, item: item);
+          if (changed == true) {
+            onChanged?.call();
+          }
+        },
+      ),
+    );
   }
 
   if (type == 'Episode' && (item.seriesId?.isNotEmpty ?? false)) {
-    actions.add(ItemContextAction(
-      icon: Icons.tv_outlined,
-      label: l10n.contextMenuGoToSeries,
-      onSelect: () async {
-        if (!context.mounted) return;
-        context.push(Destinations.item(item.seriesId!, serverId: item.serverId));
-      },
-    ));
+    actions.add(
+      ItemContextAction(
+        icon: Icons.tv_outlined,
+        label: l10n.contextMenuGoToSeries,
+        onSelect: () async {
+          if (!context.mounted) {
+            return;
+          }
+          context.push(
+            Destinations.item(item.seriesId!, serverId: item.serverId),
+          );
+        },
+      ),
+    );
   }
 
   return actions;
@@ -456,13 +525,17 @@ Future<void> _confirmAndRemoveFromCollection(
       ],
     ),
   );
-  if (confirmed != true || !context.mounted) return;
+  if (confirmed != true || !context.mounted) {
+    return;
+  }
 
   try {
     await removal.remove(item);
     onChanged?.call();
   } catch (e) {
-    if (!context.mounted) return;
+    if (!context.mounted) {
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(

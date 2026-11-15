@@ -116,12 +116,25 @@ void main() {
     );
   });
 
-  testWidgets('admins get the action even without the collection permission', (
-    tester,
-  ) async {
-    signIn(admin: true);
+  testWidgets(
+    'an administrator still needs collection permission in this app',
+    (tester) async {
+      signIn(admin: true);
+      final actions = await buildActions(tester, collectionRemoval: removal);
+      expect(
+        actions.map((a) => a.label),
+        isNot(contains('Remove from Collection')),
+      );
+    },
+  );
+
+  testWidgets('a server ID alias does not bypass the active collection policy', (tester) async {
+    users.setCurrentUser(PrivateUser(id: 'u1', name: 'Test',
+      serverId: 'saved-connection-id', accessToken: 'token',
+      lastUsed: DateTime(2026)));
     final actions = await buildActions(tester, collectionRemoval: removal);
-    expect(actions.map((a) => a.label), contains('Remove from Collection'));
+    expect(actions.map((a) => a.label), isNot(contains('Add to Collection')));
+    expect(actions.map((a) => a.label), isNot(contains('Remove from Collection')));
   });
 
   testWidgets('menus outside a collection page carry no remove entry', (

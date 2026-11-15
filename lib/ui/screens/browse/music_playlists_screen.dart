@@ -286,7 +286,7 @@ class _MusicPlaylistsScreenState
         if (_tracksLoading)
           const Padding(
             padding: EdgeInsets.all(24),
-            child: Center(child: CircularProgressIndicator()),
+            child: Center(child: LoadingThrobber()),
           )
         else
           for (var i = 0; i < _tracks.length; i++)

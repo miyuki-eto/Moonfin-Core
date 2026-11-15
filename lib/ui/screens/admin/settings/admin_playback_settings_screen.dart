@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:get_it/get_it.dart';
 import 'package:server_core/server_core.dart';
 
@@ -149,7 +150,7 @@ class _AdminPlaybackSettingsScreenState
     final l10n = AppLocalizations.of(context);
     final bottomSafe = MediaQuery.of(context).padding.bottom;
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: LoadingThrobber());
     }
     if (_error != null || _config == null) {
       return Center(

@@ -6,6 +6,7 @@ import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:moonfin_design/moonfin_design.dart';
 
+import '../../settings_visibility.dart';
 import '../../../data/repositories/seerr_repository.dart';
 import '../../../data/services/seerr/seerr_api_models.dart';
 import '../../../data/viewmodels/seerr_browse_view_model.dart';
@@ -343,7 +344,7 @@ class _SeerrBrowseScreenState extends State<SeerrBrowseScreen> {
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: 24),
                   child: Center(
-                    child: CircularProgressIndicator(color: _seerrAccent),
+                    child: LoadingThrobber(color: _seerrAccent),
                   ),
                 ),
               ),
@@ -450,8 +451,10 @@ class _SeerrBrowseHeader extends StatelessWidget {
               _ToolbarButton(icon: Icons.home, onTap: onHome),
               const SizedBox(width: 4),
               _ToolbarButton(icon: Icons.sort, onTap: onSort),
-              const SizedBox(width: 4),
-              _ToolbarButton(icon: Icons.settings, onTap: onSettings),
+              if (showAppSettings) ...[
+                const SizedBox(width: 4),
+                _ToolbarButton(icon: Icons.settings, onTap: onSettings),
+              ],
               if (showInlineFilters) ...[
                 const SizedBox(width: 16),
                 _SeerrFilterChips(filter: filter, onChanged: onFilterChanged),

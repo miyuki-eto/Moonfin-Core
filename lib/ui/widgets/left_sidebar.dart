@@ -1,6 +1,10 @@
+import '../../config/app_features.dart';
+
 import 'dart:async';
 
 import 'dart:math' as math;
+
+import 'package:flutter/cupertino.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +13,7 @@ import 'package:go_router/go_router.dart';
 import 'package:moonfin_design/moonfin_design.dart';
 import 'package:server_core/server_core.dart';
 
+import '../settings_visibility.dart';
 import '../../auth/repositories/user_repository.dart';
 import '../../data/models/aggregated_library.dart';
 import '../../data/repositories/multi_server_repository.dart';
@@ -32,6 +37,10 @@ import '../navigation/destinations.dart';
 import '../navigation/home_refresh_bus.dart';
 import '../navigation/route_lifecycle_observer.dart';
 import 'navigation_layout.dart';
+import 'tv_navigation_button.dart';
+import '../tv/tv26_button.dart';
+import '../tv/tv26_sidebar.dart';
+import '../tv/tv_back_button.dart';
 import 'settings/settings_panel.dart';
 import '../screens/downloads/downloads_panel.dart';
 import 'downloads_nav_slot.dart';
@@ -127,28 +136,43 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
   FocusNode? _previousFocus;
 
   bool get _isMobile => PlatformDetection.useMobileUi;
+  bool get _showsTvBackButton =>
+      PlatformDetection.isTV && _currentPath().startsWith('/item/');
 
   @override
   void initState() {
     super.initState();
     _currentTime = ValueNotifier<String>('');
     _focusNavbarCallback = () {
-      if (!mounted || _homeFocusNode.context == null) return;
+      if (!mounted || _homeFocusNode.context == null) {
+        return;
+      }
       // Expand the rail directly instead of relying on the focus listener,
       // whose expansion can be blocked right after this sidebar mounts.
-      if (!_isMobile && !_isExpanded) {
+      if (!_isMobile && !_isExpanded && !_showsTvBackButton) {
         _expand();
+        if (PlatformDetection.isTV) {
+          return;
+        }
       }
       _homeFocusNode.requestFocus();
     };
     _focusAvatarCallback = () {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
+      if (PlatformDetection.isTV) {
+        _focusNavbarCallback();
+        return;
+      }
       if (_profileFocusNode.context != null) {
         _profileFocusNode.requestFocus();
       } else {
         _expand();
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
+          if (!mounted) {
+            return;
+          }
           if (_profileFocusNode.context != null) {
             _profileFocusNode.requestFocus();
           } else {
@@ -163,13 +187,17 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
     NavigationLayout.focusNavbarNotifier.value = _focusNavbarCallback;
     NavigationLayout.focusNavbarAvatarNotifier.value = _focusAvatarCallback;
     NavigationLayout.chromeFocusRoots.add(_sidebarFocus);
-    _updateClock();
-    _clockTimer = Timer.periodic(
-      const Duration(seconds: 30),
-      (_) => _updateClock(),
-    );
-    _loadUserImage();
-    _userSub = _userRepo.currentUserStream.listen((_) => _loadUserImage());
+    if (!PlatformDetection.isTV) {
+      _updateClock();
+      _clockTimer = Timer.periodic(
+        const Duration(seconds: 30),
+        (_) => _updateClock(),
+      );
+    }
+    if (!PlatformDetection.isTV) {
+      _loadUserImage();
+      _userSub = _userRepo.currentUserStream.listen((_) => _loadUserImage());
+    }
     _prefs.addListener(_onPrefsChanged);
     _viewsRepo.addListener(_onUserViewsChanged);
     GetIt.instance<PluginSyncService>().addListener(_onPrefsChanged);
@@ -183,7 +211,9 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
       _sidebarFocus.addListener(_onSidebarFocusNodeChanged);
     }
     _profileFocusNode.addListener(() {
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+      }
     });
   }
 
@@ -193,7 +223,9 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final route = ModalRoute.of(context);
-    if (route == null || route == _observedRoute) return;
+    if (route == null || route == _observedRoute) {
+      return;
+    }
     if (_observedRoute != null) {
       routeLifecycleObserver.unsubscribe(this);
     }
@@ -272,14 +304,18 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
   }
 
   void _onPrefsChanged() {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     _updateClock();
     _scheduleLibrariesReload();
     setState(() {});
   }
 
   void _onUserViewsChanged() {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     _scheduleLibrariesReload();
   }
 
@@ -287,7 +323,9 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
   /// by itself, so the sidebar only rebuilds when the row comes or goes.
   void _onAchievementsChanged() {
     final available = FriendsNavSlot.isAvailable();
-    if (!mounted || available == _friendsAvailable) return;
+    if (!mounted || available == _friendsAvailable) {
+      return;
+    }
     setState(() => _friendsAvailable = available);
   }
 
@@ -296,7 +334,9 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
   void _scheduleLibrariesReload() {
     _librariesReloadDebounce?.cancel();
     _librariesReloadDebounce = Timer(const Duration(milliseconds: 300), () {
-      if (mounted) _loadLibraries();
+      if (mounted) {
+        _loadLibraries();
+      }
     });
   }
 
@@ -334,7 +374,9 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
                 .getAggregatedLibraries()
           : await _viewsRepo.getUserViews();
 
-      unawaited(GetIt.instance<GameLibraryRegistry>().refresh());
+      if (AppFeatures.has(AppFeature.games)) {
+        unawaited(GetIt.instance<GameLibraryRegistry>().refresh());
+      }
 
       final filtered = useMultiServer
           ? await GetIt.instance<LibraryScopeService>().withoutHiddenLibraries(
@@ -349,9 +391,13 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
   }
 
   bool _librariesEqual(List<AggregatedLibrary> a, List<AggregatedLibrary> b) {
-    if (a.length != b.length) return false;
+    if (a.length != b.length) {
+      return false;
+    }
     for (int i = 0; i < a.length; i++) {
-      if (a[i].id != b[i].id) return false;
+      if (a[i].id != b[i].id) {
+        return false;
+      }
     }
     return true;
   }
@@ -359,12 +405,18 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
   // Kids Mode sends /live-tv back to home, so the guide button would only be a
   // dead end.
   bool get _showLiveTvButton =>
+      AppFeatures.has(AppFeature.liveTv) &&
       !_kidsMode &&
       _prefs.get(UserPreferences.showLiveTvButton) &&
       _libraries.any(isLiveTvLibrary);
 
-  List<AggregatedLibrary> get _navLibraries =>
-      librariesForNav(_libraries, _showLiveTvButton, hideLiveTv: _kidsMode);
+  List<AggregatedLibrary> get _navLibraries => librariesForNav(
+    _libraries
+        .where((library) => AppFeatures.allowsLibrary(library.collectionType))
+        .toList(),
+    _showLiveTvButton,
+    hideLiveTv: _kidsMode,
+  );
 
   bool get _kidsMode => _prefs.get(UserPreferences.kidsModeEnabled);
 
@@ -378,20 +430,36 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
     return _prefs.get(UserPreferences.navbarOpacity) / 100.0;
   }
 
-  void _expand() {
-    if (_isExpanded) return;
+  void _expand({FocusNode? focusTarget}) {
+    if (_isExpanded) {
+      focusTarget?.requestFocus();
+      return;
+    }
     setState(() => _isExpanded = true);
+    if (PlatformDetection.isTV) {
+      // The collapsed entry and expanded menu attach the same node to
+      // different widgets. Hand off after the expanded tree is mounted.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _isExpanded) {
+          (focusTarget ?? _homeFocusNode).requestFocus();
+        }
+      });
+    }
     _labelTimer?.cancel();
     final delay = PlatformDetection.isTV
         ? const Duration(milliseconds: 150)
         : const Duration(milliseconds: 100);
     _labelTimer = Timer(delay, () {
-      if (mounted) setState(() => _showLabels = true);
+      if (mounted) {
+        setState(() => _showLabels = true);
+      }
     });
   }
 
   void _collapse() {
-    if (!_isExpanded) return;
+    if (!_isExpanded) {
+      return;
+    }
     _labelTimer?.cancel();
     setState(() {
       _isExpanded = false;
@@ -415,14 +483,18 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
         _awaitingPopFocusRestore = false;
         _focusHomeTimer?.cancel();
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
+          if (!mounted) {
+            return;
+          }
           _exitSidebarToContent();
         });
-      } else if (_canExpandViaFocus) {
+      } else if (_canExpandViaFocus && !_showsTvBackButton) {
         _expand();
         _focusHomeTimer?.cancel();
         _focusHomeTimer = Timer(Duration.zero, () {
-          if (!mounted) return;
+          if (!mounted) {
+            return;
+          }
           // Only jump to the home item when nothing specific was focused.
           // A handoff can target a specific item like the avatar, and
           // re-requesting home here would stomp it.
@@ -473,11 +545,13 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
     setState(() => _canExpandViaFocus = false);
     _focusExpandGateTimer?.cancel();
     _focusExpandGateTimer = Timer(const Duration(milliseconds: 600), () {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       setState(() => _canExpandViaFocus = true);
       // A focus handoff can land while the gate is closed, which leaves a
       // focused item inside a collapsed rail. Heal that now.
-      if (_sidebarFocus.hasFocus && !_isExpanded) {
+      if (_sidebarFocus.hasFocus && !_isExpanded && !_showsTvBackButton) {
         _expand();
       }
     });
@@ -515,7 +589,8 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
         }
       }
       if (event.logicalKey == LogicalKeyboardKey.arrowUp &&
-          _homeFocusNode.hasFocus) {
+          _homeFocusNode.hasFocus &&
+          !PlatformDetection.isTV) {
         if (_profileFocusNode.context != null) {
           _profileFocusNode.requestFocus();
         }
@@ -524,7 +599,7 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
     }
     // A browser maps Up and Down to scrolling, not focus traversal, so move
     // focus here to keep the menu usable from a keyboard.
-    if (!PlatformDetection.isTV && event.isActionable) {
+    if (event.isActionable) {
       final primary = FocusManager.instance.primaryFocus;
       if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
         primary?.focusInDirection(TraversalDirection.up);
@@ -541,7 +616,9 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
   bool _isDescendantOf(FocusNode? child, FocusNode parent) {
     FocusNode? current = child;
     while (current != null) {
-      if (identical(current, parent)) return true;
+      if (identical(current, parent)) {
+        return true;
+      }
       current = current.parent;
     }
     return false;
@@ -551,12 +628,16 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
     // Runs after the rail's listener, so a restore into it is already handled.
     _awaitingPopFocusRestore = false;
     final primary = FocusManager.instance.primaryFocus;
-    if (primary == null || _sidebarFocus.hasFocus) return;
+    if (primary == null || _sidebarFocus.hasFocus) {
+      return;
+    }
     _previousFocus = primary;
   }
 
   void _restoreFocusOutsideSidebar() {
-    if (NavigationLayout.focusDetailsPlayButton()) return;
+    if (NavigationLayout.focusDetailsPlayButton()) {
+      return;
+    }
     final previous = _previousFocus;
     if (previous != null && _isLaidOutFocusNode(previous)) {
       previous.requestFocus();
@@ -572,7 +653,9 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
       }
       return;
     }
-    if (mounted) FocusScope.of(context).nextFocus();
+    if (mounted) {
+      FocusScope.of(context).nextFocus();
+    }
   }
 
   static bool _isLaidOutFocusNode(FocusNode node) {
@@ -595,13 +678,17 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
         return child;
       }
       final found = _firstFocusableDescendant(child);
-      if (found != null) return found;
+      if (found != null) {
+        return found;
+      }
     }
     return null;
   }
 
   String _normalizedPath(String path) {
-    if (path.isEmpty) return path;
+    if (path.isEmpty) {
+      return path;
+    }
     return (path.endsWith('/') && path.length > 1)
         ? path.substring(0, path.length - 1)
         : path;
@@ -653,6 +740,7 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
           width: expandedWidth,
           child: FocusScope(
             node: _sidebarFocus,
+            skipTraversal: PlatformDetection.isTV,
             onFocusChange: _onSidebarFocusChange,
             onKeyEvent: _onKeyEvent,
             child: AppColorScheme.isGlass
@@ -778,7 +866,53 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
   }
 
   Widget _buildTvLayout() {
-    final backdropColor = _overlayColor().withValues(alpha: _overlayOpacity());
+    if (PlatformDetection.isTV && !_isExpanded) {
+      final l10n = AppLocalizations.of(context);
+      final searching = _currentPath() == Destinations.search;
+      return SizedBox(
+        width: 176,
+        child: FocusScope(
+          node: _sidebarFocus,
+          skipTraversal: PlatformDetection.isTV,
+          onFocusChange: _onSidebarFocusChange,
+          onKeyEvent: _onKeyEvent,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 30, 0, 0),
+              child: _showsTvBackButton
+                  ? TvBackButton(
+                      focusNode: _homeFocusNode,
+                      onExitToContent: _exitSidebarToContent,
+                    )
+                  : TvNavigationButton(
+                      focusNode: _homeFocusNode,
+                      label: searching ? l10n.search : l10n.home,
+                      icon: searching
+                          ? CupertinoIcons.search
+                          : Icons.home_rounded,
+                      onOpen: _expand,
+                      onExitRight: _exitSidebarToContent,
+                    ),
+            ),
+          ),
+        ),
+      );
+    }
+    if (PlatformDetection.isTV) {
+      return Tv26Sidebar(
+        child: FocusScope(
+          node: _sidebarFocus,
+          skipTraversal: PlatformDetection.isTV,
+          onFocusChange: _onSidebarFocusChange,
+          onKeyEvent: _onKeyEvent,
+          child: _buildContent(),
+        ),
+      );
+    }
+    final backdropColor = PlatformDetection.isTV
+        ? AppColorScheme.surface.withValues(alpha: 0.96)
+        : _overlayColor().withValues(alpha: _overlayOpacity());
     final isNeon = ThemeRegistry.active.id == ThemeRegistry.neonPulseId;
     final desktopHoverRail =
         (PlatformDetection.isDesktop || (PlatformDetection.isWeb && !PlatformDetection.useMobileUi)) && !PlatformDetection.isTV;
@@ -791,6 +925,7 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
       child: ClipRect(
         child: FocusScope(
           node: _sidebarFocus,
+          skipTraversal: PlatformDetection.isTV,
           onFocusChange: _onSidebarFocusChange,
           onKeyEvent: _onKeyEvent,
           child: Stack(
@@ -813,8 +948,14 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
                         else
                           Container(
                             width: _kExpandedBackdropWidthTV,
+                            margin: PlatformDetection.isTV
+                                ? const EdgeInsets.fromLTRB(12, 12, 0, 12)
+                                : EdgeInsets.zero,
                             decoration: BoxDecoration(
                               color: backdropColor,
+                              borderRadius: PlatformDetection.isTV
+                                  ? AppRadius.circular(16)
+                                  : null,
                               border: isNeon
                                   ? Border(
                                       right: ThemeRegistry
@@ -864,7 +1005,9 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
       ),
     );
 
-    if (!desktopHoverRail) return rail;
+    if (!desktopHoverRail) {
+      return rail;
+    }
 
     return MouseRegion(
       onEnter: (_) => _expand(),
@@ -912,7 +1055,9 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
         onPressed: () async {
           _onNavigate();
           await showServerMessagesDialog(context);
-          if (!mounted) return;
+          if (!mounted) {
+            return;
+          }
           _serverMessagesFocusNode.requestFocus();
         },
       ),
@@ -936,7 +1081,9 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
         onPressed: () async {
           _onNavigate();
           await FriendsNavSlot.open(context);
-          if (!mounted) return;
+          if (!mounted) {
+            return;
+          }
           _friendsFocusNode.requestFocus();
         },
       ),
@@ -945,19 +1092,27 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
 
   Widget _buildContent() {
     final l10n = AppLocalizations.of(context);
-    final showShuffle = _prefs.get(UserPreferences.showShuffleButton);
+    final showShuffle =
+        AppFeatures.has(AppFeature.surfing) &&
+        _prefs.get(UserPreferences.showShuffleButton);
     final showGenres = _prefs.get(UserPreferences.showGenresButton);
     final showFavorites = _prefs.get(UserPreferences.showFavoritesButton);
     // Checked alongside the show* preferences, never written into them, since
     // those sync and would follow the account to the parent's other devices.
     final kidsMode = _kidsMode;
     final showLiveTv = _showLiveTvButton;
+    final showRetroTv =
+        PlatformDetection.isTV &&
+        !kidsMode &&
+        GetIt.instance.isRegistered<MediaServerClient>() &&
+        GetIt.instance<MediaServerClient>().serverType == ServerType.jellyfin;
     final navLibraries = _navLibraries;
     final showLibraries =
         !kidsMode && _prefs.get(UserPreferences.showLibrariesInToolbar);
     final showLibrariesIndividually =
         _prefs.get(UserPreferences.showLibrariesIndividually);
     final showSyncPlay =
+        AppFeatures.has(AppFeature.syncPlay) &&
         !kidsMode &&
         _prefs.get(UserPreferences.syncPlayEnabled) &&
         _prefs.get(UserPreferences.showSyncPlayButton);
@@ -965,31 +1120,39 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
     final seerrNavLabel = seerrPrefs.labelOrDefault(l10n.seerr);
     final clockBehavior = _prefs.get(UserPreferences.clockBehavior);
     final showClock =
-        clockBehavior == ClockBehavior.always ||
-        clockBehavior == ClockBehavior.inMenus;
+        !PlatformDetection.isTV &&
+        (clockBehavior == ClockBehavior.always ||
+            clockBehavior == ClockBehavior.inMenus);
     return Column(
       children: [
-        Visibility(
-          visible: _isExpanded,
-          maintainSize: true,
-          maintainAnimation: true,
-          maintainState: true,
-          child: _buildUserSection(),
-        ),
+        if (PlatformDetection.isTV)
+          const SizedBox(height: Tv26Style.panelInset)
+        else
+          Visibility(
+            visible: _isExpanded,
+            maintainSize: true,
+            maintainAnimation: true,
+            maintainState: true,
+            child: _buildUserSection(),
+          ),
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
               var mainSlot = 0;
               Color? nextMainSidebarColor() {
                 final c = AppColorScheme.navColorForSlot(mainSlot);
-                if (c != null) mainSlot += 1;
+                if (c != null) {
+                  mainSlot += 1;
+                }
                 return c;
               }
 
               var librarySlot = 0;
               Color? nextLibrarySidebarColor() {
                 final c = AppColorScheme.navColorForSlot(librarySlot);
-                if (c != null) librarySlot += 1;
+                if (c != null) {
+                  librarySlot += 1;
+                }
                 return c;
               }
 
@@ -1029,6 +1192,18 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
                     context.navigateTopLevel(Destinations.search);
                   },
                 ),
+                if (showRetroTv)
+                  _SidebarItem(
+                    key: const ValueKey('sidebar-retro-tv'),
+                    icon: Icons.tv_rounded,
+                    label: 'Retro TV',
+                    baseColor: nextMainSidebarColor(),
+                    showLabel: _showLabels,
+                    onPressed: () {
+                      _exitSidebarToContent();
+                      context.push(Destinations.retroTv);
+                    },
+                  ),
                 if (showShuffle)
                   _SidebarItem(
                     key: const ValueKey('sidebar-shuffle'),
@@ -1115,6 +1290,7 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
                     },
                   ),
                 if (!kidsMode &&
+                    AppFeatures.has(AppFeature.seerr) &&
                     _prefs.get(UserPreferences.showSeerrButton) &&
                     GetIt.instance<PluginSyncService>().seerrAvailable)
                   _SidebarItem(
@@ -1218,40 +1394,54 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
                 // The slot is taken here rather than inside the builder, so the
                 // settings row keeps its colour whether or not there are any
                 // messages to show.
-                if (_prefs.get(UserPreferences.showServerMessagesButton))
+                if (AppFeatures.has(AppFeature.serverMessages) &&
+                    _prefs.get(UserPreferences.showServerMessagesButton))
                   _serverMessagesSidebarItem(
                     navColor: nextMainSidebarColor(),
                     label: l10n.serverMessages,
                   ),
-                _SidebarItem(
-                  key: const ValueKey('sidebar-settings'),
-                  icon: Icons.settings_rounded,
-                  label: l10n.settings,
-                  baseColor: nextMainSidebarColor(),
-                  focusNode: _settingsFocusNode,
-                  showLabel: _showLabels,
-                  onPressed: () async {
-                    _onNavigate();
-                    await SettingsPanel.open(
-                      context,
-                      const SettingsSidePanel(),
-                    );
-                    if (!mounted) return;
-                    _settingsFocusNode.requestFocus();
-                  },
-                ),
+                if (showAppSettings)
+                  _SidebarItem(
+                    key: const ValueKey('sidebar-settings'),
+                    icon: Icons.settings_rounded,
+                    label: l10n.settings,
+                    baseColor: nextMainSidebarColor(),
+                    focusNode: _settingsFocusNode,
+                    showLabel: _showLabels,
+                    onPressed: () async {
+                      _onNavigate();
+                      await SettingsPanel.open(
+                        context,
+                        const SettingsSidePanel(),
+                      );
+                      if (!mounted) {
+                        return;
+                      }
+                      if (PlatformDetection.isTV) {
+                        _expand(focusTarget: _settingsFocusNode);
+                      } else {
+                        _settingsFocusNode.requestFocus();
+                      }
+                    },
+                  ),
               ];
 
               return SingleChildScrollView(
                 controller: _scrollController,
-                padding: const EdgeInsets.symmetric(vertical: 4),
+                padding: PlatformDetection.isTV
+                    ? const EdgeInsets.only(bottom: Tv26Style.panelInset)
+                    : const EdgeInsets.symmetric(vertical: 4),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
                     minHeight: math.max(0, constraints.maxHeight - 8),
                   ),
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: items,
+                    mainAxisAlignment: PlatformDetection.isTV
+                        ? MainAxisAlignment.start
+                        : MainAxisAlignment.center,
+                    children: PlatformDetection.isTV
+                        ? [items[1], items[0], ...items.skip(2)]
+                        : items,
                   ),
                 ),
               );
@@ -1299,7 +1489,9 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
   }
 
   void _onNavigate() {
-    if (_isMobile) _collapse();
+    if (_isMobile) {
+      _collapse();
+    }
   }
 
   void _exitSidebarToContent() {
@@ -1334,9 +1526,10 @@ class _LeftSidebarState extends State<LeftSidebar> with RouteAware {
     final tvFocused = PlatformDetection.isTV && isFocused;
     final focusColor = Color(_prefs.get(UserPreferences.focusColor).colorValue);
 
+    final avatarSize = PlatformDetection.isTV ? 29.0 : 40.0;
     final avatar = Container(
-      width: 40,
-      height: 40,
+      width: avatarSize,
+      height: avatarSize,
       decoration: const BoxDecoration(
         shape: BoxShape.circle,
         gradient: LinearGradient(
@@ -1482,7 +1675,9 @@ class _SidebarItemState extends State<_SidebarItem> {
   void initState() {
     super.initState();
     _focusListener = () {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       setState(() => _isFocused = _focusNode.hasFocus);
     };
     _focusNode.addListener(_focusListener);
@@ -1509,7 +1704,38 @@ class _SidebarItemState extends State<_SidebarItem> {
   @override
   Widget build(BuildContext context) {
     final desktopSidebar =
-        (PlatformDetection.isDesktop || (PlatformDetection.isWeb && !PlatformDetection.useMobileUi)) && !PlatformDetection.isTV;
+        (PlatformDetection.isDesktop ||
+            (PlatformDetection.isWeb && !PlatformDetection.useMobileUi)) &&
+        !PlatformDetection.isTV;
+    if (PlatformDetection.isTV) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: Tv26Style.panelInset),
+        child: Tv26Button(
+          label: widget.label,
+          icon: switch (widget.icon) {
+            Icons.search_rounded => CupertinoIcons.search,
+            Icons.settings_rounded => CupertinoIcons.gear,
+            Icons.favorite_rounded => CupertinoIcons.heart_fill,
+            Icons.live_tv_rounded => CupertinoIcons.tv,
+            _ => widget.icon,
+          },
+          leadingBuilder: widget.iconBuilder == null
+              ? null
+              : (color) => widget.iconBuilder!(18, color),
+          contentAlignment: MainAxisAlignment.start,
+          cornerRadius: Tv26Style.rowRadius,
+          width: 190,
+          height: 43,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          foregroundColor: const Color(0xFFBDBDBD),
+          iconSize: 18,
+          focusNode: _focusNode,
+          transparent: true,
+          onPressed: widget.onPressed,
+        ),
+      );
+    }
     final useBaseForFocus = widget.baseColor != null;
     final highlighted =
         (desktopSidebar && _isHovered) ||
@@ -1558,7 +1784,7 @@ class _SidebarItemState extends State<_SidebarItem> {
                           : focusColor.withValues(alpha: 0.12))
                     : Colors.transparent,
                 borderRadius: PlatformDetection.isTV
-                    ? AppRadius.circular(24)
+                    ? AppRadius.circular(12)
                     : BorderRadius.zero,
               ),
               child: Row(
@@ -1631,7 +1857,9 @@ class _SidebarLibraryItemState extends State<_SidebarLibraryItem> {
   void initState() {
     super.initState();
     _focusNode.addListener(() {
-      if (mounted) setState(() => _isFocused = _focusNode.hasFocus);
+      if (mounted) {
+        setState(() => _isFocused = _focusNode.hasFocus);
+      }
     });
   }
 
@@ -1643,6 +1871,26 @@ class _SidebarLibraryItemState extends State<_SidebarLibraryItem> {
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformDetection.isTV) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: Tv26Style.panelInset),
+        child: Tv26Button(
+          label: widget.label,
+          icon: CupertinoIcons.rectangle_stack,
+          contentAlignment: MainAxisAlignment.start,
+          cornerRadius: Tv26Style.rowRadius,
+          width: 190,
+          height: 43,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          iconSize: 18,
+          foregroundColor: const Color(0xFFBDBDBD),
+          focusNode: _focusNode,
+          transparent: true,
+          onPressed: widget.onPressed,
+        ),
+      );
+    }
     final desktopSidebar =
         (PlatformDetection.isDesktop || (PlatformDetection.isWeb && !PlatformDetection.useMobileUi)) && !PlatformDetection.isTV;
     final focusColor = Color(_prefs.get(UserPreferences.focusColor).colorValue);
@@ -1734,10 +1982,14 @@ class _SidebarMusicCardState extends State<SidebarMusicCard> {
   void initState() {
     super.initState();
     _playSub = _manager.state.playingStream.listen((_) {
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+      }
     });
     _queueSub = _manager.queueService.queueChangedStream.listen((_) {
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+      }
     });
   }
 

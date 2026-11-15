@@ -207,7 +207,7 @@ class _AdminBrandingScreenState extends State<AdminBrandingScreen>
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: LoadingThrobber(),
                     )
                   : const Icon(Icons.upload_outlined),
               label: Text(l10n.adminBrandingSplashUpload),
@@ -231,7 +231,7 @@ class _AdminBrandingScreenState extends State<AdminBrandingScreen>
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: LoadingThrobber());
     }
     if (_error != null || _config == null) {
       return Center(

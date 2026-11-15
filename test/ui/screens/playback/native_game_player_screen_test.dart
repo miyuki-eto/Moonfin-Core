@@ -161,8 +161,31 @@ class _FakeGamesApi extends GamesApi {
 /// Fake native player: lets the test drive _prepare() to a live texture and
 /// then simulate a mid-game core crash by pushing an 'error' event, without a
 /// native runner behind a method/event channel.
+// Preparation mixes real temp-file IO with fake-clock Flutter callbacks.
+// Advance both until the backend starts; a fixed poll count races slow CI IO.
+Future<void> _pumpUntilGameStarted(
+  WidgetTester tester,
+  _FakeNativeGamePlayer player,
+) async {
+  final elapsed = Stopwatch()..start();
+  while (!player.hasStarted &&
+      elapsed.elapsed < const Duration(seconds: 10)) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump(const Duration(milliseconds: 20));
+  }
+  expect(
+    player.hasStarted,
+    isTrue,
+    reason: 'The backend must actually start before testing game controls',
+  );
+  await tester.pumpAndSettle();
+}
+
 class _FakeNativeGamePlayer implements NativeGamePlayer {
   final _eventsController = StreamController<Map<String, dynamic>>.broadcast();
+  bool hasStarted = false;
   int stopCount = 0;
   int pauseCount = 0;
   int resumeCount = 0;
@@ -248,7 +271,10 @@ class _FakeNativeGamePlayer implements NativeGamePlayer {
   }
 
   @override
-  Future<void> start() async {}
+  Future<void> start() async {
+    hasStarted = true;
+  }
+
   @override
   Future<void> pause() async {
     pauseCount++;
@@ -275,6 +301,7 @@ class _FakeNativeGamePlayer implements NativeGamePlayer {
     saveStateCount++;
     return pendingSaveState?.future ?? Future.value(null);
   }
+
   @override
   Future<bool> loadState(Uint8List data) async => false;
   @override
@@ -328,7 +355,9 @@ class _PopCountingObserver extends NavigatorObserver {
 }
 
 String? _highlightedOverlayRowLabel(WidgetTester tester) {
-  for (final container in tester.widgetList<Container>(find.byType(Container))) {
+  for (final container in tester.widgetList<Container>(
+    find.byType(Container),
+  )) {
     final decoration = container.decoration;
     if (decoration is BoxDecoration && decoration.color == Colors.white) {
       final labels = find.descendant(
@@ -502,40 +531,41 @@ void main() {
         .withSnap(gameId, StickSnapMode.fourWay);
 
     test('sends the current game own table, not the default', () {
-      final sent =
-          jsonDecode(controllerMappingsPayload({pad: mapping}, gameId))
-              as Map<String, dynamic>;
+      final sent = jsonDecode(
+        controllerMappingsPayload({pad: mapping}, gameId),
+      ) as Map<String, dynamic>;
 
       expect(sent[pad], {'190': RetroPadButton.a.retroPadIndex});
     });
 
     test('sends the default for a game that has not diverged', () {
-      final sent =
-          jsonDecode(controllerMappingsPayload({pad: mapping}, 'burgertime'))
-              as Map<String, dynamic>;
+      final sent = jsonDecode(
+        controllerMappingsPayload({pad: mapping}, 'burgertime'),
+      ) as Map<String, dynamic>;
 
       expect(sent[pad], {'96': RetroPadButton.a.retroPadIndex});
     });
 
     test('sends a table for every connected profile', () {
-      final sent =
-          jsonDecode(
-                controllerMappingsPayload({
-                  pad: mapping,
-                  'android-p2': NativeControllerMapping.empty
-                      .withBindingForGame(gameId, 191, RetroPadButton.b),
-                }, gameId),
-              )
-              as Map<String, dynamic>;
+      final sent = jsonDecode(
+        controllerMappingsPayload({
+          pad: mapping,
+          'android-p2': NativeControllerMapping.empty.withBindingForGame(
+            gameId,
+            191,
+            RetroPadButton.b,
+          ),
+        }, gameId),
+      ) as Map<String, dynamic>;
 
       expect(sent.keys, containsAll(<String>[pad, 'android-p2']));
       expect(sent['android-p2'], {'191': RetroPadButton.b.retroPadIndex});
     });
 
     test('emits keycodes only, no metadata the parser would skip', () {
-      final sent =
-          jsonDecode(controllerMappingsPayload({pad: mapping}, gameId))
-              as Map<String, dynamic>;
+      final sent = jsonDecode(
+        controllerMappingsPayload({pad: mapping}, gameId),
+      ) as Map<String, dynamic>;
 
       final keys = (sent[pad] as Map<String, dynamic>).keys;
       expect(keys.every((key) => int.tryParse(key) != null), isTrue);
@@ -592,19 +622,16 @@ void main() {
     );
   });
 
-  test(
-    'a rebound face button still resolves, and one binding does not move another',
-    () {
-      final mapping = NativeControllerMapping(const {1000: RetroPadButton.y});
+  test('a rebound face button still resolves, and one binding does not move another', () {
+    final mapping = NativeControllerMapping(const {1000: RetroPadButton.y});
 
-      expect(
-        desktopBoundBit(mapping, GamepadButton.a),
-        1 << RetroPadButton.y.retroPadIndex,
-      );
-      expect(desktopBoundBit(mapping, GamepadButton.b), isNull);
-      expect(desktopBoundBit(mapping, GamepadButton.leftTrigger), isNull);
-    },
-  );
+    expect(
+      desktopBoundBit(mapping, GamepadButton.a),
+      1 << RetroPadButton.y.retroPadIndex,
+    );
+    expect(desktopBoundBit(mapping, GamepadButton.b), isNull);
+    expect(desktopBoundBit(mapping, GamepadButton.leftTrigger), isNull);
+  });
 
   testWidgets(
     'back button escapes the error screen after a mid-game fatal error',
@@ -651,23 +678,8 @@ void main() {
 
         router.push('/game');
         await tester.pump();
-        // Not pumpAndSettle(): the loading screen's CircularProgressIndicator
-        // animates indefinitely, so it never "settles" on its own. _prepare()
-        // also does real (temp-dir-backed) file IO, which completes on the
-        // real event loop rather than flutter_test's fake clock -- runAsync()
-        // lets it actually progress between pumps that pick up the resulting
-        // setState calls, and the explicit duration on pump() lets the
-        // Cupertino-style route transition (macOS) finish too.
-        for (
-          var i = 0;
-          i < 60 && find.byType(Texture).evaluate().isEmpty;
-          i++
-        ) {
-          await tester.runAsync(
-            () => Future<void>.delayed(const Duration(milliseconds: 20)),
-          );
-          await tester.pump(const Duration(milliseconds: 20));
-        }
+        // Advance real IO and the fake clock until the backend starts.
+        await _pumpUntilGameStarted(tester, player);
         expect(find.byType(NativeGamePlayerScreen), findsOneWidget);
 
         // Reached a live-texture state through the real _prepare() flow
@@ -677,7 +689,7 @@ void main() {
         expect(player.hardwareRenderingEnabled, isFalse);
 
         player.emitError('core crashed');
-        await tester.pump();
+        await tester.pumpAndSettle();
 
         expect(find.text('core crashed'), findsOneWidget);
         expect(find.byType(Texture), findsNothing);
@@ -731,13 +743,10 @@ void main() {
           ),
         ),
       );
-      for (
-        var i = 0;
-        i < 60 &&
-            find.byType(Texture).evaluate().isEmpty &&
-            find.textContaining('PlayStation disc image').evaluate().isEmpty;
-        i++
-      ) {
+      final elapsed = Stopwatch()..start();
+      while (elapsed.elapsed < const Duration(seconds: 10) &&
+          find.byType(Texture).evaluate().isEmpty &&
+          find.textContaining('PlayStation disc image').evaluate().isEmpty) {
         await tester.runAsync(
           () => Future<void>.delayed(const Duration(milliseconds: 20)),
         );
@@ -829,19 +838,10 @@ void main() {
 
       router.push('/game');
       await tester.pump();
-      // Not pumpAndSettle(): the loading screen's CircularProgressIndicator
-      // animates indefinitely, so it never "settles" on its own. _prepare()
-      // also does real (temp-dir-backed) file IO, which completes on the
-      // real event loop rather than flutter_test's fake clock -- runAsync()
-      // lets it actually progress between pumps that pick up the resulting
-      // setState calls, and the explicit duration on pump() lets the
-      // Cupertino-style route transition (macOS) finish too.
-      for (var i = 0; i < 60 && find.byType(Texture).evaluate().isEmpty; i++) {
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)),
-        );
-        await tester.pump(const Duration(milliseconds: 20));
-      }
+      // Preparation does real temp-file IO outside the fake clock. Wait for
+      // the backend's actual start, rather than guessing how many 20ms polls
+      // IO needs under a parallel full-suite run. Then settle the ready UI.
+      await _pumpUntilGameStarted(tester, player);
       expect(find.byType(NativeGamePlayerScreen), findsOneWidget);
 
       // Reached a live-texture state through the real _prepare() flow
@@ -921,12 +921,7 @@ void main() {
 
       router.push('/game');
       await tester.pump();
-      for (var i = 0; i < 60 && find.byType(Texture).evaluate().isEmpty; i++) {
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)),
-        );
-        await tester.pump(const Duration(milliseconds: 20));
-      }
+      await _pumpUntilGameStarted(tester, player);
       expect(find.byType(Texture), findsOneWidget);
 
       player.emitMenuPressed();
@@ -961,86 +956,83 @@ void main() {
     }
   });
 
-  testWidgets('returning from an emulator option keeps and centers its cursor',
-      (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-    try {
-      player.options = [
-        for (var i = 0; i < 8; i++)
-          GameCoreOption(
-            id: 'option-$i',
-            label: 'Option $i',
-            current: 'Default',
-            choices: const ['Default', 'Alternate'],
-          ),
-      ];
-      final router = GoRouter(
-        initialLocation: '/game',
-        routes: [
-          GoRoute(
-            path: '/game',
-            builder: (context, state) => NativeGamePlayerScreen(
-              libraryId: 'lib1',
-              gameId: 'game1',
-              core: 'snes',
-              startFresh: true,
-              player: player,
+  testWidgets(
+    'returning from an emulator option keeps and centers its cursor',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      try {
+        player.options = [
+          for (var i = 0; i < 8; i++)
+            GameCoreOption(
+              id: 'option-$i',
+              label: 'Option $i',
+              current: 'Default',
+              choices: const ['Default', 'Alternate'],
             ),
-          ),
-        ],
-      );
-
-      await tester.pumpWidget(
-        MaterialApp.router(
-          routerConfig: router,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-        ),
-      );
-      for (var i = 0; i < 60 && find.byType(Texture).evaluate().isEmpty; i++) {
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        ];
+        final router = GoRouter(
+          initialLocation: '/game',
+          routes: [
+            GoRoute(
+              path: '/game',
+              builder: (context, state) => NativeGamePlayerScreen(
+                libraryId: 'lib1',
+                gameId: 'game1',
+                core: 'snes',
+                startFresh: true,
+                player: player,
+              ),
+            ),
+          ],
         );
-        await tester.pump(const Duration(milliseconds: 20));
+
+        await tester.pumpWidget(
+          MaterialApp.router(
+            routerConfig: router,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+          ),
+        );
+        await _pumpUntilGameStarted(tester, player);
+        expect(find.byType(Texture), findsOneWidget);
+
+        player.emitMenuPressed();
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.text('Emulator settings'),
+          200,
+          scrollable: find.byType(Scrollable).last,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Emulator settings'));
+        await tester.pumpAndSettle();
+
+        for (var i = 0; i < 6; i++) {
+          player.emitButton(5, true);
+          await tester.pump();
+        }
+        expect(_highlightedOverlayRowLabel(tester), startsWith('Option 6:'));
+
+        player.emitButton(0, true);
+        await tester.pumpAndSettle();
+        expect(find.text('Alternate'), findsOneWidget);
+
+        player.emitButton(8, true);
+        await tester.pumpAndSettle();
+
+        expect(_highlightedOverlayRowLabel(tester), startsWith('Option 6:'));
+        final position = tester
+            .state<ScrollableState>(find.byType(Scrollable).last)
+            .position;
+        final expected = (6 * 58 - (position.viewportDimension - 58) / 2)
+            .clamp(position.minScrollExtent, position.maxScrollExtent)
+            .toDouble();
+        expect(position.pixels, closeTo(expected, 1));
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
       }
-      expect(find.byType(Texture), findsOneWidget);
-
-      player.emitMenuPressed();
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(
-        find.text('Emulator settings'),
-        200,
-        scrollable: find.byType(Scrollable).last,
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Emulator settings'));
-      await tester.pumpAndSettle();
-
-      for (var i = 0; i < 6; i++) {
-        player.emitButton(5, true);
-        await tester.pump();
-      }
-      expect(_highlightedOverlayRowLabel(tester), startsWith('Option 6:'));
-
-      player.emitButton(0, true);
-      await tester.pumpAndSettle();
-      expect(find.text('Alternate'), findsOneWidget);
-
-      player.emitButton(8, true);
-      await tester.pumpAndSettle();
-
-      expect(_highlightedOverlayRowLabel(tester), startsWith('Option 6:'));
-      final position = tester
-          .state<ScrollableState>(find.byType(Scrollable).last)
-          .position;
-      final expected = (6 * 58 - (position.viewportDimension - 58) / 2)
-          .clamp(position.minScrollExtent, position.maxScrollExtent)
-          .toDouble();
-      expect(position.pixels, closeTo(expected, 1));
-    } finally {
-      debugDefaultTargetPlatformOverride = null;
-    }
-  });
+    },
+  );
 
   testWidgets(
     'exiting one game keeps another game\'s options for the same core',
@@ -1089,16 +1081,7 @@ void main() {
 
         router.push('/game');
         await tester.pump();
-        for (
-          var i = 0;
-          i < 60 && find.byType(Texture).evaluate().isEmpty;
-          i++
-        ) {
-          await tester.runAsync(
-            () => Future<void>.delayed(const Duration(milliseconds: 20)),
-          );
-          await tester.pump(const Duration(milliseconds: 20));
-        }
+        await _pumpUntilGameStarted(tester, player);
         expect(find.byType(Texture), findsOneWidget);
 
         player.emitMenuPressed();
@@ -1172,12 +1155,7 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
         ),
       );
-      for (var i = 0; i < 60 && find.byType(Texture).evaluate().isEmpty; i++) {
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)),
-        );
-        await tester.pump(const Duration(milliseconds: 20));
-      }
+      await _pumpUntilGameStarted(tester, player);
 
       // The core-wide document is a fallback, not a merge: once this game has
       // its own settings, that is what it plays with.
@@ -1218,12 +1196,7 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
         ),
       );
-      for (var i = 0; i < 60 && find.byType(Texture).evaluate().isEmpty; i++) {
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)),
-        );
-        await tester.pump(const Duration(milliseconds: 20));
-      }
+      await _pumpUntilGameStarted(tester, player);
       expect(find.byType(Texture), findsOneWidget);
 
       final pausesBefore = player.pauseCount;
@@ -1274,12 +1247,7 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
         ),
       );
-      for (var i = 0; i < 60 && find.byType(Texture).evaluate().isEmpty; i++) {
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)),
-        );
-        await tester.pump(const Duration(milliseconds: 20));
-      }
+      await _pumpUntilGameStarted(tester, player);
 
       final savesBefore = gamesApi.saves.length;
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
@@ -1503,12 +1471,7 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
         ),
       );
-      for (var i = 0; i < 60 && find.byType(Texture).evaluate().isEmpty; i++) {
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)),
-        );
-        await tester.pump(const Duration(milliseconds: 20));
-      }
+      await _pumpUntilGameStarted(tester, player);
       expect(find.byType(Texture), findsOneWidget);
 
       player.emitMenuPressed();

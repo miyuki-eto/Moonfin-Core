@@ -1,3 +1,5 @@
+import '../../widgets/startup_loading.dart';
+
 import 'dart:async';
 
 import 'package:custom_tv_text_field/custom_tv_text_field.dart';
@@ -35,6 +37,7 @@ import '../../widgets/allow_self_signed_dialog.dart';
 import '../../widgets/client_certificate_dialog.dart';
 import '../../widgets/login_scaffold.dart';
 import '../../widgets/pin_entry_dialog.dart';
+import '../../tv/tv26_button.dart';
 import '../../widgets/sign_in_qr_code.dart';
 
 final _kAccent = AppColorScheme.accent;
@@ -50,13 +53,21 @@ Future<bool> passesPinCheckAfterSignIn({
   required Future<bool> Function(VoidCallback onForgotPin) askForPin,
   Future<bool> Function()? resetPin,
 }) async {
-  if (!pinUtil.isPinEnabled) return true;
+  if (!pinUtil.isPinEnabled) {
+    return true;
+  }
   var forgot = forgotPin;
   if (!forgot || !canResetPin) {
-    if (await askForPin(() => forgot = true)) return true;
-    if (!forgot || !canResetPin) return false;
+    if (await askForPin(() => forgot = true)) {
+      return true;
+    }
+    if (!forgot || !canResetPin) {
+      return false;
+    }
   }
-  if (resetPin != null) return resetPin();
+  if (resetPin != null) {
+    return resetPin();
+  }
   await pinUtil.removePin();
   return true;
 }
@@ -169,9 +180,9 @@ class _LoginScreenState extends State<LoginScreen> {
   /// Names that signed in on this server before, freshest first, offered as
   /// keyboard chips so a returning user never types theirs again.
   void _loadRecentUsernames() {
-    final users = GetIt.instance<AuthenticationStore>()
-        .getUsers(widget.serverId)
-      ..sort((a, b) => b.lastUsed.compareTo(a.lastUsed));
+    final users = GetIt.instance<AuthenticationStore>().getUsers(
+      widget.serverId,
+    )..sort((a, b) => b.lastUsed.compareTo(a.lastUsed));
     _recentUsernames = [for (final user in users) user.name];
   }
 
@@ -217,8 +228,12 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   bool _handleTvFieldOpen(KeyEvent event, FocusNode focusNode) {
-    if (!PlatformDetection.isTV || _isLoading) return false;
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
+    if (!PlatformDetection.isTV || _isLoading) {
+      return false;
+    }
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return false;
+    }
     if (event.logicalKey.isBackKey) {
       final tvFieldKey = focusNode == _usernameFocus
           ? _usernameTvFieldKey
@@ -233,7 +248,9 @@ class _LoginScreenState extends State<LoginScreen> {
     }
     if (event.logicalKey == LogicalKeyboardKey.enter ||
         event.logicalKey == LogicalKeyboardKey.select) {
-      if (!focusNode.hasFocus) focusNode.requestFocus();
+      if (!focusNode.hasFocus) {
+        focusNode.requestFocus();
+      }
       if (focusNode == _usernameFocus) {
         _usernameTvFieldKey.currentState?.openKeyboard();
       } else if (focusNode == _passwordFocus) {
@@ -253,11 +270,15 @@ class _LoginScreenState extends State<LoginScreen> {
         _tvKeyboardVisible = visible;
       });
     }
-    if (!visible) return;
+    if (!visible) {
+      return;
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final fieldContext = fieldKey.currentContext;
-      if (fieldContext == null || !mounted) return;
+      if (fieldContext == null || !mounted) {
+        return;
+      }
       Scrollable.ensureVisible(
         fieldContext,
         alignment: 0.12,
@@ -290,7 +311,9 @@ class _LoginScreenState extends State<LoginScreen> {
     await _serverRepo.loadStoredServers();
     final server = _serverRepo.getServer(widget.serverId);
     if (server == null) {
-      if (mounted) context.go(Destinations.serverSelect);
+      if (mounted) {
+        context.go(Destinations.serverSelect);
+      }
       return;
     }
 
@@ -335,18 +358,24 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _selectQuickConnect() {
-    if (_showQuickConnect) return;
+    if (_showQuickConnect) {
+      return;
+    }
     setState(() {
       _showQuickConnect = true;
       _errorMessage = null;
       _untrustedCertificate = false;
       _clientCertificateRequired = false;
     });
-    if (_quickConnectTimer == null) _startQuickConnect();
+    if (_quickConnectTimer == null) {
+      _startQuickConnect();
+    }
   }
 
   void _selectPassword() {
-    if (!_showQuickConnect) return;
+    if (!_showQuickConnect) {
+      return;
+    }
     _stopQuickConnect();
     setState(() {
       _showQuickConnect = false;
@@ -363,13 +392,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _startQuickConnect({bool isInitial = false}) async {
     final client = _client;
-    if (client == null) return;
+    if (client == null) {
+      return;
+    }
 
     try {
       final result = await client.authApi.initiateQuickConnect();
       final code = result['Code'] as String?;
       final secret = result['Secret'] as String?;
-      if (code == null || secret == null) return;
+      if (code == null || secret == null) {
+        return;
+      }
 
       if (mounted) {
         setState(() {
@@ -383,7 +416,9 @@ class _LoginScreenState extends State<LoginScreen> {
         (_) => _pollQuickConnect(),
       );
     } on DioException catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       if (isClientCertificateRejected(e)) {
         unawaited(_showClientCertificateRequired());
         return;
@@ -407,7 +442,8 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
       final l10n = AppLocalizations.of(context);
-      final isQcDisabled = status == 401 ||
+      final isQcDisabled =
+          status == 401 ||
           detail.toLowerCase().contains('disabled') ||
           detail.toLowerCase().contains('quickconnect is disabled') ||
           detail.toLowerCase().contains('quick connect is disabled');
@@ -416,22 +452,25 @@ class _LoginScreenState extends State<LoginScreen> {
         _errorMessage = isQcDisabled
             ? 'QuickConnect is disabled'
             : (status == null
-                ? l10n.quickConnectUnavailableWithStatus(e.type.name, detail)
-                : l10n.quickConnectUnavailableWithStatus(
-                    '$status, ${e.type.name}',
-                    detail,
-                  ));
+                  ? l10n.quickConnectUnavailableWithStatus(e.type.name, detail)
+                  : l10n.quickConnectUnavailableWithStatus(
+                      '$status, ${e.type.name}',
+                      detail,
+                    ));
       });
 
       if (isQcDisabled && isInitial) {
         _selectPassword();
       }
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       final l10n = AppLocalizations.of(context);
       setState(
-        () => _errorMessage =
-            l10n.quickConnectUnavailable(describeError(e, l10n)),
+        () => _errorMessage = l10n.quickConnectUnavailable(
+          describeError(e, l10n),
+        ),
       );
     }
   }
@@ -439,7 +478,9 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _pollQuickConnect() async {
     final client = _client;
     final secret = _quickConnectSecret;
-    if (client == null || secret == null) return;
+    if (client == null || secret == null) {
+      return;
+    }
 
     try {
       final result = await client.authApi.checkQuickConnect(secret);
@@ -471,11 +512,15 @@ class _LoginScreenState extends State<LoginScreen> {
               }
               // A failed PIN goes back to sign in, where another account or
               // method can be tried.
-              if (mounted) context.go('${Destinations.login}?serverId=${_server!.id}');
+              if (mounted) {
+                context.go('${Destinations.login}?serverId=${_server!.id}');
+              }
               return;
             }
 
-            if (mounted) context.go(Destinations.home);
+            if (mounted) {
+              context.go(Destinations.home);
+            }
           }
         }
       }
@@ -509,12 +554,16 @@ class _LoginScreenState extends State<LoginScreen> {
       _errorMessage = AppLocalizations.of(context).untrustedServerCertificate;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _allowCertFocus.requestFocus();
+      if (mounted) {
+        _allowCertFocus.requestFocus();
+      }
     });
   }
 
   Future<void> _allowSelfSignedAndRetry() async {
-    if (!await confirmAllowSelfSignedCertificates(context) || !mounted) return;
+    if (!await confirmAllowSelfSignedCertificates(context) || !mounted) {
+      return;
+    }
     await _retrySignIn();
   }
 
@@ -535,32 +584,39 @@ class _LoginScreenState extends State<LoginScreen> {
     final l10n = AppLocalizations.of(context);
     final host = Uri.tryParse(_server?.address ?? '')?.host ?? '';
     final stored = await GetIt.instance<ClientCertificateStore>().get(host);
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     final expired = stored != null && stored.notAfter.isBefore(DateTime.now());
     setState(() {
       _isLoading = false;
       _clientCertificateRequired = true;
       _errorMessage = expired
           ? l10n.clientCertExpired(
-              MaterialLocalizations.of(
-                context,
-              ).formatMediumDate(stored.notAfter.toLocal()),
+              MaterialLocalizations.of(context)
+                  .formatMediumDate(stored.notAfter.toLocal()),
             )
           : l10n.clientCertRequired;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _clientCertFocus.requestFocus();
+      if (mounted) {
+        _clientCertFocus.requestFocus();
+      }
     });
   }
 
   Future<void> _importClientCertAndLogin() async {
     final server = _server;
-    if (server == null) return;
+    if (server == null) {
+      return;
+    }
     final saved = await showClientCertificateDialog(
       context: context,
       host: Uri.tryParse(server.address)?.host ?? server.address,
     );
-    if (saved == null || !mounted) return;
+    if (saved == null || !mounted) {
+      return;
+    }
     await _retrySignIn();
   }
 
@@ -570,10 +626,14 @@ class _LoginScreenState extends State<LoginScreen> {
       _errorMessage = message;
     });
 
-    if (!PlatformDetection.isTV) return;
+    if (!PlatformDetection.isTV) {
+      return;
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       (_hasPassword ? _passwordFocus : _signInFocus).requestFocus();
     });
   }
@@ -630,14 +690,18 @@ class _LoginScreenState extends State<LoginScreen> {
     _pinResetRefused = false;
     // A device that has not seen this user's PIN learns of it here.
     await guard.refresh();
-    if (!mounted) return false;
+    if (!mounted) {
+      return false;
+    }
     return passesPinCheckAfterSignIn(
       pinUtil: guard.pin,
       forgotPin: widget.resetPin,
       canResetPin: canResetPin,
       resetPin: () async {
         final cleared = await guard.resetForgotten(userId);
-        if (!cleared) _pinResetRefused = true;
+        if (!cleared) {
+          _pinResetRefused = true;
+        }
         return cleared;
       },
       askForPin: (onForgotPin) => PinEntryDialog.show(
@@ -653,9 +717,13 @@ class _LoginScreenState extends State<LoginScreen> {
     // The sign in button goes dead once this is running, but the flag only
     // reaches it on the next build, and the password field submits straight
     // here, so one remote select can sign in twice.
-    if (_isLoading) return;
+    if (_isLoading) {
+      return;
+    }
     final username = _usernameController.text.trim();
-    if (username.isEmpty || _client == null || _server == null) return;
+    if (username.isEmpty || _client == null || _server == null) {
+      return;
+    }
 
     setState(() {
       _isLoading = true;
@@ -672,7 +740,9 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text,
       );
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       final l10n = AppLocalizations.of(context);
       switch (result) {
@@ -683,7 +753,9 @@ class _LoginScreenState extends State<LoginScreen> {
             username: username,
             password: _passwordController.text,
           );
-          if (!mounted) return;
+          if (!mounted) {
+            return;
+          }
           if (switched) {
             final passed = await _passesPinCheck(
               result.userId,
@@ -702,7 +774,9 @@ class _LoginScreenState extends State<LoginScreen> {
               return;
             }
 
-            if (mounted) context.go(Destinations.home);
+            if (mounted) {
+              context.go(Destinations.home);
+            }
             return;
           }
           _finishLoginWithError(l10n.loginFailed);
@@ -730,7 +804,9 @@ class _LoginScreenState extends State<LoginScreen> {
           _finishLoginWithError(l10n.loginFailed);
       }
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       _finishLoginWithError(AppLocalizations.of(context).loginFailed);
     }
   }
@@ -740,20 +816,17 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_server == null) {
       return SignInBackScope(
         onBack: _navigateBack,
-        child: const Scaffold(body: Center(child: CircularProgressIndicator())),
+        child: const Scaffold(body: StartupLoading()),
       );
     }
 
+    finishWebStartupSplashAfterFrame(context);
     final l10n = AppLocalizations.of(context);
 
     return SignInBackScope(
       onBack: _navigateBack,
       child: LoginScaffold(
         maxWidth: _quickConnectQrBeside ? 900 : 600,
-        header: Padding(
-          padding: const EdgeInsets.only(bottom: 24),
-          child: Image.asset('assets/images/logo_and_text.png', height: 64),
-        ),
         footer: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           height: PlatformDetection.isTV && _tvKeyboardVisible ? 280 : 0,
@@ -764,16 +837,14 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               Text(
                 l10n.signIn,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: Theme.of(context).textTheme.headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4),
               Text(
                 l10n.connectingToServer(_server!.name),
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: _loginForeground(0.5)),
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: _loginForeground(0.5)),
               ),
               const SizedBox(height: 24),
               if (_supportsQuickConnect) ...[
@@ -793,7 +864,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _withQuickConnectQrBeside(Widget content) {
-    if (!_quickConnectQrBeside) return content;
+    if (!_quickConnectQrBeside) {
+      return content;
+    }
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -841,7 +914,7 @@ class _LoginScreenState extends State<LoginScreen> {
         style:
             FilledButton.styleFrom(
               backgroundColor: _kAccent,
-              foregroundColor: _loginForegroundSolid,
+              foregroundColor: AppColorScheme.onAccent,
               minimumSize: const Size(120, 44),
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
               shape: RoundedRectangleBorder(
@@ -869,6 +942,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   ButtonStyle _outlinedFocusStyle({required EdgeInsetsGeometry padding}) {
+    if (PlatformDetection.isTV) return const ButtonStyle();
     return OutlinedButton.styleFrom(
       foregroundColor: _loginForeground(0.8),
       padding: padding,
@@ -881,7 +955,9 @@ class _LoginScreenState extends State<LoginScreen> {
         return BorderSide(color: _loginForeground(0.2));
       }),
       foregroundColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.focused)) return _kAccent;
+        if (states.contains(WidgetState.focused)) {
+          return _kAccent;
+        }
         return _loginForeground(0.8);
       }),
     );
@@ -945,9 +1021,8 @@ class _LoginScreenState extends State<LoginScreen> {
             tappable
                 ? l10n.quickConnectTapOrScanHint
                 : l10n.quickConnectScanHint,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: _loginForeground(0.5)),
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: _loginForeground(0.5)),
             textAlign: TextAlign.center,
           ),
         ),
@@ -964,9 +1039,8 @@ class _LoginScreenState extends State<LoginScreen> {
       children: [
         Text(
           l10n.quickConnectInstruction,
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: _loginForeground(0.7)),
+          style: Theme.of(context).textTheme.bodyMedium
+              ?.copyWith(color: _loginForeground(0.7)),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 20),
@@ -994,21 +1068,18 @@ class _LoginScreenState extends State<LoginScreen> {
           SizedBox(
             height: 24,
             width: 24,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
+            child: LoadingThrobber(
               color: _kAccent.withValues(alpha: 0.7),
             ),
           ),
           const SizedBox(height: 12),
           Text(
             l10n.waitingForAuthorization,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: _loginForeground(0.5)),
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: _loginForeground(0.5)),
           ),
         ] else ...[
-          if (_errorMessage == null)
-            const CircularProgressIndicator(),
+          if (_errorMessage == null) const LoadingThrobber(),
         ],
         if (_errorMessage != null) ...[
           const SizedBox(height: 16),
@@ -1207,6 +1278,14 @@ class _LoginScreenState extends State<LoginScreen> {
     required VoidCallback? onPressed,
     bool isLoading = false,
   }) {
+    if (PlatformDetection.isTV && onPressed != null) {
+      return Tv26Button(
+        label: label,
+        focusNode: focusNode,
+        onPressed: onPressed,
+        height: 44,
+      );
+    }
     return OutlinedButton(
       focusNode: focusNode,
       onPressed: onPressed,
@@ -1217,8 +1296,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ? SizedBox(
               height: 20,
               width: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
+              child: LoadingThrobber(
                 color: _loginForegroundSolid,
               ),
             )
@@ -1227,7 +1305,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   String _formatCode(String code) {
-    if (code.length == 6) return '${code.substring(0, 3)} ${code.substring(3)}';
+    if (code.length == 6) {
+      return '${code.substring(0, 3)} ${code.substring(3)}';
+    }
     return code;
   }
 }

@@ -522,7 +522,7 @@ class _PluginSettingsSectionState extends State<PluginSettingsSection> {
           if (_profileSyncBusy)
             const Padding(
               padding: EdgeInsets.only(top: 8),
-              child: LinearProgressIndicator(),
+              child: LoadingThrobber(),
             ),
         ],
       ),

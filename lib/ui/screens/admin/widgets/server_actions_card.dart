@@ -51,7 +51,7 @@ class ServerActionsCard extends ConsumerWidget {
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: LoadingThrobber(),
                         )
                       : const Icon(Icons.refresh),
                   label: Text(l10n.adminScanAllLibraries),

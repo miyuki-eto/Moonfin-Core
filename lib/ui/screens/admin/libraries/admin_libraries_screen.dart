@@ -81,7 +81,7 @@ class AdminLibrariesScreen extends ConsumerWidget {
         : null;
 
     return librariesAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: LoadingThrobber()),
       error: (e, _) => Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -233,7 +233,7 @@ class AdminLibrariesScreen extends ConsumerWidget {
                       ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: LoadingThrobber(),
                         )
                       : const Icon(Icons.refresh),
                   label: Text(scanProgress == null

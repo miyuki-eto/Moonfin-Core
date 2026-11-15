@@ -31,8 +31,7 @@ class NouveauSeasonSelector extends StatefulWidget {
   });
 
   @override
-  State<NouveauSeasonSelector> createState() =>
-      NouveauSeasonSelectorState();
+  State<NouveauSeasonSelector> createState() => NouveauSeasonSelectorState();
 }
 
 class NouveauSeasonSelectorState extends State<NouveauSeasonSelector>
@@ -445,6 +444,7 @@ class NouveauSeasonSelectorState extends State<NouveauSeasonSelector>
         onNavigateDown: widget.onNavigateDown,
         allowLeftEdgeExit: widget.allowLeftEdgeExit,
         selectOnFocus: true,
+        standaloneTabs: true,
       ),
     );
   }

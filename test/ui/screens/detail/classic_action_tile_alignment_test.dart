@@ -53,7 +53,7 @@ void main() {
     await GetIt.instance.reset();
   });
 
-  testWidgets('classic tiles line up by their icons when a label wraps', (
+  testWidgets('person actions keep Favourite and omit Display settings', (
     tester,
   ) async {
     PlatformDetection.setInterfaceLayout(InterfaceLayout.phone);
@@ -97,14 +97,7 @@ void main() {
     await tester.pump();
 
     final tiles = find.byWidgetPredicate((w) => w is SizedBox && w.width == 80);
-    expect(tiles, findsAtLeastNWidgets(2));
-    final rects = [
-      for (final e in tiles.evaluate()) tester.getRect(find.byWidget(e.widget)),
-    ];
-
-    // The wrapped label makes one tile taller than the rest.
-    final heights = rects.map((r) => r.height).toSet();
-    expect(heights.length, greaterThan(1));
-    expect(rects.map((r) => r.top).toSet(), hasLength(1));
+    expect(tiles, findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

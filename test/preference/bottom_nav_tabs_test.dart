@@ -17,24 +17,25 @@ void main() {
 
   group('parsePinnedBottomNavTabs', () {
     test('reads names case-insensitively and ignores whitespace', () {
-      expect(
-        parsePinnedBottomNavTabs(' Search , LIVETV,Favorites'),
-        [BottomNavTab.search, BottomNavTab.liveTv, BottomNavTab.favorites],
-      );
+      expect(parsePinnedBottomNavTabs(' Search , LIVETV,Favorites'), [
+        BottomNavTab.search,
+        BottomNavTab.liveTv,
+        BottomNavTab.favorites,
+      ]);
     });
 
     test('drops a folders pin, which the bar no longer offers', () {
-      expect(
-        parsePinnedBottomNavTabs('search,folders,liveTv'),
-        [BottomNavTab.search, BottomNavTab.liveTv],
-      );
+      expect(parsePinnedBottomNavTabs('search,folders,liveTv'), [
+        BottomNavTab.search,
+        BottomNavTab.liveTv,
+      ]);
     });
 
     test('drops unknown names and duplicates', () {
-      expect(
-        parsePinnedBottomNavTabs('podcasts,favorites,favorites,,genres'),
-        [BottomNavTab.favorites, BottomNavTab.genres],
-      );
+      expect(parsePinnedBottomNavTabs('podcasts,favorites,favorites,,genres'), [
+        BottomNavTab.favorites,
+        BottomNavTab.genres,
+      ]);
     });
 
     test('keeps at most three', () {
@@ -73,7 +74,7 @@ void main() {
       expect(gates.resolvePins(''), [
         BottomNavTab.search,
         BottomNavTab.libraries,
-        BottomNavTab.liveTv,
+        BottomNavTab.genres,
       ]);
     });
 
@@ -90,14 +91,14 @@ void main() {
       ]);
     });
 
-    test('Seerr only counts once the plugin reports it available', () {
+    test('Seerr stays omitted even when its plugin is available', () {
       const without = BottomNavTabGates(showLibraries: false);
       const withSeerr = BottomNavTabGates(
         showLibraries: false,
         seerrAvailable: true,
       );
       expect(without.resolvePins(''), isNot(contains(BottomNavTab.discover)));
-      expect(withSeerr.resolvePins(''), contains(BottomNavTab.discover));
+      expect(withSeerr.resolvePins(''), isNot(contains(BottomNavTab.discover)));
     });
   });
 
@@ -123,43 +124,56 @@ void main() {
       'pref_show_favorites_button_srv_usr': false,
     };
 
-    test('lands on Dock with pins from the toggles and writes nothing',
-        () async {
-      final store = await _store(signedIn);
-      final prefs = UserPreferences(store);
+    test(
+      'lands on Dock with pins from the toggles and writes nothing',
+      () async {
+        final store = await _store(signedIn);
+        final prefs = UserPreferences(store);
 
-      expect(prefs.get(UserPreferences.navbarPosition), NavbarPosition.bottom);
-      expect(prefs.get(UserPreferences.bottomNavbarStyle),
-          BottomNavbarStyle.dock);
+        expect(
+          prefs.get(UserPreferences.navbarPosition),
+          NavbarPosition.bottom,
+        );
+        expect(
+          prefs.get(UserPreferences.bottomNavbarStyle),
+          BottomNavbarStyle.dock,
+        );
 
-      final gates = BottomNavTabGates.fromPreferences(
-        prefs,
-        seerrAvailable: false,
-      );
-      expect(gates.resolvePins(prefs.get(UserPreferences.bottomNavbarTabs)), [
-        BottomNavTab.search,
-        BottomNavTab.libraries,
-        BottomNavTab.genres,
-      ]);
+        final gates = BottomNavTabGates.fromPreferences(
+          prefs,
+          seerrAvailable: false,
+        );
+        expect(gates.resolvePins(prefs.get(UserPreferences.bottomNavbarTabs)), [
+          BottomNavTab.search,
+          BottomNavTab.libraries,
+          BottomNavTab.genres,
+        ]);
 
-      // Other constructor steps seed their own keys, so only the navbar's
-      // own keys are checked.
-      expect(
-        store.keys.where((k) => k.startsWith('pref_bottom_navbar')),
-        isEmpty,
-      );
-      expect(prefs.containsPreference(UserPreferences.bottomNavbarStyle),
-          isFalse);
-      expect(prefs.containsPreference(UserPreferences.bottomNavbarTabs),
-          isFalse);
-    });
+        // Other constructor steps seed their own keys, so only the navbar's
+        // own keys are checked.
+        expect(
+          store.keys.where((k) => k.startsWith('pref_bottom_navbar')),
+          isEmpty,
+        );
+        expect(
+          prefs.containsPreference(UserPreferences.bottomNavbarStyle),
+          isFalse,
+        );
+        expect(
+          prefs.containsPreference(UserPreferences.bottomNavbarTabs),
+          isFalse,
+        );
+      },
+    );
 
     test('both new preferences are stored per server and user', () async {
       final store = await _store(signedIn);
       final prefs = UserPreferences(store);
 
-      await prefs.set(UserPreferences.bottomNavbarStyle,
-          BottomNavbarStyle.strip);
+      await prefs.set(
+        UserPreferences.bottomNavbarStyle,
+        BottomNavbarStyle.strip,
+      );
       await prefs.set(UserPreferences.bottomNavbarTabs, 'search');
 
       expect(store.getString('pref_bottom_navbar_style_srv_usr'), 'strip');

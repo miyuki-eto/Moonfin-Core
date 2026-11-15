@@ -12,12 +12,20 @@ import '../../../data/services/sponsorblock_service.dart';
 import '../../../data/services/youtube_stream_resolver.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../playback/appletv_preview_player.dart';
+import '../../../playback/tizen_player_backend.dart';
 import '../../../playback/mpv_client_certificate.dart';
 import '../../../preference/user_preferences.dart';
 import '../../../util/platform_detection.dart';
 import '../../screensaver/screensaver_controller.dart';
 import '../../widgets/adaptive/sf_symbol.dart';
+import '../../widgets/startup_loading.dart';
+import '../../tv/tv26_button.dart';
+import '../../widgets/playback/tv_playback_failure.dart';
+
+import 'package:moonfin_design/moonfin_design.dart';
+
 import '../../widgets/web_youtube_trailer.dart';
+import 'widgets/tv_trailer_controls.dart';
 
 class TrailerPlayerScreen extends StatefulWidget {
   final String? videoId;
@@ -36,6 +44,8 @@ class _TrailerPlayerScreenState extends State<TrailerPlayerScreen> {
   Player? _player;
   VideoController? _controller;
   AppleTvPreviewPlayer? _appleTvPlayer;
+  TizenPlayerBackend? _tizenPlayer;
+  StreamSubscription<bool>? _tizenCompletedSub;
   StreamSubscription<void>? _appleTvCompletedSub;
   StreamSubscription<Duration>? _sponsorBlockPositionSub;
   final _sponsorBlockService = SponsorBlockService();
@@ -46,6 +56,8 @@ class _TrailerPlayerScreenState extends State<TrailerPlayerScreen> {
   bool _useEmbeddedYouTube = false;
   bool _embedFallbackTriggered = false;
   bool _sponsorBlockSeekInFlight = false;
+  bool _paused = false;
+  var _embeddedKey = GlobalKey<WebYouTubeTrailerState>();
   int _sponsorBlockToken = 0;
   final _screensaverController = GetIt.instance<ScreensaverController>();
   final _showCaptions = GetIt.instance<UserPreferences>().get(
@@ -78,7 +90,7 @@ class _TrailerPlayerScreenState extends State<TrailerPlayerScreen> {
       } else {
         _webVideoId = resolvedVideoId;
       }
-      _loading = false;
+      _loading = _error == null;
       return;
     }
 
@@ -107,6 +119,10 @@ class _TrailerPlayerScreenState extends State<TrailerPlayerScreen> {
   }
 
   void _startStreamPlaybackPath() {
+    if (PlatformDetection.isTizen) {
+      unawaited(_openTrailerTizen());
+      return;
+    }
     if (PlatformDetection.useApplePreviewPlayer) {
       unawaited(_openTrailerAppleTv());
       return;
@@ -128,6 +144,23 @@ class _TrailerPlayerScreenState extends State<TrailerPlayerScreen> {
     setState(() => _loading = false);
   }
 
+  void _onEmbeddedError() {
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _error = AppLocalizations.of(context).playbackFailedForTrailer;
+    });
+  }
+
+  void _retryEmbedded() {
+    setState(() {
+      _embeddedKey = GlobalKey<WebYouTubeTrailerState>();
+      _paused = false;
+      _error = null;
+      _loading = true;
+    });
+  }
+
   void _fallBackToStreamPlayback() {
     if (!mounted || _embedFallbackTriggered || !_useEmbeddedYouTube) {
       return;
@@ -147,6 +180,8 @@ class _TrailerPlayerScreenState extends State<TrailerPlayerScreen> {
     _sponsorBlockPositionSub?.cancel();
     _appleTvCompletedSub?.cancel();
     unawaited(_appleTvPlayer?.dispose());
+    _tizenCompletedSub?.cancel();
+    _tizenPlayer?.dispose();
     _player?.stop();
     _player?.dispose();
     super.dispose();
@@ -168,9 +203,8 @@ class _TrailerPlayerScreenState extends State<TrailerPlayerScreen> {
 
     if (widget.videoId != null && widget.videoId!.isNotEmpty) {
       sponsorBlockVideoId = widget.videoId;
-      final stream = await YouTubeStreamResolver.resolve(
-        widget.videoId!,
-      ).timeout(_resolveTimeout, onTimeout: () => null);
+      final stream = await YouTubeStreamResolver.resolve(widget.videoId!)
+          .timeout(_resolveTimeout, onTimeout: () => null);
       streamUrl = stream?.url;
       audioLanguage = stream?.audioLanguage;
       if (streamUrl != null && streamUrl.isNotEmpty) {
@@ -183,9 +217,8 @@ class _TrailerPlayerScreenState extends State<TrailerPlayerScreen> {
       final trailerUrl = widget.trailerUrl!;
       final youtubeVideoId = YouTubeStreamResolver.extractVideoId(trailerUrl);
       sponsorBlockVideoId = youtubeVideoId;
-      final stream = await YouTubeStreamResolver.resolveFromUrl(
-        trailerUrl,
-      ).timeout(_resolveTimeout, onTimeout: () => null);
+      final stream = await YouTubeStreamResolver.resolveFromUrl(trailerUrl)
+          .timeout(_resolveTimeout, onTimeout: () => null);
       streamUrl = stream?.url;
       audioLanguage = stream?.audioLanguage;
       if (streamUrl != null && streamUrl.isNotEmpty) {
@@ -202,6 +235,36 @@ class _TrailerPlayerScreenState extends State<TrailerPlayerScreen> {
       useYouTubeHeaders: useYouTubeHeaders,
       audioLanguage: audioLanguage,
     );
+  }
+
+  Future<void> _openTrailerTizen() async {
+    try {
+      final resolved = await _resolveStreamUrl();
+      if (!mounted) return;
+      final url = resolved.streamUrl;
+      // AVPlay accepts actual streams, never a YouTube HTML watch page.
+      if (url == null || YouTubeStreamResolver.extractVideoId(url) != null) {
+        throw StateError('Trailer stream could not be resolved');
+      }
+      final player = _tizenPlayer ??= TizenPlayerBackend(
+        GetIt.instance<UserPreferences>(),
+      );
+      _tizenCompletedSub ??= player.completedStream.listen((complete) {
+        if (complete && mounted) Navigator.of(context).maybePop();
+      });
+      await player.play({
+        'url': url,
+        if (resolved.useYouTubeHeaders)
+          'headers': YouTubeStreamResolver.youtubeHeaders,
+      }).timeout(_openTimeout);
+      if (mounted) setState(() => _loading = false);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = AppLocalizations.of(context).playbackFailedForTrailer;
+      });
+    }
   }
 
   Future<void> _openTrailerAppleTv() async {
@@ -381,6 +444,32 @@ class _TrailerPlayerScreenState extends State<TrailerPlayerScreen> {
     }());
   }
 
+  void _togglePause() {
+    final paused = !_paused;
+    setState(() => _paused = paused);
+    if (_webVideoId != null && (kIsWeb || _useEmbeddedYouTube)) {
+      _embeddedKey.currentState?.setPaused(paused);
+    } else if (_appleTvPlayer != null) {
+      unawaited(paused ? _appleTvPlayer!.pause() : _appleTvPlayer!.resume());
+    } else if (_tizenPlayer != null) {
+      unawaited(paused ? _tizenPlayer!.pause() : _tizenPlayer!.resume());
+    } else {
+      unawaited(paused ? _player?.pause() : _player?.play());
+    }
+  }
+
+  void _seekRelative(Duration offset) {
+    if (_webVideoId != null && (kIsWeb || _useEmbeddedYouTube)) {
+      _embeddedKey.currentState?.seekRelative(offset);
+    } else if (_player != null) {
+      final position = _player!.state.position + offset;
+      unawaited(_player!.seek(position < Duration.zero ? Duration.zero : position));
+    } else if (_tizenPlayer != null) {
+      final position = _tizenPlayer!.position + offset;
+      unawaited(_tizenPlayer!.seekTo(position < Duration.zero ? Duration.zero : position));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -390,25 +479,36 @@ class _TrailerPlayerScreenState extends State<TrailerPlayerScreen> {
           Positioned.fill(
             child: ColoredBox(
               color: Colors.black,
-              child: ((kIsWeb || _useEmbeddedYouTube) && _webVideoId != null)
+              child: _error != null
+                  ? const SizedBox.shrink()
+                  : ((kIsWeb || _useEmbeddedYouTube) && _webVideoId != null)
                   ? Center(
                       child: AspectRatio(
                         aspectRatio: 16 / 9,
                         child: WebYouTubeTrailer(
+                          key: _embeddedKey,
                           videoId: _webVideoId!,
+                          ignorePointer: PlatformDetection.isTV,
                           muted: false,
                           showCaptions: _showCaptions,
                           loop: false,
+                          onPausedChanged: (paused) {
+                            if (mounted && _paused != paused) {
+                              setState(() => _paused = paused);
+                            }
+                          },
                           onPlaybackStarted: _onEmbeddedPlaybackStarted,
                           onEmbeddedUnavailable: _useEmbeddedYouTube
                               ? _fallBackToStreamPlayback
-                              : null,
+                              : _onEmbeddedError,
                           onAutoplayFailed: _useEmbeddedYouTube
                               ? _fallBackToStreamPlayback
-                              : null,
+                              : _onEmbeddedError,
                         ),
                       ),
                     )
+                  : PlatformDetection.isTizen
+                  ? (_tizenPlayer?.buildView(ready: !_loading) ?? const SizedBox.shrink())
                   : PlatformDetection.useApplePreviewPlayer
                   ? (_appleTvPlayer?.textureId != null
                         ? FittedBox(
@@ -434,8 +534,20 @@ class _TrailerPlayerScreenState extends State<TrailerPlayerScreen> {
                         : const SizedBox.shrink()),
             ),
           ),
-          if (_loading) const Center(child: CircularProgressIndicator()),
-          if (_error != null)
+          if (_loading)
+            PlatformDetection.isTV
+                ? const StartupLoading()
+                : const Center(child: LoadingThrobber()),
+          if (_error != null && PlatformDetection.isTV)
+            Positioned.fill(child: TvPlaybackFailure(
+              message: _error!,
+              onRetry: kIsWeb ? _retryEmbedded : PlatformDetection.isTizen ? () {
+                setState(() { _loading = true; _error = null; });
+                _startStreamPlaybackPath();
+              } : null,
+              onBack: () => Navigator.of(context).pop(),
+            )),
+          if (_error != null && !PlatformDetection.isTV)
             Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
@@ -446,19 +558,43 @@ class _TrailerPlayerScreenState extends State<TrailerPlayerScreen> {
                 ),
               ),
             ),
+          if (PlatformDetection.isTV && !_loading && _error == null)
+            Positioned.fill(child: TvTrailerControls(
+              paused: _paused,
+              onTogglePause: _togglePause,
+              onSeek: _appleTvPlayer == null ? _seekRelative : null,
+              onBack: () => Navigator.of(context).pop(),
+            )),
+          if (!PlatformDetection.isTV || _loading)
           SafeArea(
             child: Align(
               alignment: Alignment.topLeft,
               child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: IconButton(
-                  icon: const AdaptiveIcon(Icons.arrow_back, color: Colors.white),
-                  onPressed: () {
-                    _player?.stop();
-                    unawaited(_appleTvPlayer?.stop());
-                    Navigator.of(context).pop();
-                  },
+                padding: EdgeInsets.all(
+                  PlatformDetection.isTV ? Tv26Style.inset : 16,
                 ),
+                child: PlatformDetection.isTV
+                    ? Tv26Button(
+                        label: AppLocalizations.of(context).back,
+                        icon: Icons.chevron_left,
+                        autofocus: true,
+                        onPressed: () {
+                          _player?.stop();
+                          unawaited(_appleTvPlayer?.stop());
+                          Navigator.of(context).pop();
+                        },
+                      )
+                    : IconButton(
+                        icon: const AdaptiveIcon(
+                          Icons.arrow_back,
+                          color: Colors.white,
+                        ),
+                        onPressed: () {
+                          _player?.stop();
+                          unawaited(_appleTvPlayer?.stop());
+                          Navigator.of(context).pop();
+                        },
+                      ),
               ),
             ),
           ),

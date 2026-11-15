@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:moonfin/config/app_features.dart';
 import 'package:jellyfin_preference/jellyfin_preference.dart';
 import 'package:moonfin/data/repositories/mdblist_repository.dart';
 import 'package:moonfin/data/utils/genre_browse_utils.dart';
@@ -154,16 +155,19 @@ Future<LibraryBrowseViewModel> _viewModel(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('sorting a mixed library by name keeps shows and movies together', () async {
-    final api = _FakeItemsApi();
-    final vm = await _viewModel(api, savedSort: LibrarySortBy.name);
+  test(
+    'sorting a mixed library by name keeps shows and movies together',
+    () async {
+      final api = _FakeItemsApi();
+      final vm = await _viewModel(api, savedSort: LibrarySortBy.name);
 
-    await vm.load();
+      await vm.load();
 
-    expect(vm.sortBy, LibrarySortBy.name);
-    expect(api.requestedSorts.first, 'SortName');
-    expect(api.requestedRecursive.first, isFalse);
-  });
+      expect(vm.sortBy, LibrarySortBy.name);
+      expect(api.requestedSorts.first, 'SortName');
+      expect(api.requestedRecursive.first, isFalse);
+    },
+  );
 
   test('a mixed library with no saved sort opens with folders first', () async {
     final api = _FakeItemsApi();
@@ -183,7 +187,10 @@ void main() {
     await vm.load();
 
     expect(api.requestedExcludes.first, containsAll(kDirectoryItemTypes));
-    expect(api.requestedIncludes.last, kDirectoryItemTypes);
+    expect(
+      api.requestedIncludes.last,
+      kDirectoryItemTypes.where(AppFeatures.allowsItem).toList(),
+    );
     expect(vm.items.map((item) => item.id), ['folder', 'series', 'movie']);
     expect(vm.totalCount, 3);
   });
@@ -200,15 +207,18 @@ void main() {
     expect(vm.hasMore, isFalse);
   });
 
-  test('a premiere date sort stays picked when the library opens again', () async {
-    final api = _FakeItemsApi();
-    final vm = await _viewModel(api, savedSort: LibrarySortBy.premiereDate);
+  test(
+    'a premiere date sort stays picked when the library opens again',
+    () async {
+      final api = _FakeItemsApi();
+      final vm = await _viewModel(api, savedSort: LibrarySortBy.premiereDate);
 
-    await vm.load();
+      await vm.load();
 
-    expect(vm.sortBy, LibrarySortBy.premiereDate);
-    expect(api.requestedSorts.first, 'PremiereDate,SortName');
-  });
+      expect(vm.sortBy, LibrarySortBy.premiereDate);
+      expect(api.requestedSorts.first, 'PremiereDate,SortName');
+    },
+  );
 
   group('Folder View', () {
     test('a movies library starts flat and shows its folders once turned on, '
@@ -226,7 +236,10 @@ void main() {
       expect(vm.folderView, isTrue);
       expect(vm.sortBy, LibrarySortBy.foldersFirst);
       expect(api.requestedRecursive.last, isFalse);
-      expect(api.requestedIncludes.last, kDirectoryItemTypes);
+      expect(
+        api.requestedIncludes.last,
+        kDirectoryItemTypes.where(AppFeatures.allowsItem).toList(),
+      );
       expect(vm.items.first.id, 'folder');
 
       final reopened = await _viewModel(

@@ -142,7 +142,7 @@ class _CastTargetSheetState extends State<_CastTargetSheet> {
                 child: SizedBox(
                   width: 22,
                   height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: LoadingThrobber(),
                 ),
               ),
             );
@@ -175,7 +175,7 @@ class _CastTargetSheetState extends State<_CastTargetSheet> {
                     const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: LoadingThrobber(),
                     ),
                 ],
               ),
@@ -193,7 +193,7 @@ class _CastTargetSheetState extends State<_CastTargetSheet> {
       controller: widget.scrollController,
       children: [
         const SizedBox(height: 48),
-        const Center(child: CircularProgressIndicator()),
+        const Center(child: LoadingThrobber()),
         const SizedBox(height: 16),
         Center(
           child: Text(

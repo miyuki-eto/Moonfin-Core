@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+
+import '../../tv/tv_modal.dart';
+import '../track_selector_dialog.dart';
+
 import 'package:moonfin_design/moonfin_design.dart';
 
 import '../../../data/models/aggregated_item.dart';
@@ -15,7 +19,7 @@ Future<void> showContextMenu(
   VoidCallback? onChanged,
   CollectionRemovalContext? collectionRemoval,
   bool isContinueWatchingOrNextUp = false,
-}) {
+}) async {
   final actions = contextActionsFor(
     context,
     item,
@@ -23,7 +27,33 @@ Future<void> showContextMenu(
     collectionRemoval: collectionRemoval,
     isContinueWatchingOrNextUp: isContinueWatchingOrNextUp,
   );
-  if (actions.isEmpty) return Future<void>.value();
+  if (actions.isEmpty) {
+    return;
+  }
+  if (PlatformDetection.isTV) {
+    final selected = await showStyledPlayerDialog<ItemContextAction>(
+      context,
+      title: item.name,
+      builder: (dialogContext) => SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < actions.length; i++)
+              TvMenuRow(
+                label: actions[i].label,
+                icon: actions[i].icon,
+                autofocus: i == 0,
+                onPressed: () => Navigator.pop(dialogContext, actions[i]),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (selected != null) {
+      await selected.onSelect();
+    }
+    return;
+  }
   // A pointer opened this from a spot on screen, so put it there. A remote or
   // a touch has no such spot and keeps the centered menu.
   final anchor = PlatformDetection.useDesktopUi
@@ -32,8 +62,7 @@ Future<void> showContextMenu(
   return OverlaySheetController.show<void>(
     context,
     anchor: anchor,
-    builder: (sheetContext) =>
-        _ContextMenu(item: item, actions: actions),
+    builder: (sheetContext) => _ContextMenu(item: item, actions: actions),
   );
 }
 

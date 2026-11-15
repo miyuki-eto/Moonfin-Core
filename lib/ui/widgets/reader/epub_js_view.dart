@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -238,7 +239,7 @@ class _EpubJsViewState extends State<EpubJsView> {
   Widget build(BuildContext context) {
     final html = _html;
     if (html == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: LoadingThrobber());
     }
 
     final webView = InAppWebView(
@@ -301,7 +302,7 @@ class _EpubJsViewState extends State<EpubJsView> {
       fit: StackFit.expand,
       children: [
         webView,
-        if (!_ready) const Center(child: CircularProgressIndicator()),
+        if (!_ready) const Center(child: LoadingThrobber()),
       ],
     );
   }

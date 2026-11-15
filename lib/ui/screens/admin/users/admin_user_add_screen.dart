@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
@@ -116,7 +117,7 @@ class _AdminUserAddScreenState extends ConsumerState<AdminUserAddScreen> {
         }
         final lists = snapshot.data;
         if (lists == null) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: LoadingThrobber());
         }
         final (folders, channels) = lists;
         return Form(

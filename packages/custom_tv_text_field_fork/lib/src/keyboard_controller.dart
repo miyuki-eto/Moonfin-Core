@@ -74,10 +74,12 @@ class KeyboardController extends ChangeNotifier {
 
   KeyboardStyle _style = KeyboardStyle.classic;
 
-  KeyboardStyle get style => _style;
+  KeyboardStyle get style => CustomKeyboard.fixedStyle ?? _style;
 
   set style(KeyboardStyle value) {
-    if (value == _style) return;
+    if (CustomKeyboard.fixedStyle != null || value == _style) {
+      return;
+    }
     _style = value;
     notifyListeners();
   }
@@ -120,14 +122,18 @@ class KeyboardController extends ChangeNotifier {
   void addCharacter(String character) => insertText(character);
 
   void insertText(String value) {
-    if (value.isEmpty) return;
+    if (value.isEmpty) {
+      return;
+    }
     _text = _text.substring(0, _cursor) + value + _text.substring(_cursor);
     _cursor += value.length;
     _commit();
   }
 
   void backspace() {
-    if (_cursor == 0) return;
+    if (_cursor == 0) {
+      return;
+    }
     final step = _stepBefore(_cursor);
     _text = _text.substring(0, _cursor - step) + _text.substring(_cursor);
     _cursor -= step;
@@ -135,7 +141,9 @@ class KeyboardController extends ChangeNotifier {
   }
 
   void clear() {
-    if (_text.isEmpty && _cursor == 0) return;
+    if (_text.isEmpty && _cursor == 0) {
+      return;
+    }
     _text = '';
     _cursor = 0;
     _commit();
@@ -147,7 +155,9 @@ class KeyboardController extends ChangeNotifier {
     final next = direction < 0
         ? _cursor - (_cursor > 0 ? _stepBefore(_cursor) : 0)
         : _cursor + (_cursor < _text.length ? _stepAfter(_cursor) : 0);
-    if (next == _cursor) return;
+    if (next == _cursor) {
+      return;
+    }
     _cursor = next;
     // The text is unchanged, so listeners repaint but the field's
     // onTextChanged callback stays quiet.
@@ -250,8 +260,34 @@ class KeyboardLayouts {
   /// them, so Delete and Done each cover two rows and space covers seven
   /// columns. The semicolon is left out, it sits behind ':' and ','.
   static const List<List<String>> dockedNumeric = [
-    ['MODE_LOWER', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'BACKSPACE'],
-    ['MODE_UPPER', '!', '@', '#', r'$', '%', '^', '&', '*', '(', ')', 'BACKSPACE'],
+    [
+      'MODE_LOWER',
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+      '0',
+      'BACKSPACE',
+    ],
+    [
+      'MODE_UPPER',
+      '!',
+      '@',
+      '#',
+      r'$',
+      '%',
+      '^',
+      '&',
+      '*',
+      '(',
+      ')',
+      'BACKSPACE',
+    ],
     ['MODE_NUM', '-', '_', '=', '+', ':', "'", '?', '/', ',', '.', 'DONE'],
     _dockedBottomRow,
   ];
@@ -269,7 +305,13 @@ class KeyboardLayouts {
       return [
         ['MODE_LOWER', ...rows[0], 'BACKSPACE'],
         ['MODE_UPPER', ...rows[1], 'BACKSPACE'],
-        ['MODE_NUM', ...rows[2].sublist(1, rows[2].length - 1), '.', '@', 'DONE'],
+        [
+          'MODE_NUM',
+          ...rows[2].sublist(1, rows[2].length - 1),
+          '.',
+          '@',
+          'DONE',
+        ],
         _dockedBottomRow,
       ];
     });
@@ -296,8 +338,12 @@ class KeyboardLayouts {
   }
 
   static String _shiftKey(String key) {
-    if (key.length > 1) return key;
-    if (key == "'") return '"';
+    if (key.length > 1) {
+      return key;
+    }
+    if (key == "'") {
+      return '"';
+    }
     return key.toUpperCase();
   }
 
@@ -375,6 +421,9 @@ class _KeyboardChip {
 class CustomKeyboard extends StatefulWidget {
   static KeyboardStrings strings = const KeyboardStrings();
 
+  /// When set by the host, omits the style picker and uses this style.
+  static KeyboardStyle? fixedStyle;
+
   /// The app saves a style picked from the keyboard's own picker.
   static ValueChanged<KeyboardStyle>? onStylePicked;
 
@@ -413,6 +462,7 @@ class CustomKeyboardState extends State<CustomKeyboard> {
   final ValueNotifier<int?> _styleChoice = ValueNotifier<int?>(null);
 
   bool _pendingAlternateSelect = false;
+  Timer? _alternateHoldTimer;
   bool _alternateAwaitingSelectRelease = false;
 
   // The app's back handler sees each Back before this keyboard does. When it
@@ -437,6 +487,16 @@ class CustomKeyboardState extends State<CustomKeyboard> {
   bool get _isDocked => _style == KeyboardStyle.docked;
 
   List<List<String>> get _currentLayout {
+    final layout = _layout;
+    if (CustomKeyboard.fixedStyle == null || _isDocked) {
+      return layout;
+    }
+    return [
+      for (final row in layout) row.where((key) => key != 'IME').toList(),
+    ];
+  }
+
+  List<List<String>> get _layout {
     if (_usesNumberPad) {
       return KeyboardLayouts.numberPad;
     }
@@ -467,14 +527,22 @@ class CustomKeyboardState extends State<CustomKeyboard> {
 
     for (final entry in widget.recentSuggestions) {
       final value = entry.trim();
-      if (value.isEmpty) continue;
+      if (value.isEmpty) {
+        continue;
+      }
       final normalized = value.toLowerCase();
-      if (normalized == query) continue;
-      if (query.isNotEmpty && !normalized.contains(query)) continue;
+      if (normalized == query) {
+        continue;
+      }
+      if (query.isNotEmpty && !normalized.contains(query)) {
+        continue;
+      }
       if (seen.add(normalized)) {
         unique.add(value);
       }
-      if (unique.length >= 5) break;
+      if (unique.length >= 5) {
+        break;
+      }
     }
 
     return unique
@@ -527,13 +595,19 @@ class CustomKeyboardState extends State<CustomKeyboard> {
 
         for (final entry in source) {
           final value = entry.trim();
-          if (value.isEmpty) continue;
+          if (value.isEmpty) {
+            continue;
+          }
           final normalized = value.toLowerCase();
-          if (normalized == query.toLowerCase()) continue;
+          if (normalized == query.toLowerCase()) {
+            continue;
+          }
           if (seen.add(normalized)) {
             unique.add(value);
           }
-          if (unique.length >= 5) break;
+          if (unique.length >= 5) {
+            break;
+          }
         }
 
         return unique
@@ -599,7 +673,9 @@ class CustomKeyboardState extends State<CustomKeyboard> {
 
   void _onControllerTextChanged() {
     final next = widget.keyboardController.text;
-    if (next == _lastControllerText) return;
+    if (next == _lastControllerText) {
+      return;
+    }
     _lastControllerText = next;
 
     _refreshSearchSuggestions();
@@ -636,26 +712,36 @@ class CustomKeyboardState extends State<CustomKeyboard> {
       final generation = ++_suggestionRequestGeneration;
       try {
         final results = await widget.suggestionsBuilder!.call(query);
-        if (!mounted || generation != _suggestionRequestGeneration) return;
+        if (!mounted || generation != _suggestionRequestGeneration) {
+          return;
+        }
 
         final normalized = <String>[];
         final seen = <String>{};
         for (final result in results) {
           final value = result.trim();
-          if (value.isEmpty) continue;
+          if (value.isEmpty) {
+            continue;
+          }
           final key = value.toLowerCase();
-          if (key == query.toLowerCase()) continue;
+          if (key == query.toLowerCase()) {
+            continue;
+          }
           if (seen.add(key)) {
             normalized.add(value);
           }
-          if (normalized.length >= 5) break;
+          if (normalized.length >= 5) {
+            break;
+          }
         }
 
         setState(() {
           _searchSuggestions = normalized;
         });
       } catch (_) {
-        if (!mounted || generation != _suggestionRequestGeneration) return;
+        if (!mounted || generation != _suggestionRequestGeneration) {
+          return;
+        }
         setState(() {
           _searchSuggestions = const [];
         });
@@ -689,6 +775,7 @@ class CustomKeyboardState extends State<CustomKeyboard> {
   }
 
   void _onMove(int dRow, int dCol) {
+    _cancelSelectHold();
     final chips = _contextChips;
 
     if (_selectedRow.value < 0) {
@@ -704,7 +791,9 @@ class CustomKeyboardState extends State<CustomKeyboard> {
       if (dCol != 0 && chips.isNotEmpty) {
         final rowLength = chips.length;
         var nextChip = (_selectedChip.value + dCol) % rowLength;
-        if (nextChip < 0) nextChip += rowLength;
+        if (nextChip < 0) {
+          nextChip += rowLength;
+        }
         _selectedChip.value = nextChip;
       }
       return;
@@ -738,10 +827,20 @@ class CustomKeyboardState extends State<CustomKeyboard> {
       final int rowLength = layout[row].length;
       do {
         nextCol = (nextCol + dCol) % rowLength;
-        if (nextCol < 0) nextCol += rowLength;
+        if (nextCol < 0) {
+          nextCol += rowLength;
+        }
       } while (layout[row][nextCol] == key && nextCol != col);
     }
 
+    // Docked geometry keeps its twelve cells. The style rail's fourth
+    // slot is omitted when locked, so remote movement steps over that slot.
+    if (_isDocked &&
+        CustomKeyboard.fixedStyle != null &&
+        layout[nextRow][nextCol] == 'IME') {
+      final step = dCol == 0 ? 1 : dCol;
+      nextCol = (nextCol + step) % layout[nextRow].length;
+    }
     _selectedRow.value = nextRow;
     _selectedCol.value = nextCol;
 
@@ -753,7 +852,9 @@ class CustomKeyboardState extends State<CustomKeyboard> {
   void _onAction() {
     if (_selectedRow.value < 0) {
       final chips = _contextChips;
-      if (chips.isEmpty) return;
+      if (chips.isEmpty) {
+        return;
+      }
 
       final chipIndex = _selectedChip.value.clamp(0, chips.length - 1);
       final chip = chips[chipIndex];
@@ -807,6 +908,7 @@ class CustomKeyboardState extends State<CustomKeyboard> {
         _isShifted.value = key == 'MODE_UPPER';
         break;
       case 'IME':
+        if (CustomKeyboard.fixedStyle != null) break;
         _styleChoice.value = _style.index;
         break;
       default:
@@ -822,13 +924,17 @@ class CustomKeyboardState extends State<CustomKeyboard> {
     } catch (_) {
       return;
     }
-    if (!mounted || value == null) return;
+    if (!mounted || value == null) {
+      return;
+    }
     // Line breaks have no home in a single line field, and clipboard
     // managers love trailing ones.
     final sanitized = value
         .replaceAll(RegExp(r'[\r\n]+$'), '')
         .replaceAll(RegExp(r'[\r\n]+'), ' ');
-    if (sanitized.isEmpty) return;
+    if (sanitized.isEmpty) {
+      return;
+    }
     widget.keyboardController.insertText(sanitized);
   }
 
@@ -837,7 +943,9 @@ class CustomKeyboardState extends State<CustomKeyboard> {
 
   bool _openAlternatesForKey(String key) {
     final options = _alternatesForKey(key);
-    if (options == null || options.isEmpty) return false;
+    if (options == null || options.isEmpty) {
+      return false;
+    }
     _alternateOptions.value = options;
     _alternateIndex.value = 0;
     _alternateAwaitingSelectRelease = true;
@@ -875,14 +983,18 @@ class CustomKeyboardState extends State<CustomKeyboard> {
 
   void _commitAlternateSelection() {
     final options = _alternateOptions.value;
-    if (options == null || options.isEmpty) return;
+    if (options == null || options.isEmpty) {
+      return;
+    }
     widget.keyboardController.addCharacter(options[_alternateIndex.value]);
     _dismissAlternates();
   }
 
   void _handleAlternateMove(int delta) {
     final options = _alternateOptions.value;
-    if (options == null || options.isEmpty) return;
+    if (options == null || options.isEmpty) {
+      return;
+    }
 
     final next = (_alternateIndex.value + delta) % options.length;
     _alternateIndex.value = next < 0 ? next + options.length : next;
@@ -895,6 +1007,7 @@ class CustomKeyboardState extends State<CustomKeyboard> {
   }
 
   void _startSelectHold() {
+    _cancelSelectHold();
     if (_selectedRow.value < 0) {
       _onAction();
       return;
@@ -907,6 +1020,11 @@ class CustomKeyboardState extends State<CustomKeyboard> {
     }
 
     _pendingAlternateSelect = true;
+    _alternateHoldTimer = Timer(const Duration(milliseconds: 500), () {
+      if (!mounted || !_pendingAlternateSelect) return;
+      _pendingAlternateSelect = false;
+      _openAlternatesForKey(key);
+    });
   }
 
   void _finishSelectHold() {
@@ -918,6 +1036,8 @@ class CustomKeyboardState extends State<CustomKeyboard> {
   }
 
   void _cancelSelectHold() {
+    _alternateHoldTimer?.cancel();
+    _alternateHoldTimer = null;
     _pendingAlternateSelect = false;
   }
 
@@ -1072,7 +1192,7 @@ class CustomKeyboardState extends State<CustomKeyboard> {
             event.logicalKey == LogicalKeyboardKey.select) &&
         event is KeyRepeatEvent) {
       if (_pendingAlternateSelect && _selectedRow.value >= 0) {
-        _pendingAlternateSelect = false;
+        _cancelSelectHold();
         _openAlternatesForKey(_selectedKey);
       } else if (_selectedRow.value >= 0 && _selectedKeyRepeats) {
         _onAction();
@@ -1140,13 +1260,13 @@ class CustomKeyboardState extends State<CustomKeyboard> {
         // Dark text where the accent is light enough to carry it, the 0.19
         // cut is where the two contrast ratios meet.
         final onAccent = accent.computeLuminance() > 0.19
-            ? const Color(0xFF04131A)
-            : Colors.white;
+            ? Tv26Style.canvas
+            : Tv26Style.foreground;
         return _KeyboardPalette(
           scrim: const Color(0x8C040508),
-          panel: const Color(0xF70B0C10),
-          panelBorder: const BorderSide(color: Color(0x12FFFFFF)),
-          panelRadius: BorderRadius.circular(14),
+          panel: Tv26Style.surface,
+          panelBorder: const BorderSide(color: Tv26Style.border),
+          panelRadius: BorderRadius.circular(Tv26Style.panelRadius),
           idleKey: const Color(0x0FFFFFFF),
           idleKeyBorder: BorderSide.none,
           functionKey: const Color(0x0DFFFFFF),
@@ -1385,9 +1505,7 @@ class CustomKeyboardState extends State<CustomKeyboard> {
           child: GestureDetector(
             onTap: () {},
             child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: _usesNumberPad ? 340 : 850,
-              ),
+              constraints: BoxConstraints(maxWidth: _usesNumberPad ? 340 : 850),
               // The pane sits behind the keys rather than around them,
               // since it clips and the alternate popup has to float free.
               child: Stack(
@@ -1418,9 +1536,7 @@ class CustomKeyboardState extends State<CustomKeyboard> {
           child: GestureDetector(
             onTap: () {},
             child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: _usesNumberPad ? 320 : 820,
-              ),
+              constraints: BoxConstraints(maxWidth: _usesNumberPad ? 320 : 820),
               child: Material(
                 color: palette.panel,
                 elevation: 8,
@@ -1650,9 +1766,15 @@ class _KeyboardGrid extends StatelessWidget {
   });
 
   double _getKeyUnitSpan(String key) {
-    if (uniformKeySpans) return 1.0;
-    if (key == 'SPACE') return 2.4;
-    if (['123', 'ABC', 'DONE', 'IME'].contains(key)) return 1.22;
+    if (uniformKeySpans) {
+      return 1.0;
+    }
+    if (key == 'SPACE') {
+      return 2.4;
+    }
+    if (['123', 'ABC', 'DONE', 'IME'].contains(key)) {
+      return 1.22;
+    }
     return 1.0;
   }
 
@@ -1778,7 +1900,9 @@ class _KeyboardKey extends StatelessWidget {
     final scale = isSelected ? palette.selectedScale : 1.0;
     final idleColor = palette.glass && label == 'DONE'
         ? palette.accent.withValues(alpha: 0.2)
-        : (_functionKeys.contains(label) ? palette.functionKey : palette.idleKey);
+        : (_functionKeys.contains(label)
+              ? palette.functionKey
+              : palette.idleKey);
 
     return GestureDetector(
       onTap: onTap,
@@ -1881,7 +2005,9 @@ class _KeyboardKey extends StatelessWidget {
         return ValueListenableBuilder<bool>(
           valueListenable: isShifted,
           builder: (context, shifted, _) => Icon(
-            shifted ? Icons.keyboard_capslock_rounded : Icons.arrow_upward_rounded,
+            shifted
+                ? Icons.keyboard_capslock_rounded
+                : Icons.arrow_upward_rounded,
             color: shifted && !isSelected ? palette.textPrimary : color,
             size: 19,
           ),
@@ -1910,7 +2036,9 @@ class _KeyboardKey extends StatelessWidget {
   }
 
   Widget _buildContent(BuildContext context) {
-    if (palette.glass) return _buildGlassContent();
+    if (palette.glass) {
+      return _buildGlassContent();
+    }
     final color = isSelected ? palette.textOnSelected : palette.textPrimary;
     switch (label) {
       case 'BACKSPACE':
@@ -2035,7 +2163,8 @@ class _StylePicker extends StatelessWidget {
               ),
             ),
           ),
-          if (style == current) Icon(Icons.check_rounded, size: 18, color: color),
+          if (style == current)
+            Icon(Icons.check_rounded, size: 18, color: color),
         ],
       ),
     );
@@ -2431,15 +2560,17 @@ class _DockedKeyboard extends StatelessWidget {
     // paints over the rows above it.
     for (var r = 0; r < layout.length; r++) {
       final top = r * (_row + _rowGap);
-      children.add(
-        Positioned(
-          left: 0,
-          top: top,
-          width: _rail,
-          height: _row,
-          child: _buildCell(r, 0, _row),
-        ),
-      );
+      if (layout[r][0] != 'IME' || CustomKeyboard.fixedStyle == null) {
+        children.add(
+          Positioned(
+            left: 0,
+            top: top,
+            width: _rail,
+            height: _row,
+            child: _buildCell(r, 0, _row),
+          ),
+        );
+      }
 
       var c = 1;
       while (c <= 10) {
@@ -2565,7 +2696,9 @@ class _DockedKeyboard extends StatelessWidget {
                 ),
               ),
             ),
-          if (isSelected && alternateOptions != null && alternateOptions!.isNotEmpty)
+          if (isSelected &&
+              alternateOptions != null &&
+              alternateOptions!.isNotEmpty)
             Positioned(
               bottom: height + 6,
               child: _AlternateCharacterPopup(
@@ -2597,8 +2730,15 @@ class _DockedKeyboard extends StatelessWidget {
     Color tone(Color idle) => isSelected ? palette.textOnSelected : idle;
     const iconColor = Color(0xB3FFFFFF);
 
-    Widget stacked(IconData glyph, String label, Color idle, FontWeight weight) {
-      if (numberPad) return Icon(glyph, size: 22, color: tone(idle));
+    Widget stacked(
+      IconData glyph,
+      String label,
+      Color idle,
+      FontWeight weight,
+    ) {
+      if (numberPad) {
+        return Icon(glyph, size: 22, color: tone(idle));
+      }
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -2606,7 +2746,11 @@ class _DockedKeyboard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             label,
-            style: TextStyle(color: tone(idle), fontSize: 13, fontWeight: weight),
+            style: TextStyle(
+              color: tone(idle),
+              fontSize: 13,
+              fontWeight: weight,
+            ),
           ),
         ],
       );
@@ -2648,11 +2792,23 @@ class _DockedKeyboard extends StatelessWidget {
           ),
         );
       case 'CURSORL':
-        return Icon(Icons.chevron_left_rounded, size: 24, color: tone(iconColor));
+        return Icon(
+          Icons.chevron_left_rounded,
+          size: 24,
+          color: tone(iconColor),
+        );
       case 'CURSORR':
-        return Icon(Icons.chevron_right_rounded, size: 24, color: tone(iconColor));
+        return Icon(
+          Icons.chevron_right_rounded,
+          size: 24,
+          color: tone(iconColor),
+        );
       case 'PASTE':
-        return Icon(Icons.content_paste_rounded, size: 19, color: tone(iconColor));
+        return Icon(
+          Icons.content_paste_rounded,
+          size: 19,
+          color: tone(iconColor),
+        );
       case 'BACKSPACE':
         return stacked(
           Icons.backspace_outlined,
@@ -2661,7 +2817,12 @@ class _DockedKeyboard extends StatelessWidget {
           FontWeight.w500,
         );
       case 'DONE':
-        return stacked(doneIcon, doneLabel, palette.accentText, FontWeight.w600);
+        return stacked(
+          doneIcon,
+          doneLabel,
+          palette.accentText,
+          FontWeight.w600,
+        );
       default:
         return Text(
           key,

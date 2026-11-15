@@ -1,3 +1,5 @@
+import '../../config/app_features.dart';
+
 import 'dart:async';
 import 'dart:math';
 
@@ -24,7 +26,11 @@ class SearchResultGroup {
   });
 
   SearchResultGroup copyWith({List<AggregatedItem>? items}) =>
-      SearchResultGroup(title: title, itemTypes: itemTypes, items: items ?? this.items);
+      SearchResultGroup(
+        title: title,
+        itemTypes: itemTypes,
+        items: items ?? this.items,
+      );
 }
 
 /// A single retro game that matched the query. Games live behind the Moonbase
@@ -55,10 +61,9 @@ class SearchViewModel extends ChangeNotifier {
     MultiServerRepository? multiServerRepository,
   }) : _seerrRepository = seerrRepository,
        _multiServerRepository = multiServerRepository,
-       _scopedParentId =
-           (scopedParentId != null && scopedParentId.isNotEmpty)
-               ? scopedParentId
-               : null;
+       _scopedParentId = (scopedParentId != null && scopedParentId.isNotEmpty)
+           ? scopedParentId
+           : null;
 
   void setSeerrRepository(SeerrRepository repo) {
     _seerrRepository = repo;
@@ -109,14 +114,6 @@ class SearchViewModel extends ChangeNotifier {
   // Counts searches, so people that answer late only fill in their own search.
   int _searchRun = 0;
 
-  static List<SearchResultGroup> _bookSearchGroups() {
-    final l10n = currentAppLocalizations();
-    return [
-      SearchResultGroup(title: l10n.books, itemTypes: const ['Book']),
-      SearchResultGroup(title: l10n.audiobooks, itemTypes: const ['AudioBook']),
-    ];
-  }
-
   static List<SearchResultGroup> _searchGroups() {
     final l10n = currentAppLocalizations();
     return [
@@ -126,7 +123,10 @@ class SearchViewModel extends ChangeNotifier {
       SearchResultGroup(title: l10n.seasons, itemTypes: const ['Season']),
       SearchResultGroup(title: l10n.episodes, itemTypes: const ['Episode']),
       SearchResultGroup(title: l10n.videos, itemTypes: const ['Video']),
-      SearchResultGroup(title: l10n.musicVideos, itemTypes: const ['MusicVideo']),
+      SearchResultGroup(
+        title: l10n.musicVideos,
+        itemTypes: const ['MusicVideo'],
+      ),
       SearchResultGroup(title: l10n.trailers, itemTypes: const ['Trailer']),
       SearchResultGroup(title: l10n.programs, itemTypes: const ['Program']),
       SearchResultGroup(
@@ -140,7 +140,10 @@ class SearchViewModel extends ChangeNotifier {
       ),
       SearchResultGroup(title: l10n.albums, itemTypes: const ['MusicAlbum']),
       SearchResultGroup(title: l10n.songs, itemTypes: const ['Audio']),
-      SearchResultGroup(title: l10n.photoAlbums, itemTypes: const ['PhotoAlbum']),
+      SearchResultGroup(
+        title: l10n.photoAlbums,
+        itemTypes: const ['PhotoAlbum'],
+      ),
       SearchResultGroup(title: l10n.photos, itemTypes: const ['Photo']),
       SearchResultGroup(title: l10n.collections, itemTypes: const ['BoxSet']),
       SearchResultGroup(title: l10n.people, itemTypes: const ['Person']),
@@ -153,7 +156,9 @@ class SearchViewModel extends ChangeNotifier {
 
   void searchDebounced(String query) {
     final trimmed = query.trim();
-    if (trimmed == _query) return;
+    if (trimmed == _query) {
+      return;
+    }
     _query = trimmed;
 
     _debounceTimer?.cancel();
@@ -178,7 +183,9 @@ class SearchViewModel extends ChangeNotifier {
 
   void searchImmediate(String query) {
     final trimmed = query.trim();
-    if (trimmed.isEmpty) return;
+    if (trimmed.isEmpty) {
+      return;
+    }
     _query = trimmed;
     _debounceTimer?.cancel();
     _state = SearchState.loading;
@@ -187,15 +194,20 @@ class SearchViewModel extends ChangeNotifier {
   }
 
   Future<void> _executeSearch(String query) async {
-    if (query != _query) return;
+    if (query != _query) {
+      return;
+    }
     final run = ++_searchRun;
 
     try {
-        final activeGroups = _scopedParentId != null
-          ? _bookSearchGroups()
-          : _searchGroups();
-      final seerrFuture = _fetchSeerrResults(query);
-      final gamesFuture = _scopedParentId != null
+      final activeGroups = _searchGroups()
+          .where((group) => group.itemTypes.every(AppFeatures.allowsItem))
+          .toList();
+      final seerrFuture = AppFeatures.has(AppFeature.seerr)
+          ? _fetchSeerrResults(query)
+          : Future.value(const <SeerrDiscoverItem>[]);
+      final gamesFuture =
+          !AppFeatures.has(AppFeature.games) || _scopedParentId != null
           ? Future.value(const <GameSearchResult>[])
           : _fetchGameResults(query);
 
@@ -230,7 +242,9 @@ class SearchViewModel extends ChangeNotifier {
                 .timeout(_peopleGrace, onTimeout: () => null)
           : await peopleFuture;
 
-      if (query != _query) return;
+      if (query != _query) {
+        return;
+      }
 
       _results = _withPeople(groups, people ?? const []);
       _seerrResults = seerr;
@@ -239,14 +253,18 @@ class SearchViewModel extends ChangeNotifier {
       if (people == null) {
         unawaited(
           peopleFuture.then((found) {
-            if (found.isEmpty || run != _searchRun || query != _query) return;
+            if (found.isEmpty || run != _searchRun || query != _query) {
+              return;
+            }
             _results = _withPeople(groups, found);
             notifyListeners();
           }),
         );
       }
     } catch (e) {
-      if (query != _query) return;
+      if (query != _query) {
+        return;
+      }
       _error = e;
       _state = SearchState.error;
     }
@@ -264,7 +282,10 @@ class SearchViewModel extends ChangeNotifier {
     // instead of looking the servers up again.
     final sessions = await _multiServerRepository?.getLoggedInServers();
     _serverNames = sessions != null && sessions.length > 1
-        ? {for (final session in sessions) session.server.id: session.server.name}
+        ? {
+            for (final session in sessions)
+              session.server.id: session.server.name,
+          }
         : const {};
     final peopleFuture = _searchEachServer(
       (repository) => repository
@@ -272,7 +293,9 @@ class SearchViewModel extends ChangeNotifier {
           .timeout(_peopleTimeout),
       label: 'people search',
     ).then(_interleave).catchError((_) => <AggregatedItem>[]);
-    final channelsFuture = _channelMatches(query);
+    final channelsFuture = AppFeatures.has(AppFeature.liveTv)
+        ? _channelMatches(query)
+        : Future.value(const <AggregatedItem>[]);
     final perServerItems = await _searchEachServer(
       (repository) => repository.search(
         query,
@@ -321,13 +344,17 @@ class SearchViewModel extends ChangeNotifier {
     required String label,
   }) async {
     final multiServer = _multiServerRepository;
-    if (multiServer == null) return [await search(_searchRepository)];
+    if (multiServer == null) {
+      return [await search(_searchRepository)];
+    }
     return multiServer.searchEachServer(search, label: label);
   }
 
   /// Takes one result from each server in turn, so every server keeps its own
   /// ranking and none crowds the others out of a capped group.
-  static List<AggregatedItem> _interleave(List<List<AggregatedItem>> perServer) {
+  static List<AggregatedItem> _interleave(
+    List<List<AggregatedItem>> perServer,
+  ) {
     final longest = perServer.fold(0, (most, items) => max(most, items.length));
     return [
       for (var i = 0; i < longest; i++)
@@ -344,7 +371,9 @@ class SearchViewModel extends ChangeNotifier {
     // Channels come back wholesale rather than through a search the server
     // answers, so the folding it would have done has to happen here.
     final q = foldForSearch(query.trim());
-    if (q.isEmpty || q.startsWith('studio:')) return const [];
+    if (q.isEmpty || q.startsWith('studio:')) {
+      return const [];
+    }
     _channelsFuture ??= _searchEachServer(
       (repository) => repository.fetchLiveTvChannels(),
       label: 'channel lineup',
@@ -364,13 +393,21 @@ class SearchViewModel extends ChangeNotifier {
   }
 
   Future<List<SeerrDiscoverItem>> _fetchSeerrResults(String query) async {
-    if (_scopedParentId != null) return const [];
-    if (query.trim().toLowerCase().startsWith('studio:')) return const [];
+    if (_scopedParentId != null) {
+      return const [];
+    }
+    if (query.trim().toLowerCase().startsWith('studio:')) {
+      return const [];
+    }
     final repo = _seerrRepository;
-    if (repo == null) return const [];
+    if (repo == null) {
+      return const [];
+    }
     try {
       await repo.ensureInitialized();
-      if (!repo.isAvailable) return const [];
+      if (!repo.isAvailable) {
+        return const [];
+      }
       final page = await repo.search(query, limit: _resultLimit);
       return page.results.where((item) => !item.isBlacklisted).toList();
     } catch (_) {
@@ -382,9 +419,13 @@ class SearchViewModel extends ChangeNotifier {
     // Games have no search endpoint, so the whole set is matched here and the
     // folding is this side's to do.
     final q = foldForSearch(query.trim());
-    if (q.isEmpty || q.startsWith('studio:')) return const [];
+    if (q.isEmpty || q.startsWith('studio:')) {
+      return const [];
+    }
     final gamesApi = _client.gamesApi;
-    if (gamesApi == null) return const [];
+    if (gamesApi == null) {
+      return const [];
+    }
     try {
       _allGamesFuture ??= _fetchAllGames(gamesApi);
       final all = await _allGamesFuture!;

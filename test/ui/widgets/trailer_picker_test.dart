@@ -125,45 +125,46 @@ void main() {
     expect((await picked())?.url, 'https://example.com/two.mp4');
   });
 
-  testWidgets('d-pad focus never leaves the side panel at any edge', (
-    tester,
-  ) async {
-    PlatformDetection.setInterfaceLayout(InterfaceLayout.tv);
-    final picked = await _pumpPicker(tester);
+  testWidgets(
+    'TV trailer modal keeps D-pad focus at its edges and selects by arrows',
+    (tester) async {
+      PlatformDetection.setInterfaceLayout(InterfaceLayout.tv);
+      final picked = await _pumpPicker(tester);
 
-    // The page behind lives in a Scaffold and the panel doesn't, so a focus
-    // with a Scaffold above it has fallen out of the panel.
-    Future<void> press(LogicalKeyboardKey key) async {
-      await tester.sendKeyEvent(key);
+      // The page behind lives in a Scaffold and the panel doesn't, so a focus
+      // with a Scaffold above it has fallen out of the panel.
+      Future<void> press(LogicalKeyboardKey key) async {
+        await tester.sendKeyEvent(key);
+        await tester.pumpAndSettle();
+        final focused = FocusManager.instance.primaryFocus?.context;
+        expect(focused, isNotNull, reason: '$key');
+        expect(
+          focused!.findAncestorWidgetOfExactType<Scaffold>(),
+          isNull,
+          reason: '$key',
+        );
+      }
+
+      await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
-      final focused = FocusManager.instance.primaryFocus?.context;
-      expect(focused, isNotNull, reason: '$key');
-      expect(
-        focused!.findAncestorWidgetOfExactType<Scaffold>(),
-        isNull,
-        reason: '$key',
-      );
-    }
+      expect(find.byType(BottomSheet), findsNothing);
+      await press(LogicalKeyboardKey.arrowUp);
+      await press(LogicalKeyboardKey.arrowLeft);
+      await press(LogicalKeyboardKey.arrowRight);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect((await picked())?.url, 'https://example.com/one.mp4');
 
-    await tester.tap(find.text('Open'));
-    await tester.pumpAndSettle();
-    expect(find.byType(BottomSheet), findsNothing);
-    await press(LogicalKeyboardKey.arrowUp);
-    await press(LogicalKeyboardKey.arrowLeft);
-    await press(LogicalKeyboardKey.arrowRight);
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-    await tester.pumpAndSettle();
-    expect((await picked())?.url, 'https://example.com/one.mp4');
-
-    await tester.tap(find.text('Open'));
-    await tester.pumpAndSettle();
-    for (var i = 0; i < 4; i++) {
-      await press(LogicalKeyboardKey.arrowDown);
-    }
-    await press(LogicalKeyboardKey.arrowLeft);
-    await press(LogicalKeyboardKey.arrowRight);
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-    await tester.pumpAndSettle();
-    expect((await picked())?.url, 'https://example.com/two.mp4');
-  });
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      for (var i = 0; i < 4; i++) {
+        await press(LogicalKeyboardKey.arrowDown);
+      }
+      await press(LogicalKeyboardKey.arrowLeft);
+      await press(LogicalKeyboardKey.arrowRight);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect((await picked())?.url, 'https://example.com/two.mp4');
+    },
+  );
 }

@@ -2,6 +2,28 @@ import 'package:flutter/material.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../../playback/subtitle_style.dart';
+import '../../../util/platform_detection.dart';
+import '../../tv/tv26_button.dart';
+
+Widget _appearanceStepButton({
+  required String label,
+  required bool increase,
+  required VoidCallback onPressed,
+}) => PlatformDetection.isTV
+    ? Tv26Button(
+        label: label,
+        icon: increase ? Icons.add : Icons.remove,
+        iconOnly: true,
+        width: 40,
+        onPressed: onPressed,
+      )
+    : IconButton(
+        tooltip: label,
+        onPressed: onPressed,
+        icon: Icon(
+          increase ? Icons.add_circle_outline : Icons.remove_circle_outline,
+        ),
+      );
 
 class SubtitleAppearanceFooter extends StatefulWidget {
   const SubtitleAppearanceFooter({
@@ -114,10 +136,8 @@ class _SubtitleAppearanceFooterState extends State<SubtitleAppearanceFooter> {
                 ? _relativeLabel(_offset * 100)
                 : '${(_offset * 100).round()}%',
             valueWidth: widget.secondary ? 80 : 48,
-            onDecrease: () =>
-                _update(offset: _offset - widget.offsetStep),
-            onIncrease: () =>
-                _update(offset: _offset + widget.offsetStep),
+            onDecrease: () => _update(offset: _offset - widget.offsetStep),
+            onIncrease: () => _update(offset: _offset + widget.offsetStep),
           ),
       ],
     ),
@@ -151,10 +171,10 @@ class _SubtitleAppearanceFooterState extends State<SubtitleAppearanceFooter> {
             style: const TextStyle(color: Colors.white70),
           ),
         ),
-        IconButton(
-          tooltip: AppLocalizations.of(context).playerTooltipPrevious,
+        _appearanceStepButton(
+          label: AppLocalizations.of(context).playerTooltipPrevious,
+          increase: false,
           onPressed: () => _updateTextColor(nextColor(-1)),
-          icon: const Icon(Icons.remove_circle_outline),
         ),
         SizedBox(
           width: 112,
@@ -181,10 +201,10 @@ class _SubtitleAppearanceFooterState extends State<SubtitleAppearanceFooter> {
             ],
           ),
         ),
-        IconButton(
-          tooltip: AppLocalizations.of(context).next,
+        _appearanceStepButton(
+          label: AppLocalizations.of(context).next,
+          increase: true,
           onPressed: () => _updateTextColor(nextColor(1)),
-          icon: const Icon(Icons.add_circle_outline),
         ),
       ],
     );
@@ -212,19 +232,19 @@ class _AppearanceControlRow extends StatelessWidget {
       Expanded(
         child: Text(label, style: const TextStyle(color: Colors.white70)),
       ),
-      IconButton(
-        tooltip: AppLocalizations.of(context).decreaseValue(label),
+      _appearanceStepButton(
+        label: AppLocalizations.of(context).decreaseValue(label),
+        increase: false,
         onPressed: onDecrease,
-        icon: const Icon(Icons.remove_circle_outline),
       ),
       SizedBox(
         width: valueWidth,
         child: Text(value, textAlign: TextAlign.center),
       ),
-      IconButton(
-        tooltip: AppLocalizations.of(context).increaseValue(label),
+      _appearanceStepButton(
+        label: AppLocalizations.of(context).increaseValue(label),
+        increase: true,
         onPressed: onIncrease,
-        icon: const Icon(Icons.add_circle_outline),
       ),
     ],
   );

@@ -6,12 +6,12 @@ import 'package:moonfin/ui/theme/app_theme.dart';
 import 'package:moonfin/ui/widgets/grid_button_card.dart';
 
 void main() {
-  test('Neon Pulse typography applies themed display styling', () {
+  test('all theme builds use bundled Inter', () {
     final theme = AppTheme.buildTheme(
       ThemeRegistry.resolveById(ThemeRegistry.neonPulseId),
     );
 
-    expect(theme.textTheme.displayLarge?.fontFamily, 'NeonPulseDisplay');
+    expect(theme.textTheme.displayLarge?.fontFamily, 'Inter');
     expect(theme.textTheme.displayLarge?.shadows?.isNotEmpty, true);
     expect(theme.textTheme.bodyMedium?.letterSpacing, 0.6);
   });

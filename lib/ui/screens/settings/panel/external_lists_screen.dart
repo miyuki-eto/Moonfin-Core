@@ -179,7 +179,7 @@ class _ImdbListsScreenState extends State<_ImdbListsScreen> {
                     SizedBox(
                       width: 50,
                       height: 50,
-                      child: CircularProgressIndicator(),
+                      child: LoadingThrobber(),
                     ),
                     SizedBox(height: 24),
                     Text(
@@ -1989,7 +1989,7 @@ class _AddEditCustomRowDialogState extends State<_AddEditCustomRowDialog> {
                           child: SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: LoadingThrobber(),
                           ),
                         )
                       ]

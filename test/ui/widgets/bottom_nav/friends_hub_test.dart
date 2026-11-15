@@ -31,22 +31,23 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('the bottom navbar hub lists Friends with what is waiting', (
-    tester,
-  ) async {
-    await GetIt.instance<UserPreferences>().set(
-      UserPreferences.showFriendsButton,
-      true,
-    );
-    GetIt.instance.registerSingleton<AchievementsService>(
-      _FakeAchievements(socialAvailable: true),
-    );
-    await openHub(tester);
+  testWidgets(
+    'the bottom navbar omits Friends even when the plugin and preference enable it',
+    (tester) async {
+      await GetIt.instance<UserPreferences>().set(
+        UserPreferences.showFriendsButton,
+        true,
+      );
+      GetIt.instance.registerSingleton<AchievementsService>(
+        _FakeAchievements(socialAvailable: true),
+      );
+      await openHub(tester);
 
-    expect(find.text('Friends'), findsOneWidget);
-    // Once on the avatar and once on the row.
-    expect(find.text('2'), findsNWidgets(2));
-  });
+      expect(find.text('Friends'), findsNothing);
+      // Once on the avatar and once on the row.
+      expect(find.text('2'), findsNothing);
+    },
+  );
 
   testWidgets('Friends stays out of the hub until it\'s turned on', (
     tester,
@@ -57,7 +58,7 @@ void main() {
     await openHub(tester);
 
     expect(find.text('Friends'), findsNothing);
-    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Settings'), findsNothing);
   });
 
   testWidgets('no Friends without the plugin', (tester) async {
@@ -71,6 +72,6 @@ void main() {
     await openHub(tester);
 
     expect(find.text('Friends'), findsNothing);
-    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Settings'), findsNothing);
   });
 }

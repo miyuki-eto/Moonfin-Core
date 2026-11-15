@@ -1,8 +1,13 @@
+import 'config/app_features.dart';
+
 import 'dart:async';
 
 import 'package:audio_session/audio_session.dart';
+import 'package:device_info_plus_tizen/device_info_plus_tizen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart'
+    show LicenseEntryWithLineBreaks, LicenseRegistry;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:get_it/get_it.dart';
 import 'package:jellyfin_preference/jellyfin_preference.dart';
@@ -82,7 +87,9 @@ void _attachIosAudioRouteHandling() {
         break;
       case AVAudioSessionRouteChangeReason.newDeviceAvailable:
       case AVAudioSessionRouteChangeReason.override:
-        if (!manager.state.isPlaying) return;
+        if (!manager.state.isPlaying) {
+          return;
+        }
         final now = DateTime.now();
         final last = _lastIosRouteResync;
         if (last != null &&
@@ -141,12 +148,16 @@ void _configureImageCache() {
 /// Impeller builds ignore this call. It waits for the first frame so the view
 /// has its real size.
 void _capSkiaCache() {
-  if (!PlatformDetection.isAndroid) return;
+  if (!PlatformDetection.isAndroid) {
+    return;
+  }
   WidgetsBinding.instance.addPostFrameCallback((_) {
-    final size = WidgetsBinding.instance.platformDispatcher.implicitView
-        ?.physicalSize;
+    final size =
+        WidgetsBinding.instance.platformDispatcher.implicitView?.physicalSize;
     final cap = size == null ? null : skiaCacheCapFor(size.width * size.height);
-    if (cap == null) return;
+    if (cap == null) {
+      return;
+    }
     unawaited(
       SystemChannels.skia
           .invokeMethod<void>('Skia.setResourceCacheMaxBytes', cap)
@@ -179,7 +190,9 @@ void _captureCrash(Object error, StackTrace? stack) {
     final signature = '$errorLine @ $frameLine';
 
     final crashes = GetIt.instance<CrashReportService>();
-    if (!crashes.shouldCapture(signature)) return;
+    if (!crashes.shouldCapture(signature)) {
+      return;
+    }
 
     final logs = GetIt.instance<LogService>();
     logs.logCrash(
@@ -314,7 +327,9 @@ Future<void> _detectAndSetTvMode() async {
     PlatformDetection.setTvMode(true);
     return;
   }
-  if (!PlatformDetection.isAndroid) return;
+  if (!PlatformDetection.isAndroid) {
+    return;
+  }
   const channel = MethodChannel('org.moonfin.androidtv/platform');
   const attempts = 3;
   for (var attempt = 0; attempt < attempts; attempt++) {
@@ -388,7 +403,9 @@ Future<bool> _retryOffLaunchPath(Future<bool> Function() attempt) async {
     await Future<void>.delayed(delay);
     delay *= 2;
     try {
-      if (await attempt()) return true;
+      if (await attempt()) {
+        return true;
+      }
     } catch (_) {}
   }
   return false;
@@ -399,13 +416,29 @@ Future<bool> _retryOffLaunchPath(Future<bool> Function() attempt) async {
 /// channel cant reach the platform side. Its own try/catch matters: this runs
 /// inside a Future.wait, which gives up on every sibling the moment one throws.
 Future<void> _detectAndSetDeviceMemory() async {
-  if (!PlatformDetection.isAndroid) return;
+  if (PlatformDetection.isTizen) {
+    try {
+      final info = await DeviceInfoPluginTizen().tizenInfo
+          .timeout(const Duration(seconds: 2));
+      PlatformDetection.setDeviceMemory({
+        'totalMem': info.physicalRamSize * 1024 * 1024,
+      });
+    } catch (_) {
+      // Leave the performance mode to the existing override if unavailable.
+    }
+    return;
+  }
+  if (!PlatformDetection.isAndroid) {
+    return;
+  }
   try {
     const channel = MethodChannel('org.moonfin.androidtv/platform');
     final raw = await channel
         .invokeMethod<Map<dynamic, dynamic>>('deviceMemory')
         .timeout(const Duration(seconds: 2));
-    if (raw == null) return;
+    if (raw == null) {
+      return;
+    }
     final memory = raw.map((key, value) => MapEntry(key.toString(), value));
     PlatformDetection.setDeviceMemory(memory);
     // The facts go in, never the verdict, so moving the threshold later
@@ -424,7 +457,9 @@ Future<void> _detectAndSetDeviceMemory() async {
 /// box whose TV is still asleep would otherwise hold the launch for the whole
 /// half-minute retry window.
 Future<void> _detectAndSetDisplayCapabilities() async {
-  if (!DisplayHdrProbe.isSupported) return;
+  if (!DisplayHdrProbe.isSupported) {
+    return;
+  }
   // Its own try/catch for the same reason the memory probe has one: this runs
   // inside a Future.wait, which gives up on every sibling the moment one
   // throws.
@@ -444,9 +479,7 @@ Future<void> _detectAndSetDisplayCapabilities() async {
 Future<Map<String, dynamic>?> _queryCodecCaps(MethodChannel channel) async {
   final raw = await channel.invokeMethod<Map<dynamic, dynamic>>(
     'mediaCodecCapabilities',
-    <String, dynamic>{
-      'includeSoftwareDecoders': !PlatformDetection.isTV,
-    },
+    <String, dynamic>{'includeSoftwareDecoders': !PlatformDetection.isTV},
   );
   return raw?.map((key, value) => MapEntry(key.toString(), value));
 }
@@ -469,9 +502,13 @@ Future<void> _retryCodecCapsOffLaunchPath(MethodChannel channel) =>
 /// true once the answer carries HEVC and throws when the channel does.
 Future<bool> _applyCodecProbe(MethodChannel channel) async {
   final caps = await _queryCodecCaps(channel);
-  if (caps == null || codecCapsLookDegenerate(caps)) return false;
+  if (caps == null || codecCapsLookDegenerate(caps)) {
+    return false;
+  }
   PlatformDetection.setMediaCodecCapabilities(caps);
-  if (codecCapsLookIncomplete(caps)) return false;
+  if (codecCapsLookIncomplete(caps)) {
+    return false;
+  }
   await _cacheCodecCaps(channel, caps);
   return true;
 }
@@ -492,7 +529,9 @@ Future<void> _cacheCodecCaps(
   Map<String, dynamic> caps,
 ) async {
   final build = await _androidBuildFingerprint(channel);
-  if (build == null) return;
+  if (build == null) {
+    return;
+  }
   await DeviceCapabilityCache.writeMap(
     DeviceCapabilityCache.codecKey,
     caps,
@@ -503,20 +542,26 @@ Future<void> _cacheCodecCaps(
 /// Some Amlogic and MediaTek audio drivers misbehave once a device has been up
 /// for a long time, so the diagnostic report says how long that's been.
 Future<void> _detectAndSetSystemUptime() async {
-  if (!PlatformDetection.isAndroid) return;
+  if (!PlatformDetection.isAndroid) {
+    return;
+  }
   try {
     const channel = MethodChannel('org.moonfin.androidtv/platform');
     final uptimeMs = await channel
         .invokeMethod<int>('uptimeMillis')
         .timeout(const Duration(seconds: 2));
-    if (uptimeMs != null) PlatformDetection.setSystemUptime(uptimeMs);
+    if (uptimeMs != null) {
+      PlatformDetection.setSystemUptime(uptimeMs);
+    }
   } catch (_) {}
 }
 
 /// The renderer is fixed before Dart runs, so the diagnostic report asks the
 /// platform side what it chose.
 Future<void> _detectAndSetRenderer() async {
-  if (!PlatformDetection.isAndroid) return;
+  if (!PlatformDetection.isAndroid) {
+    return;
+  }
   try {
     const channel = MethodChannel('org.moonfin.androidtv/platform');
     PlatformDetection.setRenderer(
@@ -528,7 +573,9 @@ Future<void> _detectAndSetRenderer() async {
 }
 
 Future<void> _detectAndSetCodecCapabilities() async {
-  if (!PlatformDetection.isAndroid) return;
+  if (!PlatformDetection.isAndroid) {
+    return;
+  }
   const channel = MethodChannel('org.moonfin.androidtv/platform');
 
   // What a chip decodes only changes with its firmware, so a sound result
@@ -673,7 +720,9 @@ Future<void> _detectAndSetAppleTvCapabilities() async {
 }
 
 Future<void> _detectAndApplyAudioCapabilities(UserPreferences prefs) async {
-  if (!AudioCapabilityProbe.isSupported) return;
+  if (!AudioCapabilityProbe.isSupported) {
+    return;
+  }
   try {
     // Probe with a retry window sized against an HDMI handshake, then publish
     // so getDeviceProfile() picks it up.
@@ -702,15 +751,14 @@ Future<void> _detectAndApplyAudioCapabilities(UserPreferences prefs) async {
   } catch (_) {}
 }
 
-Future<void> _retryAudioCapsOffLaunchPath() =>
-    _retryOffLaunchPath(() async {
-      final profile = await AudioCapabilityProbe.query();
-      if (profile == null || AudioCapabilityProbe.looksEmpty(profile)) {
-        return false;
-      }
-      AudioCapabilityProbe.apply(profile);
-      return true;
-    });
+Future<void> _retryAudioCapsOffLaunchPath() => _retryOffLaunchPath(() async {
+  final profile = await AudioCapabilityProbe.query();
+  if (profile == null || AudioCapabilityProbe.looksEmpty(profile)) {
+    return false;
+  }
+  AudioCapabilityProbe.apply(profile);
+  return true;
+});
 
 void _sweepImageCache(UserPreferences prefs, {bool throttle = false}) {
   final mb = prefs.get(UserPreferences.imageCacheLimitMb);
@@ -723,8 +771,12 @@ void _sweepImageCache(UserPreferences prefs, {bool throttle = false}) {
 class _AutoDownloadResumeObserver with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) return;
-    if (!GetIt.instance.isRegistered<AutoDownloadService>()) return;
+    if (state != AppLifecycleState.resumed) {
+      return;
+    }
+    if (!GetIt.instance.isRegistered<AutoDownloadService>()) {
+      return;
+    }
     GetIt.instance<AutoDownloadService>().onAppResumed();
   }
 }
@@ -763,10 +815,14 @@ class _CapabilityRefreshObserver with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) return;
+    if (state != AppLifecycleState.resumed) {
+      return;
+    }
     final now = DateTime.now();
     final last = _lastRefresh;
-    if (last != null && now.difference(last) < _throttle) return;
+    if (last != null && now.difference(last) < _throttle) {
+      return;
+    }
     _lastRefresh = now;
     unawaited(_refresh());
   }
@@ -800,7 +856,9 @@ class _CapabilityRefreshObserver with WidgetsBindingObserver {
 /// Desktop is the only place a mouse wheel is the main way to scroll, so the
 /// setting stays inert elsewhere.
 void _bindScrollSensitivity(UserPreferences prefs) {
-  if (!PlatformDetection.useDesktopUi) return;
+  if (!PlatformDetection.useDesktopUi) {
+    return;
+  }
   void apply() {
     (WidgetsBinding.instance as ScrollSensitivityBinding).multiplier =
         prefs.get(UserPreferences.desktopScrollSensitivity) / 100;
@@ -839,16 +897,20 @@ class _PreferenceWriteFlushObserver with WidgetsBindingObserver {
 }
 
 @pragma('vm:entry-point')
-Future<void> watchNextBackgroundMain() => watch_next_bg.watchNextBackgroundMain();
+Future<void> watchNextBackgroundMain() =>
+    watch_next_bg.watchNextBackgroundMain();
 
 /// Entry for the Android auto-download worker's headless engine.
 @pragma('vm:entry-point')
 Future<void> autoDownloadBackgroundMain() =>
     auto_download_bg.autoDownloadBackgroundMain();
 
-void main() async {
+Future<void> main() => startMediaApp();
+
+/// The hardware observer supplies the normal binding with screenshot support.
+Future<void> startMediaApp({WidgetsBinding? binding}) async {
   configureHttpOverrides();
-  ScrollSensitivityBinding.ensureInitialized();
+  if (binding == null) ScrollSensitivityBinding.ensureInitialized();
 
   // Pre-warms the liquid_glass_widgets shader programs so the first glass
   // pane doesn't white-flash. Cheap no-op on tiers where the package
@@ -857,6 +919,14 @@ void main() async {
   await LiquidGlassWidgets.initialize();
 
   registerGameCoreLicenses();
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks([
+      'Inter',
+    ], await rootBundle.loadString('assets/fonts/Inter-LICENSE.txt'));
+    yield LicenseEntryWithLineBreaks([
+      'libpgs-js (native PGS adaptation)',
+    ], await rootBundle.loadString('assets/licenses/libpgs.txt'));
+  });
   registerEpubJsLicenses();
 
   if (!PlatformDetection.isWeb && PlatformDetection.isWindows) {
@@ -905,7 +975,8 @@ void main() async {
 
   // Apple runs entirely on AetherEngine, so media_kit isn't initialized there
   // and its native libs are out of those builds.
-  if (!PlatformDetection.isAppleTV &&
+  if (!PlatformDetection.isTizen &&
+      !PlatformDetection.isAppleTV &&
       !PlatformDetection.isIOS &&
       !PlatformDetection.isMacOS) {
     MediaKit.ensureInitialized();
@@ -939,8 +1010,8 @@ void main() async {
   // appear blank. Pumping a warm-up frame gives the font loader time to finish.
   // The issue is intermittent and goes away on re-run once the OS font cache
   // is warm, which confirms the timing root cause.
-  if (PlatformDetection.isLinux ||
-      PlatformDetection.isAppleTV) {
+  if (PlatformDetection.isLinux || PlatformDetection.isAppleTV ||
+      PlatformDetection.isTizen) {
     WidgetsBinding.instance.scheduleWarmUpFrame();
   }
 
@@ -956,16 +1027,26 @@ void main() async {
 
   await configureDependencies();
   _installCrashHandlers();
-  if (PlatformDetection.isAndroid) _startProcessExitReporter();
+  if (PlatformDetection.isAndroid) {
+    _startProcessExitReporter();
+  }
   // When the system runs the auto-download refresh task against this
   // engine, the native side retries its call until this handler is bound.
-  if (AutoDownloadService.isSupportedPlatform) {
+  if (AppFeatures.has(AppFeature.downloads) &&
+      AutoDownloadService.isSupportedPlatform) {
     BackgroundRefresh.instance.bind(runAutoDownloadBackgroundRefresh);
+  } else if (!AppFeatures.has(AppFeature.downloads)) {
+    // Cancel schedules left by an earlier install and finish any in-flight
+    // OS wake without restoring a download session.
+    BackgroundRefresh.instance.bind((_) async => true);
+    unawaited(BackgroundRefresh.instance.configure(enabled: false));
   }
 
   // Registered before runApp so a CarPlay-only launch (no window scene, no
   // widgets) can browse and start playback.
-  if (PlatformDetection.isIOS && !GetIt.instance.isRegistered<CarPlayService>()) {
+  if (AppFeatures.has(AppFeature.music) &&
+      PlatformDetection.isIOS &&
+      !GetIt.instance.isRegistered<CarPlayService>()) {
     try {
       final carPlayService = CarPlayService(
         browse: GetIt.instance<MediaBrowseService>(),
@@ -980,11 +1061,14 @@ void main() async {
   WidgetsBinding.instance.addObserver(_PreferenceWriteFlushObserver(prefs));
   WidgetsBinding.instance.addObserver(_ImageCacheSweepObserver(prefs));
   WidgetsBinding.instance.addObserver(_CapabilityRefreshObserver());
-  WidgetsBinding.instance.addObserver(_AutoDownloadResumeObserver());
+  if (AppFeatures.has(AppFeature.downloads)) {
+    WidgetsBinding.instance.addObserver(_AutoDownloadResumeObserver());
+  }
   WidgetsBinding.instance.addPostFrameCallback((_) => _sweepImageCache(prefs));
 
   GetIt.instance<PlaybackManager>().queueService.queueChangedStream.listen((_) {
-    final activeItem = GetIt.instance<PlaybackManager>().queueService.currentItem;
+    final activeItem =
+        GetIt.instance<PlaybackManager>().queueService.currentItem;
     if (activeItem is AggregatedItem) {
       prefs.unhideFromContinueWatching(activeItem.id);
       if (activeItem.seriesId != null && activeItem.seriesId!.isNotEmpty) {
@@ -996,9 +1080,8 @@ void main() async {
 
   // Register Theme Store themes before the active theme is resolved so a
   // store-saved theme applies on launch.
-  await ThemeStoreService(
-    GetIt.instance<StoragePathService>(),
-  ).loadAndRegister();
+  await ThemeStoreService(GetIt.instance<StoragePathService>())
+      .loadAndRegister();
 
   if (PlatformDetection.isDesktop) {
     await _restoreWindowGeometry();
@@ -1030,9 +1113,11 @@ void main() async {
     );
   }
 
-  try {
-    GetIt.instance<AirPlayCommandBridge>().start();
-  } catch (_) {}
+  if (AppFeatures.has(AppFeature.casting)) {
+    try {
+      GetIt.instance<AirPlayCommandBridge>().start();
+    } catch (_) {}
+  }
 
   runApp(const MoonfinApp());
 }
@@ -1049,7 +1134,9 @@ Future<void> _initDeferredStartupServices(UserPreferences prefs) async {
         clientFactory: GetIt.instance<MediaServerClientFactory>(),
       );
     } catch (e, st) {
-      debugPrint('initAudioService failed (lock-screen controls disabled): $e\n$st');
+      debugPrint(
+        'initAudioService failed (lock-screen controls disabled): $e\n$st',
+      );
     }
   }
 
@@ -1066,22 +1153,24 @@ Future<void> _initDeferredStartupServices(UserPreferences prefs) async {
 
   await _detectAndApplyAudioCapabilities(prefs);
 
-  try {
-    await GetIt.instance<DownloadNotificationService>().initialize();
-  } catch (_) {}
-
-  // Starts the native download engine and re-attaches to any downloads that
-  // ran while the app was suspended or dead. No-op where unsupported.
-  try {
-    await GetIt.instance<BackgroundDownloadCoordinator>().ensureInitialized();
-  } catch (_) {}
-
-  try {
-    await GetIt.instance<SeerrNotificationService>().initialize();
-    await GetIt.instance<SeerrNotificationService>().handleColdStart();
-  } catch (_) {}
-
-  if (PlatformDetection.isMobile) {
+  if (AppFeatures.has(AppFeature.downloads)) {
+    try {
+      await GetIt.instance<DownloadNotificationService>().initialize();
+    } catch (_) {}
+    try {
+      await GetIt.instance<BackgroundDownloadCoordinator>().ensureInitialized();
+    } catch (_) {}
+  }
+  if (AppFeatures.has(AppFeature.seerr)) {
+    try {
+      await GetIt.instance<SeerrNotificationService>().initialize();
+      await GetIt.instance<SeerrNotificationService>().handleColdStart();
+    } catch (_) {}
+  }
+  if (PlatformDetection.isMobile &&
+      (AppFeatures.has(AppFeature.seerr) ||
+          AppFeatures.has(AppFeature.social) ||
+          AppFeatures.has(AppFeature.serverMessages))) {
     try {
       await GetIt.instance<PushMessagingService>().initialize();
     } catch (_) {}
@@ -1101,12 +1190,14 @@ Future<void> _initDeferredStartupServices(UserPreferences prefs) async {
   if (PlatformDetection.isAndroid) {
     try {
       final session = await AudioSession.instance;
-      await session.configure(AudioSessionConfiguration(
-        androidAudioAttributes: AndroidAudioAttributes(
-          contentType: AndroidAudioContentType.music,
-          usage: AndroidAudioUsage.media,
+      await session.configure(
+        AudioSessionConfiguration(
+          androidAudioAttributes: AndroidAudioAttributes(
+            contentType: AndroidAudioContentType.music,
+            usage: AndroidAudioUsage.media,
+          ),
         ),
-      ));
+      );
       session.becomingNoisyEventStream.listen((_) {
         GetIt.instance<PlaybackManager>().pause();
       });

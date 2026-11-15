@@ -7,6 +7,7 @@ import 'package:moonfin/data/models/media_segment.dart';
 import 'package:moonfin/l10n/app_localizations.dart';
 import 'package:moonfin/preference/user_preferences.dart';
 import 'package:moonfin/ui/widgets/playback/next_up_overlay.dart';
+import 'package:moonfin/ui/tv/tv26_button.dart';
 import 'package:moonfin/ui/widgets/playback/skip_segment_overlay.dart';
 import 'package:moonfin/util/platform_detection.dart';
 import 'package:moonfin_design/moonfin_design.dart';
@@ -175,9 +176,17 @@ void main() {
       focusNode.requestFocus();
       await tester.pump();
 
-      final button = tester.widget<ElevatedButton>(find.byType(ElevatedButton));
-      final side = button.style?.side?.resolve({WidgetState.focused});
-      expect(side?.color, ThemeRegistry.active.borders.focusBorder.color);
+      final button = find.byWidgetPredicate(
+        (widget) => widget is Tv26Button && widget.label == 'Play Next',
+      );
+      final decoration = tester.widget<AnimatedContainer>(find.descendant(
+        of: button, matching: find.byType(AnimatedContainer),
+      )).decoration as BoxDecoration;
+      final text = tester.widget<Text>(find.descendant(
+        of: button, matching: find.text('Play Next'),
+      ));
+      expect(decoration.color, Tv26Style.foreground);
+      expect(text.style?.color, Colors.black);
     },
   );
 

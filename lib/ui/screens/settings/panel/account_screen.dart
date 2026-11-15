@@ -278,7 +278,7 @@ class _ClientCertificatesScreenState extends State<_ClientCertificatesScreen> {
         Text(l10n.settingsClientCertificates),
       ),
       body: certificates == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: LoadingThrobber())
           : ListView(
               children: [
                 adaptiveListSection(

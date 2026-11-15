@@ -1,4 +1,11 @@
+import '../../tv/tv_modal.dart';
+import '../../tv/tv_status_view.dart';
+
 import 'dart:async';
+
+import '../../tv/tv_browse_header.dart';
+import '../../tv/tv_async_content.dart';
+import '../../tv/tv26_button.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +14,7 @@ import 'package:go_router/go_router.dart';
 import 'package:moonfin_design/moonfin_design.dart';
 import 'package:server_core/server_core.dart' hide ImageType;
 
+import '../../settings_visibility.dart';
 import '../../../data/models/aggregated_item.dart';
 import '../../../data/repositories/mdblist_repository.dart';
 import '../../../data/services/background_service.dart';
@@ -82,7 +90,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addObserver(this);
     _backgroundSub = _backgroundService.backgroundStream.listen((url) {
-      if (mounted) setState(() => _backdropUrl = url);
+      if (mounted) {
+        setState(() => _backdropUrl = url);
+      }
     });
     _backdropUrl = _backgroundService.currentUrl;
     _prefs.addListener(_onChanged);
@@ -109,9 +119,13 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     super.didChangeMetrics();
     _resizeCheckDebounce?.cancel();
     _resizeCheckDebounce = Timer(const Duration(milliseconds: 150), () {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _onScroll();
+        if (mounted) {
+          _onScroll();
+        }
       });
     });
   }
@@ -121,7 +135,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
   List<AggregatedItem> _currentTabItems() {
     final types = _visibleTypes();
-    if (_selectedTab < 0 || _selectedTab >= types.length) return const [];
+    if (_selectedTab < 0 || _selectedTab >= types.length) {
+      return const [];
+    }
     return _vm.rowItems[types[_selectedTab]] ?? const [];
   }
 
@@ -141,7 +157,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       gridContentVersion++;
       cleanupGridFocusNodes(length);
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
         final primary = FocusManager.instance.primaryFocus;
         final inGrid =
             primary != null &&
@@ -154,10 +172,14 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   }
 
   void _onChanged() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
     _maybeBumpGridVersion();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _onScroll();
+      if (mounted) {
+        _onScroll();
+      }
     });
   }
 
@@ -167,9 +189,13 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   }
 
   void _onScroll() {
-    if (!_scrollController.hasClients) return;
+    if (!_scrollController.hasClients) {
+      return;
+    }
     final pos = _scrollController.position;
-    if (pos.pixels <= pos.maxScrollExtent - 400) return;
+    if (pos.pixels <= pos.maxScrollExtent - 400) {
+      return;
+    }
     if (_vm.viewStyle == FavoritesViewStyle.library) {
       _vm.loadMoreGrid();
     } else {
@@ -218,25 +244,33 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     final result = <FavoriteTypeFilter>[];
     for (final type in FavoritesViewModel.rowTypes) {
       final items = _vm.rowItems[type];
-      if (items != null && items.isNotEmpty) result.add(type);
+      if (items != null && items.isNotEmpty) {
+        result.add(type);
+      }
     }
     return result;
   }
 
   void _selectTab(int index) {
-    if (index == _selectedTab) return;
+    if (index == _selectedTab) {
+      return;
+    }
     setState(() => _selectedTab = index);
     final items = _currentTabItems();
     cleanupGridFocusNodes(items.length);
     gridContentVersion++;
     _lastGridItemsLength = items.length;
     _lastGridFirstItemId = items.isEmpty ? null : items.first.id;
-    if (_scrollController.hasClients) _scrollController.jumpTo(0);
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+    }
   }
 
   void _ensureVisibleNode(FocusNode node) {
     final nodeContext = node.context;
-    if (nodeContext == null) return;
+    if (nodeContext == null) {
+      return;
+    }
     Scrollable.ensureVisible(
       nodeContext,
       duration: const Duration(milliseconds: 200),
@@ -254,7 +288,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       final target = getGridItemFocusNode(index);
       if (target.canRequestFocus) {
         target.requestFocus();
@@ -264,7 +300,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   }
 
   void _focusFirstGridCell() {
-    if (!_usesDpad) return;
+    if (!_usesDpad) {
+      return;
+    }
     _focusGridCell(0);
   }
 
@@ -291,7 +329,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     required int count,
     required KeyEvent event,
   }) {
-    if (!event.isActionable) return KeyEventResult.ignored;
+    if (!event.isActionable) {
+      return KeyEventResult.ignored;
+    }
     final key = event.logicalKey;
     final column = index % columns;
 
@@ -334,11 +374,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     return KeyEventResult.ignored;
   }
 
-  String? _imageUrl(
-    AggregatedItem item, {
-    int? maxWidth,
-    int? maxHeight,
-  }) {
+  String? _imageUrl(AggregatedItem item, {int? maxWidth, int? maxHeight}) {
     final api = _vm.imageApi;
     if (_vm.imageType == ImageType.banner) {
       // Same order library browse uses. The portrait primary comes last
@@ -382,8 +418,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
   @override
   Widget build(BuildContext context) => RequestInitialFocus(
-    targetNode:
-        _vm.viewStyle == FavoritesViewStyle.home ? _tabsFocusNode : null,
+    targetNode: _vm.viewStyle == FavoritesViewStyle.home
+        ? _tabsFocusNode
+        : null,
     child: QuickReturnWrapper(
       scrollController: _scrollController,
       // cleanupGridFocusNodes disposes node 0 once the list empties, and the
@@ -391,7 +428,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       topFocusNode: _focusTrackedItems.isNotEmpty
           ? getGridItemFocusNode(0)
           : null,
-      child: _buildContent(context),
+      child: PlatformDetection.isTV
+          ? TvAsyncContent(
+              ready: _vm.state != FavoritesState.loading,
+              child: _buildContent(context),
+            )
+          : _buildContent(context),
     ),
   );
 
@@ -445,27 +487,37 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         cardWidth: _cardWidth(),
         aspectRatio: _gridBaseAspectRatio(),
       ),
-      FavoritesState.error => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _vm.isNetworkError
-                  ? AppLocalizations.of(context).unableToConnectToServer
-                  : describeError(_vm.error!, AppLocalizations.of(context)),
-              style: const TextStyle(color: Colors.white),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _vm.load,
-              child: Text(AppLocalizations.of(context).retry),
-            ),
-          ],
-        ),
-      ),
-      FavoritesState.ready => _vm.viewStyle == FavoritesViewStyle.home
-          ? _buildTabs()
-          : _buildGrid(),
+      FavoritesState.error =>
+        PlatformDetection.isTV
+            ? TvStatusView(
+                message: _vm.isNetworkError
+                    ? AppLocalizations.of(context).unableToConnectToServer
+                    : describeError(_vm.error!, AppLocalizations.of(context)),
+                onRetry: _vm.load,
+              )
+            : Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _vm.isNetworkError
+                          ? AppLocalizations.of(context).unableToConnectToServer
+                          : describeError(
+                              _vm.error!,
+                              AppLocalizations.of(context),
+                            ),
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: _vm.load,
+                      child: Text(AppLocalizations.of(context).retry),
+                    ),
+                  ],
+                ),
+              ),
+      FavoritesState.ready =>
+        _vm.viewStyle == FavoritesViewStyle.home ? _buildTabs() : _buildGrid(),
     };
   }
 
@@ -483,7 +535,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     if (_selectedTab >= visibleTypes.length) {
       _selectedTab = visibleTypes.length - 1;
     }
-    if (_selectedTab < 0) _selectedTab = 0;
+    if (_selectedTab < 0) {
+      _selectedTab = 0;
+    }
 
     final isMobile = _isCompact(context);
     final horizontalPadding = isMobile ? 16.0 : _horizontalPadding;
@@ -515,9 +569,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
               if (isUp) {
                 // Let default directional focus reach the header toolbar,
                 // falling back to the navbar when nothing sits above.
-                if (FocusScope.of(
-                  context,
-                ).focusInDirection(TraversalDirection.up)) {
+                if (FocusScope.of(context)
+                    .focusInDirection(TraversalDirection.up)) {
                   return true;
                 }
                 return _tryFocusNavbar();
@@ -534,7 +587,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
   Widget _buildTabGrid(FavoriteTypeFilter type, double horizontalPadding) {
     final items = _vm.rowItems[type] ?? const <AggregatedItem>[];
-    if (items.isEmpty) return const SizedBox.shrink();
+    if (items.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     final isMobile = _isCompact(context);
     final cardWidth = _cardWidth();
@@ -560,8 +615,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         final hasSubtitles = items.any(
           (item) => (_cardSubtitle(item)?.isNotEmpty ?? false),
         );
-        final desktopTextScale = MediaQuery.textScalerOf(context).scale(1.0);
-        final textHeight = (hasSubtitles ? 42.0 : 24.0) * desktopTextScale;
+        final cardHeight = MediaCard.layoutHeight(
+          context,
+          width: cellWidth,
+          aspectRatio: ar,
+          hasSubtitle: hasSubtitles,
+        );
         final imageHeight = cellWidth / ar;
         final upwardGrowth = focusExpansion && !isMobile
             ? (imageHeight * (MediaCard.focusScale - 1))
@@ -570,7 +629,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         final rowSpacing = baseRowSpacing + upwardGrowth;
         final baseTopPadding = 18.0;
         final topPadding = baseTopPadding + upwardGrowth;
-        final childAspectRatio = cellWidth / (imageHeight + textHeight);
+        final childAspectRatio = cellWidth / cardHeight;
 
         return GridView.builder(
           controller: _scrollController,
@@ -653,11 +712,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
               event: event,
             )
           : null,
-      onLongPress: () => showContextMenu(
-        context,
-        item,
-        onChanged: () => setState(() {}),
-      ),
+      onLongPress: () =>
+          showContextMenu(context, item, onChanged: () => setState(() {})),
       onTap: () => context.push(
         Destinations.itemOrPhoto(
           item.id,
@@ -671,6 +727,11 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
   Widget _buildGrid() {
     if (_vm.gridItems.isEmpty) {
+      if (PlatformDetection.isTV) {
+        return TvStatusView(
+          message: AppLocalizations.of(context).noFavoritesYet,
+        );
+      }
       return Center(
         child: Text(
           AppLocalizations.of(context).noFavoritesYet,
@@ -692,11 +753,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         final minClamp = _vm.imageType == ImageType.banner
             ? (constraints.maxWidth < 600 ? 1 : 2)
             : 2;
-        final crossAxisCount =
-            ((constraints.maxWidth - gridPadding * 2 + spacing) /
-                    (cardWidth + spacing))
-                .floor()
-                .clamp(minClamp, 20);
+        final crossAxisCount = PlatformDetection.isTV
+            ? 6
+            : ((constraints.maxWidth - gridPadding * 2 + spacing) /
+                      (cardWidth + spacing))
+                  .floor()
+                  .clamp(minClamp, 20);
 
         final cellWidth =
             (constraints.maxWidth -
@@ -707,8 +769,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         final hasSubtitles = _vm.gridItems.any(
           (item) => (_cardSubtitle(item)?.isNotEmpty ?? false),
         );
-        final desktopTextScale = MediaQuery.textScalerOf(context).scale(1.0);
-        final textHeight = (hasSubtitles ? 42.0 : 24.0) * desktopTextScale;
+        final cardHeight = MediaCard.layoutHeight(
+          context,
+          width: cellWidth,
+          aspectRatio: ar,
+          hasSubtitle: hasSubtitles,
+        );
         final imageHeight = cellWidth / ar;
         final focusColor = Color(
           _prefs.get(UserPreferences.focusColor).colorValue,
@@ -721,14 +787,20 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         final rowSpacing = baseRowSpacing + upwardGrowth;
         final baseTopPadding = 18.0;
         final topPadding = baseTopPadding + upwardGrowth;
-        final childAspectRatio = cellWidth / (imageHeight + textHeight);
-        final suppressFocusGlow = ThemeRegistry.active.borders.focusGlow.isNotEmpty;
+        final childAspectRatio = cellWidth / cardHeight;
+        final suppressFocusGlow =
+            ThemeRegistry.active.borders.focusGlow.isNotEmpty;
 
         return CustomScrollView(
           controller: _scrollController,
           slivers: [
             SliverPadding(
-              padding: EdgeInsets.fromLTRB(gridPadding, topPadding, gridPadding, 16),
+              padding: EdgeInsets.fromLTRB(
+                gridPadding,
+                topPadding,
+                gridPadding,
+                16,
+              ),
               sliver: SliverGrid(
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: crossAxisCount,
@@ -763,10 +835,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                     watchedBehavior: watchedBehavior,
                     itemType: item.type,
                     onFocus: isMobile
-                      ? null
-                      : () {
-                          _onItemFocused(item);
-                        },
+                        ? null
+                        : () {
+                            _onItemFocused(item);
+                          },
                     onHoverStart: isMobile ? null : () => _onItemFocused(item),
                     onHoverEnd: isMobile
                         ? null
@@ -784,13 +856,13 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                       if (!_vm.hasMoreGrid && !_vm.loadingMoreGrid) {
                         return KeyEventResult.ignored;
                       }
-                      if (!event.isActionable ||
-                          !event.logicalKey.isDownKey) {
+                      if (!event.isActionable || !event.logicalKey.isDownKey) {
                         return KeyEventResult.ignored;
                       }
 
                       final nextRowIndex = index + crossAxisCount;
-                      final atBottomLoadedRow = nextRowIndex >= _vm.gridItems.length;
+                      final atBottomLoadedRow =
+                          nextRowIndex >= _vm.gridItems.length;
                       if (!atBottomLoadedRow) {
                         return KeyEventResult.ignored;
                       }
@@ -821,7 +893,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24),
                   child: Center(
-                    child: CircularProgressIndicator(
+                    child: LoadingThrobber(
                       color: AppColorScheme.accent,
                     ),
                   ),
@@ -840,8 +912,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       return item.productionYear != null ? '${item.productionYear}' : null;
     }
 
-    if (item.productionYear != null) parts.add('${item.productionYear}');
-    if (item.officialRating != null) parts.add(item.officialRating!);
+    if (item.productionYear != null) {
+      parts.add('${item.productionYear}');
+    }
+    if (item.officialRating != null) {
+      parts.add(item.officialRating!);
+    }
     final rt = item.runtime;
     if (rt != null) {
       final h = rt.inHours;
@@ -896,6 +972,25 @@ class _FavoritesHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformDetection.isTV) {
+      return TvBrowseHeader(
+        title: AppLocalizations.of(context).favorites,
+        onHome: onHome,
+        subtitle: totalCount > 0
+            ? AppLocalizations.of(context).spotlightItemsCount(totalCount)
+            : null,
+        actions: [
+          Tv26Button(
+            label: AppLocalizations.of(context).sortAndFilter,
+            icon: Icons.sort,
+            width: 164,
+            height: 36,
+            fontSize: 16,
+            onPressed: onSort,
+          ),
+        ],
+      );
+    }
     final isMobile = _isCompact(context);
     final topPad = isMobile ? MediaQuery.of(context).padding.top + 8 : 12.0;
     final hPad = isMobile ? 16.0 : _horizontalPadding;
@@ -920,7 +1015,7 @@ class _FavoritesHeader extends StatelessWidget {
               if (totalCount > 0) ...[
                 const SizedBox(width: 12),
                 Text(
-                  AppLocalizations.of(context).totalCountItems(totalCount),
+                  AppLocalizations.of(context).spotlightItemsCount(totalCount),
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.white.withAlpha(102),
@@ -948,6 +1043,7 @@ class _FavoritesHeader extends StatelessWidget {
             children: [
               FocusableToolbarButton(
                 icon: Icons.home,
+                tooltip: AppLocalizations.of(context).home,
                 size: 34,
                 iconSize: 22,
                 unfocusedIconAlpha: 128,
@@ -956,15 +1052,17 @@ class _FavoritesHeader extends StatelessWidget {
               const SizedBox(width: 4),
               FocusableToolbarButton(
                 icon: Icons.sort,
+                tooltip: AppLocalizations.of(context).sortBy,
                 size: 34,
                 iconSize: 22,
                 unfocusedIconAlpha: 128,
                 onTap: onSort,
               ),
-              if (!isMobile) ...[
+              if (!isMobile && showAppSettings) ...[
                 const SizedBox(width: 4),
                 FocusableToolbarButton(
                   icon: Icons.settings,
+                  tooltip: AppLocalizations.of(context).settings,
                   size: 34,
                   iconSize: 22,
                   unfocusedIconAlpha: 128,
@@ -998,8 +1096,7 @@ class _FocusedItemHud extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hudHeight =
-        (showLabels ? 105.0 : 86.0) * _desktopUiScaleFactor();
+    final hudHeight = (showLabels ? 105.0 : 86.0) * _desktopUiScaleFactor();
     return SizedBox(
       height: hudHeight,
       child: AnimatedSwitcher(
@@ -1077,7 +1174,9 @@ class _MetadataRow extends StatelessWidget {
             borderRadius: AppRadius.circular(4),
           ),
           child: Text(
-            continuing ? AppLocalizations.of(context).continuing : AppLocalizations.of(context).ended,
+            continuing
+                ? AppLocalizations.of(context).continuing
+                : AppLocalizations.of(context).ended,
             style: const TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w900,
@@ -1152,7 +1251,12 @@ class _MetadataRow extends StatelessWidget {
 Widget _sectionHeader(String title) {
   final onSurface = AppColorScheme.onSurface;
   return Padding(
-    padding: const EdgeInsets.fromLTRB(24, 12, 24, 4),
+    padding: EdgeInsets.fromLTRB(
+      PlatformDetection.isTV ? 16 : 24,
+      12,
+      PlatformDetection.isTV ? 16 : 24,
+      4,
+    ),
     child: Text(
       title,
       style: TextStyle(
@@ -1216,7 +1320,9 @@ class _SortDialogState extends State<_SortDialog> {
   }
 
   void _rebuild() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -1229,55 +1335,58 @@ class _SortDialogState extends State<_SortDialog> {
       380.0,
     );
     return Dialog(
-      backgroundColor: AppColorScheme.surface.withValues(alpha: 0.9),
-      shape: RoundedRectangleBorder(
-        borderRadius: AppRadius.circular(20),
-        side: ThemeRegistry.active.borders.chipBorder,
-      ),
-      child: SizedBox(
-        width: dialogWidth,
-        child: ListView(
-          shrinkWrap: true,
-          padding: const EdgeInsets.symmetric(vertical: 20),
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              child: Text(
-                AppLocalizations.of(context).sortAndFilter,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: onSurface,
+      backgroundColor: Colors.transparent,
+      child: TvModalPanel(
+        padding: EdgeInsets.zero,
+        child: SizedBox(
+          width: dialogWidth,
+          child: ListView(
+            shrinkWrap: true,
+            padding: PlatformDetection.isTV
+                ? Tv26Style.modalMenuPadding
+                : const EdgeInsets.symmetric(vertical: 20),
+            children: [
+              Padding(
+                padding: PlatformDetection.isTV
+                    ? Tv26Style.modalMenuHeaderPadding
+                    : const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                child: Text(
+                  AppLocalizations.of(context).sortAndFilter,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: onSurface,
+                  ),
                 ),
               ),
-            ),
-            Divider(color: dividerColor),
-            _sectionHeader(AppLocalizations.of(context).sortBy),
-            for (final option in LibrarySortBy.itemsApiValues)
-              _radioTile(
-                label: librarySortLabel(option, AppLocalizations.of(context)),
-                selected: vm.sortBy == option,
-                trailing: vm.sortBy == option
-                    ? IconButton(
-                        icon: Icon(
-                          vm.sortDirection == SortDirection.ascending
-                              ? Icons.arrow_upward
-                              : Icons.arrow_downward,
-                          color: AppColorScheme.accent,
-                          size: 18,
-                        ),
-                        onPressed: () => vm.toggleSortDirection(),
-                      )
-                    : null,
-                onTap: () {
-                  if (vm.sortBy == option) {
-                    vm.toggleSortDirection();
-                  } else {
-                    vm.setSortBy(option);
-                  }
-                },
-              ),
-          ],
+              if (!PlatformDetection.isTV) Divider(color: dividerColor),
+              _sectionHeader(AppLocalizations.of(context).sortBy),
+              for (final option in vm.sortOptions)
+                _radioTile(
+                  label: librarySortLabel(option, AppLocalizations.of(context)),
+                  selected: vm.sortBy == option,
+                  trailing: vm.sortBy == option
+                      ? IconButton(
+                          icon: Icon(
+                            vm.sortDirection == SortDirection.ascending
+                                ? Icons.arrow_upward
+                                : Icons.arrow_downward,
+                            color: AppColorScheme.accent,
+                            size: 18,
+                          ),
+                          onPressed: () => vm.toggleSortDirection(),
+                        )
+                      : null,
+                  onTap: () {
+                    if (vm.sortBy == option) {
+                      vm.toggleSortDirection();
+                    } else {
+                      vm.setSortBy(option);
+                    }
+                  },
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -1289,6 +1398,14 @@ class _SortDialogState extends State<_SortDialog> {
     required VoidCallback onTap,
     Widget? trailing,
   }) {
+    if (PlatformDetection.isTV) {
+      return TvMenuRow(
+        label: label,
+        selected: selected,
+        trailing: trailing,
+        onPressed: onTap,
+      );
+    }
     final onSurface = AppColorScheme.onSurface;
     return InkWell(
       onTap: onTap,
@@ -1340,7 +1457,9 @@ class _DisplaySettingsDialogState extends State<_DisplaySettingsDialog> {
   }
 
   void _rebuild() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -1394,7 +1513,11 @@ class _DisplaySettingsDialogState extends State<_DisplaySettingsDialog> {
     );
   }
 
-  Widget _viewStyleRadioTile(FavoritesViewModel vm, FavoritesViewStyle style, String label) {
+  Widget _viewStyleRadioTile(
+    FavoritesViewModel vm,
+    FavoritesViewStyle style,
+    String label,
+  ) {
     final selected = vm.viewStyle == style;
     final onSurface = AppColorScheme.onSurface;
     return InkWell(
@@ -1409,9 +1532,7 @@ class _DisplaySettingsDialogState extends State<_DisplaySettingsDialog> {
               label,
               style: TextStyle(
                 fontSize: 15,
-                color: selected
-                    ? onSurface
-                    : onSurface.withValues(alpha: 0.72),
+                color: selected ? onSurface : onSurface.withValues(alpha: 0.72),
               ),
             ),
           ],
@@ -1435,9 +1556,7 @@ class _DisplaySettingsDialogState extends State<_DisplaySettingsDialog> {
               type.name[0].toUpperCase() + type.name.substring(1),
               style: TextStyle(
                 fontSize: 15,
-                color: selected
-                    ? onSurface
-                    : onSurface.withValues(alpha: 0.72),
+                color: selected ? onSurface : onSurface.withValues(alpha: 0.72),
               ),
             ),
           ],
@@ -1468,9 +1587,7 @@ class _DisplaySettingsDialogState extends State<_DisplaySettingsDialog> {
               label,
               style: TextStyle(
                 fontSize: 15,
-                color: selected
-                    ? onSurface
-                    : onSurface.withValues(alpha: 0.72),
+                color: selected ? onSurface : onSurface.withValues(alpha: 0.72),
               ),
             ),
           ],

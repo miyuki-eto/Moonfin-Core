@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:get_it/get_it.dart';
 import 'package:server_core/server_core.dart';
@@ -92,9 +93,11 @@ class _RunningTaskRow extends StatelessWidget {
                     Expanded(
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
+                        child: pct == null || isCancelling
+                            ? const Center(child: LoadingThrobber())
+                            : LinearProgressIndicator(
                           minHeight: 6,
-                          value: pct != null && !isCancelling ? pct / 100 : null,
+                          value: pct / 100,
                         ),
                       ),
                     ),

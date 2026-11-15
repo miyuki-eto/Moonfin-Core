@@ -5,6 +5,7 @@ import 'package:jellyfin_preference/jellyfin_preference.dart';
 import '../../l10n/app_localizations.dart';
 import '../../preference/preference_constants.dart';
 import '../../preference/user_preferences.dart';
+import '../../util/platform_detection.dart';
 
 class PosterSizeSettingsDialog extends StatefulWidget {
   final UserPreferences prefs;
@@ -40,22 +41,29 @@ class _PosterSizeSettingsDialogState extends State<PosterSizeSettingsDialog> {
     final onSurface = AppColorScheme.onSurface;
     final sectionColor = onSurface.withValues(alpha: 0.72);
     final dividerColor = onSurface.withValues(alpha: 0.12);
+    final isTv = PlatformDetection.isTV;
     return Dialog(
       backgroundColor: AppColorScheme.surface.withValues(alpha: 0.9),
-      shape: RoundedRectangleBorder(
-        borderRadius: AppRadius.circular(20),
-        side: ThemeRegistry.active.borders.chipBorder.copyWith(
-          color: onSurface.withValues(alpha: 0.18),
-        ),
-      ),
+      shape: isTv
+          ? Tv26Style.modalShape
+          : RoundedRectangleBorder(
+              borderRadius: AppRadius.circular(20),
+              side: ThemeRegistry.active.borders.chipBorder.copyWith(
+                color: onSurface.withValues(alpha: 0.18),
+              ),
+            ),
       child: SizedBox(
         width: 340,
         child: ListView(
           shrinkWrap: true,
-          padding: const EdgeInsets.symmetric(vertical: 20),
+          padding: isTv
+              ? Tv26Style.modalMenuPadding
+              : const EdgeInsets.symmetric(vertical: 20),
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              padding: isTv
+                  ? Tv26Style.modalMenuHeaderPadding
+                  : const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
               child: Text(
                 l10n.posterDisplayTitle,
                 style: TextStyle(

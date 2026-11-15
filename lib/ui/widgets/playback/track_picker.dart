@@ -144,6 +144,15 @@ abstract final class TrackPicker {
     if (!context.mounted) return;
 
     final backend = manager.backend;
+    final authoredPgs =
+        !secondary &&
+        backend is AsyncPgsSubtitleBackend &&
+        (backend as AsyncPgsSubtitleBackend).loadsEmbeddedPgsAsFiles &&
+        streams.any(
+          (stream) =>
+              stream['Index'] == manager.subtitleStreamIndex &&
+              MediaStreamResolver.isPgsCodec(stream['Codec'] as String?),
+        );
     final SecondarySubtitleBackend? secondaryControls =
         backend is SecondarySubtitleBackend
         ? backend as SecondarySubtitleBackend
@@ -191,6 +200,7 @@ abstract final class TrackPicker {
     Widget? footer;
     if (!audio &&
         showControls &&
+        !authoredPgs &&
         (secondary || streams.any(isTextSubtitleStream)) &&
         (!secondary ||
             supportsSecondarySize ||

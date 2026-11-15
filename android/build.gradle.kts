@@ -5,7 +5,8 @@ allprojects {
     }
 }
 
-val media3Version = "1.10.1"
+// 1.11.1 reads and seeks MKVs whose edited Tracks element follows Clusters.
+val media3Version = "1.11.1"
 
 val newBuildDir: Directory = rootProject.layout.buildDirectory.dir("../../build").get()
 rootProject.layout.buildDirectory.value(newBuildDir)
@@ -35,7 +36,7 @@ subprojects {
             // This force covers only the androidx.media3 group. The bundled
             // FFmpeg audio extension (org.jellyfin.media3:media3-ffmpeg-decoder
             // in moonfin_native_video) isn't rewritten and ships against
-            // media3 1.9.x, since no 1.10.x build of it exists yet.
+            // media3 1.9.x, since no 1.11.x build of it exists yet.
             // Media3VideoView emits an "ffmpegDecoderDiagnostics" event at
             // first player build. If that ever reports unavailable, pin
             // media3Version back to the decoder's line until jellyfin

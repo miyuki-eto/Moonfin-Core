@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:moonfin_design/moonfin_design.dart';
 
 import 'glass_focus_halo.dart';
+import '../../../util/platform_detection.dart';
 
 class FocusTheme {
-  static const double scale = 1.02;
+  static const double scale = 1.0;
   static const double defaultBorderRadius = 8.0;
-  static const Duration animationDuration = Duration(milliseconds: 150);
+  static const Duration animationDuration = Duration(milliseconds: 200);
 
-  static double get borderWidth => ThemeRegistry.active.borders.focusBorder.width;
+  static double get borderWidth =>
+      ThemeRegistry.active.borders.focusBorder.width;
 
   static BoxDecoration focusDecoration({
     required bool isFocused,
@@ -23,9 +25,7 @@ class FocusTheme {
       color: backgroundColor,
       borderRadius: AppRadius.circular(effectiveRadius),
       border: isFocused && color != null
-          ? Border.fromBorderSide(
-              borders.focusBorder.copyWith(color: color),
-            )
+          ? Border.fromBorderSide(borders.focusBorder.copyWith(color: color))
           : null,
       boxShadow: isFocused && !suppressFocusGlow && borders.focusGlow.isNotEmpty
           ? borders.focusGlow
@@ -62,8 +62,10 @@ class FocusTheme {
       : AppColors.white;
 
   static Color resolveColor(BuildContext context, Color? override) =>
-      override ??
-      (GlassFocusHalo.appleStyleActive
-          ? Colors.white
-          : Theme.of(context).colorScheme.primary);
+      PlatformDetection.isTV
+      ? Tv26Style.foreground
+      : override ??
+            (GlassFocusHalo.appleStyleActive
+                ? Colors.white
+                : Theme.of(context).colorScheme.primary);
 }

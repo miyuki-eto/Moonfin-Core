@@ -58,6 +58,7 @@ import '../../../util/focus/scroll_utils.dart';
 import '../../../util/artwork_request_size.dart';
 import '../../../util/device_performance.dart';
 import '../../../util/platform_detection.dart';
+import '../../widgets/startup_loading.dart';
 import '../../../util/server_url.dart';
 import '../../../util/tmdb_thumb.dart';
 import '../../navigation/app_router.dart';
@@ -72,6 +73,7 @@ import '../../widgets/media_bar.dart';
 import '../../widgets/mediabar/banner_media_bar.dart';
 import '../../widgets/image_source.dart';
 import '../../widgets/media_card.dart';
+import '../../widgets/scroll_edge_fade.dart';
 import '../../widgets/selector_builder.dart';
 import '../../widgets/bottom_nav/bottom_navbar.dart';
 import '../../widgets/navigation_layout.dart';
@@ -89,6 +91,7 @@ import '../../../util/game_library.dart';
 import 'home_row_prefetch.dart';
 import 'home_row_shift.dart';
 import 'home_view_model.dart';
+import 'tv_home_content.dart';
 import '../../widgets/seerr/seerr_genre_label.dart';
 import '../../widgets/skeleton/skeleton_home_row.dart';
 import '../../widgets/skeleton/skeleton_shimmer.dart';
@@ -564,61 +567,94 @@ class _HomeShellState extends State<_HomeShell>
               seasonalFollower &&
               PlatformDetection.isDesktop &&
               !PlatformDetection.isTV,
-          child: NavigationLayout(
-            activeRoute: Destinations.home,
-            child: QuickReturnWrapper(
-              isAtStart: _isScrolledToTopNotifier,
-              onReturn: () => _contentRowsKey.currentState?.returnToTop(),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (backdropStyle != UserPreferences.homeBackdropOff)
-                    ValueListenableBuilder<String?>(
-                      valueListenable: _backdropUrlNotifier,
-                      builder: (context, url, _) {
-                        return _Backdrop(
-                          url: url,
-                          blurAmount: blurAmount,
-                          useMakdBackdropFx: useMakdBackdropFx,
-                          style: PlatformDetection.useMobileUi
-                              ? UserPreferences.homeBackdropFullScreen
-                              : backdropStyle,
-                        );
-                      },
-                    ),
-                  const _GradientScrim(),
-                  Positioned.fill(
-                    child: _ContentRows(
-                      key: _contentRowsKey,
-                      viewModel: _viewModel,
-                      mediaBarViewModel: _viewModel.mediaBarViewModel,
-                      prefs: _userPrefs,
-                      selectedItemNotifier: _selectedItemNotifier,
-                      onItemSelected: onItemSelected,
-                      isHoverPausedNotifier: _isHoverPausedNotifier,
-                      isScrolledToTopNotifier: _isScrolledToTopNotifier,
-                      onScrolledToTopChanged: (atTop) {
-                        if (atTop != _isScrolledToTopNotifier.value) {
-                          _isScrolledToTopNotifier.value = atTop;
-                        }
-                      },
+          child: PlatformDetection.isTV
+              ? TvHomeContent(
+                  viewModel: _viewModel,
+                  prefs: _userPrefs,
+                  pageBuilder: (content) => NavigationLayout(
+                    activeRoute: Destinations.home,
+                    child: content,
+                  ),
+                  onItemSelected: onItemSelected,
+                  onOpenItem: (row, item) => _ContentRowsState._openItem(
+                    context,
+                    row,
+                    item,
+                    _userPrefs,
+                  ),
+                  onItemMenu: (row, item) => showContextMenu(
+                    context,
+                    item,
+                    isContinueWatchingOrNextUp:
+                        _ContentRowsState._isContinueWatchingOrNextUp(row),
+                  ),
+                  imageUrl: (item) => _ContentRowsState._resolveRowImageUrl(
+                    item,
+                    _viewModel.imageApiForServer(item.serverId),
+                    107,
+                    ImageType.thumb,
+                    true,
+                    MediaQuery.devicePixelRatioOf(context),
+                  ),
+                )
+              : NavigationLayout(
+                  activeRoute: Destinations.home,
+                  child: QuickReturnWrapper(
+                    isAtStart: _isScrolledToTopNotifier,
+                    onReturn: () => _contentRowsKey.currentState?.returnToTop(),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (backdropStyle != UserPreferences.homeBackdropOff)
+                          ValueListenableBuilder<String?>(
+                            valueListenable: _backdropUrlNotifier,
+                            builder: (context, url, _) {
+                              return _Backdrop(
+                                url: url,
+                                blurAmount: blurAmount,
+                                useMakdBackdropFx: useMakdBackdropFx,
+                                style: PlatformDetection.useMobileUi
+                                    ? UserPreferences.homeBackdropFullScreen
+                                    : backdropStyle,
+                              );
+                            },
+                          ),
+                        const _GradientScrim(),
+                        Positioned.fill(
+                          child: _ContentRows(
+                            key: _contentRowsKey,
+                            viewModel: _viewModel,
+                            mediaBarViewModel: _viewModel.mediaBarViewModel,
+                            prefs: _userPrefs,
+                            selectedItemNotifier: _selectedItemNotifier,
+                            onItemSelected: onItemSelected,
+                            isHoverPausedNotifier: _isHoverPausedNotifier,
+                            isScrolledToTopNotifier: _isScrolledToTopNotifier,
+                            onScrolledToTopChanged: (atTop) {
+                              if (atTop != _isScrolledToTopNotifier.value) {
+                                _isScrolledToTopNotifier.value = atTop;
+                              }
+                            },
+                          ),
+                        ),
+                        if (seasonalEffect != UserPreferences.seasonalNone)
+                          Positioned.fill(
+                            child: SeasonalEffectsHost(
+                              followFocus:
+                                  PlatformDetection.isTV && seasonalFollower,
+                              effect: seasonalEffect,
+                              density: _userPrefs.get(
+                                UserPreferences.seasonalDensity,
+                              ),
+                              reducedFrameRate:
+                                  _userPrefs.resolveDevicePerformanceTier() ==
+                                  DevicePerformanceTier.reduced,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
-                  if (seasonalEffect != UserPreferences.seasonalNone)
-                    Positioned.fill(
-                      child: SeasonalEffectsHost(
-                        followFocus: PlatformDetection.isTV && seasonalFollower,
-                        effect: seasonalEffect,
-                        density: _userPrefs.get(UserPreferences.seasonalDensity),
-                        reducedFrameRate:
-                            _userPrefs.resolveDevicePerformanceTier() ==
-                            DevicePerformanceTier.reduced,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
+                ),
         ),
       ),
     );
@@ -646,9 +682,9 @@ class _GradientScrim extends StatelessWidget {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              AppColorScheme.scrim.withValues(alpha: 0.8),
-              AppColorScheme.scrim.withValues(alpha: 0.4),
-              AppColorScheme.scrim.withValues(alpha: 0.8),
+              AppColorScheme.background.withValues(alpha: 0.96),
+              AppColorScheme.background.withValues(alpha: 0.92),
+              AppColorScheme.background,
             ],
             stops: [0.0, 0.3, 1.0],
           ),
@@ -850,7 +886,7 @@ class _ContentRowsState extends State<_ContentRows>
     implements AudioOwnable {
   static const double _kHomeRowLabelInset = 16.0;
   static const double _kHomeRowTrailingInset = 20.0;
-  static const double _focusedRowExtraSpacing = 20.0;
+  static const double _focusedRowExtraSpacing = 8.0;
   static const Duration _focusedRowSpacingDuration = Duration(
     milliseconds: 200,
   );
@@ -2008,13 +2044,15 @@ class _ContentRowsState extends State<_ContentRows>
         }
 
         await _media3PreviewBackend
-            .play(<String, dynamic>{
-              'url': previewUrl,
-              'mediaType': 'video',
-              'preview': true,
-              if (source.youTube)
-                'headers': YouTubeStreamResolver.youtubeHeaders,
-            })
+            .play(
+              <String, dynamic>{
+                'url': previewUrl,
+                'mediaType': 'video',
+                if (source.youTube)
+                  'headers': YouTubeStreamResolver.youtubeHeaders,
+              },
+              inlinePreview: true,
+            )
             .timeout(_previewOpenTimeout);
         if (!_isPreviewRequestActive(requestId, previewKey)) {
           await _media3PreviewBackend.stop();
@@ -2658,7 +2696,7 @@ class _ContentRowsState extends State<_ContentRows>
     final screenWidth = size.width;
 
     if (_isBannerMode()) {
-      if (PlatformDetection.isTV) return 320.0;
+      if (PlatformDetection.isTV) return screenHeight * 0.80;
       if (!PlatformDetection.useMobileUi) return 240.0;
       return 200.0;
     }
@@ -4222,8 +4260,8 @@ class _ContentRowsState extends State<_ContentRows>
   /// Touch never leaves a card grown, so phones keep the tighter layout.
   double _rowItemSpacing(double itemExtent, bool cardExpansion) =>
       cardExpansion && !PlatformDetection.useMobileUi
-      ? MediaCard.focusGap(itemExtent)
-      : 12.0;
+      ? MediaCard.focusGap(itemExtent, minimum: 16)
+      : 16.0;
 
   double _rowContentHeight(
     HomeRow row,
@@ -4640,6 +4678,7 @@ class _ContentRowsState extends State<_ContentRows>
       );
     }
 
+    finishWebStartupSplashAfterFrame(context);
     _updateOffsets();
     final includeMediaBar = _isMediaBarIncluded();
     final bannerMode = _isBannerMode();
@@ -4686,7 +4725,7 @@ class _ContentRowsState extends State<_ContentRows>
         navbarIsTop && PlatformDetection.isTV && !PlatformDetection.useMobileUi
         ? 48.0
         : 0.0;
-    final rowLeftInset =
+    final rowLeftInset = PlatformDetection.isTV ? 32.0 :
         (navbarIsLeft && !PlatformDetection.useMobileUi
             ? 56.0
             : tvTopNavbarInset) +
@@ -4787,7 +4826,9 @@ class _ContentRowsState extends State<_ContentRows>
             canRequestFocus: false,
             skipTraversal: true,
             onKeyEvent: (_, event) => _handleRowsKeyEvent(event),
-            child: _pullToRefresh(ListView.builder(
+            child: ScrollEdgeFade(
+              distance: 112,
+              child: _pullToRefresh(ListView.builder(
               controller: _scrollController,
               // A Home too short to scroll still has to take the pull.
               physics: PlatformDetection.useMobileUi
@@ -5057,6 +5098,7 @@ class _ContentRowsState extends State<_ContentRows>
                     return itemWidget;
                   },
                 )),
+              ),
               ),
             ),
         ValueListenableBuilder<bool>(
@@ -5485,25 +5527,7 @@ class _ContentRowsState extends State<_ContentRows>
         ),
         onTap: (_, item) {
           _finishSharedPreview(releaseResources: true);
-          if (_playedOnSelect(row, item)) return;
-          if (row.rowType == HomeRowType.libraryTiles) {
-            _navigateToLibrary(context, item);
-          } else if (row.rowType == HomeRowType.genres && row.id == 'genres') {
-            context.push(Destinations.genre(item.name, genreId: item.id));
-          } else if (row.rowType == HomeRowType.studios && row.id == 'studios') {
-            context.push(Destinations.studio(item.name));
-          } else if (item.serverId == 'seerr') {
-            _navigateToSeerrItem(context, item);
-          } else {
-            context.push(
-              Destinations.itemOrPhoto(
-                item.id,
-                serverId: item.serverId,
-                type: item.type,
-                channelId: item.channelId,
-              ),
-            );
-          }
+          _openItem(context, row, item, widget.prefs);
         },
         itemBuilder: (ctx, item, idx, isFocused) {
           final requestScale = MediaQuery.devicePixelRatioOf(
@@ -6193,6 +6217,41 @@ class _ContentRowsState extends State<_ContentRows>
       Destinations.item(item.id, serverId: item.serverId, autoPlay: true),
     );
     return true;
+  }
+
+  static void _openItem(
+    BuildContext context,
+    HomeRow row,
+    AggregatedItem item,
+    UserPreferences prefs,
+  ) {
+    if ((row.rowType == HomeRowType.resume || row.rowType == HomeRowType.nextUp) &&
+        prefs.get(UserPreferences.continueWatchingDefaultAction) ==
+            ContinueWatchingDefaultAction.play) {
+      context.push(
+        Destinations.item(item.id, serverId: item.serverId, autoPlay: true),
+      );
+      return;
+    }
+    if (row.rowType == HomeRowType.libraryTiles ||
+        row.rowType == HomeRowType.libraryTilesSmall) {
+      _navigateToLibrary(context, item);
+    } else if (row.rowType == HomeRowType.genres && row.id == 'genres') {
+      context.push(Destinations.genre(item.name, genreId: item.id));
+    } else if (row.rowType == HomeRowType.studios && row.id == 'studios') {
+      context.push(Destinations.studio(item.name));
+    } else if (item.serverId == 'seerr') {
+      _navigateToSeerrItem(context, item);
+    } else {
+      context.push(
+        Destinations.itemOrPhoto(
+          item.id,
+          serverId: item.serverId,
+          type: item.type,
+          channelId: item.channelId,
+        ),
+      );
+    }
   }
 
   static void _navigateToLibrary(BuildContext context, AggregatedItem item) {

@@ -1,3 +1,5 @@
+import 'package:moonfin_design/moonfin_design.dart';
+
 class NouveauRailMetrics {
   final double gap;
   final double preferredWidth;
@@ -42,9 +44,9 @@ class NouveauRailMetrics {
 
 abstract final class NouveauSpacing {
   // Section hierarchy
-  static const double titleToContent = 20;
-  static const double sectionGap = 64;
-  static const double detailsSectionGap = 80;
+  static const double titleToContent = Tv26Style.railTitleGap;
+  static const double sectionGap = 40;
+  static const double detailsSectionGap = 48;
 
   // Compact/mobile hierarchy
   static const double mobileHorizontalInset = 20;
@@ -54,15 +56,16 @@ abstract final class NouveauSpacing {
   static const double mobileHeroToSection = 8;
 
   // Shared rail spacing
-  static const double railItemGap = 40;
-  static const double tvRailItemGap = 32;
+  static const double railItemGap = 16;
+  static const double tvRailItemGap = Tv26Style.railItemGap;
   static const double compactWideRailItemGap = 14;
   static const double compactNarrowRailItemGap = 12;
 
   // Episodes
   static const double seasonSelectorToEpisodes = 24;
   static const double episodeVisibleItemCount = 4.15;
-  static const double tvEpisodeVisibleItemCount = 3.25;
+  static const double tvEpisodeVisibleItemCount = 4.25;
+  static const double tvCollectionVisibleItemCount = 3.25;
 
   static const NouveauRailMetrics compactEpisodes = NouveauRailMetrics(
     gap: compactWideRailItemGap,

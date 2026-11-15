@@ -3,6 +3,8 @@ import 'package:moonfin_design/moonfin_design.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../adaptive/sf_symbol.dart';
+import '../../../util/platform_detection.dart';
+import '../../tv/tv26_button.dart';
 
 class DelayFooter extends StatefulWidget {
   const DelayFooter({
@@ -49,6 +51,34 @@ class _DelayFooterState extends State<DelayFooter> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    void reset() {
+      setState(() => _delay = 0.0);
+      widget.onDelayChanged(0.0);
+    }
+
+    Widget adjustButton(bool increase) {
+      final label = increase ? l10n.delayPlusMs(100) : l10n.delayMinusMs(100);
+      return PlatformDetection.isTV
+          ? Tv26Button(
+              label: label,
+              icon: increase ? Icons.add : Icons.remove,
+              iconOnly: true,
+              width: 40,
+              onPressed: () => _adjust(increase ? .1 : -.1),
+            )
+          : IconButton(
+              tooltip: label,
+              onPressed: () => _adjust(increase ? .1 : -.1),
+              icon: AdaptiveIcon(
+                increase
+                    ? Icons.add_circle_outline
+                    : Icons.remove_circle_outline,
+                color: Colors.white,
+                size: 28,
+              ),
+            );
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 4),
       child: Column(
@@ -82,15 +112,7 @@ class _DelayFooterState extends State<DelayFooter> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              IconButton(
-                onPressed: () => _adjust(-0.1),
-                icon: const AdaptiveIcon(
-                  Icons.remove_circle_outline,
-                  color: Colors.white,
-                  size: 28,
-                ),
-                tooltip: l10n.delayMinusMs(100),
-              ),
+              adjustButton(false),
               Text(
                 l10n.delayMinusMs(100),
                 style: const TextStyle(
@@ -99,20 +121,26 @@ class _DelayFooterState extends State<DelayFooter> {
                 ),
               ),
               const Spacer(),
-              OutlinedButton(
-                autofocus: true,
-                onPressed: () {
-                  setState(() => _delay = 0.0);
-                  widget.onDelayChanged(0.0);
-                },
-                style: OutlinedButton.styleFrom(
-                  side: ThemeRegistry.active.borders.chipBorder,
+              if (PlatformDetection.isTV)
+                Tv26Button(
+                  label: l10n.reset,
+                  width: 90,
+                  height: 36,
+                  autofocus: true,
+                  onPressed: reset,
+                )
+              else
+                OutlinedButton(
+                  autofocus: true,
+                  onPressed: reset,
+                  style: OutlinedButton.styleFrom(
+                    side: ThemeRegistry.active.borders.chipBorder,
+                  ),
+                  child: Text(
+                    l10n.reset,
+                    style: const TextStyle(color: Colors.white),
+                  ),
                 ),
-                child: Text(
-                  l10n.reset,
-                  style: const TextStyle(color: Colors.white),
-                ),
-              ),
               const Spacer(),
               Text(
                 l10n.delayPlusMs(100),
@@ -121,15 +149,7 @@ class _DelayFooterState extends State<DelayFooter> {
                   fontSize: AppTypography.fontSizeXs,
                 ),
               ),
-              IconButton(
-                onPressed: () => _adjust(0.1),
-                icon: const AdaptiveIcon(
-                  Icons.add_circle_outline,
-                  color: Colors.white,
-                  size: 28,
-                ),
-                tooltip: l10n.delayPlusMs(100),
-              ),
+              adjustButton(true),
             ],
           ),
         ],

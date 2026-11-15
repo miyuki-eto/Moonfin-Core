@@ -51,7 +51,7 @@ class _AdminContentAnalyticsScreenState
     final analyticsAsync = ref.watch(adminMediaAnalyticsProvider);
 
     return analyticsAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: LoadingThrobber()),
       error: (error, _) => Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -84,7 +84,7 @@ class _AdminContentAnalyticsScreenState
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const CircularProgressIndicator(),
+                  const LoadingThrobber(),
                   const SizedBox(height: 24),
                   Text(
                     l10n.adminAnalyticsLoadingProgress(percentage),
@@ -1155,7 +1155,7 @@ class _LoadingCard extends StatelessWidget {
             const SizedBox(
               width: 18,
               height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: LoadingThrobber(),
             ),
             const SizedBox(width: 12),
             Expanded(

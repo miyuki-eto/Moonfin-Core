@@ -98,9 +98,8 @@ void main() {
 
     seerr = _MockSeerrRepository();
     seerrSignedIn = false;
-    when(
-      () => seerr.ensureInitialized(force: any(named: 'force')),
-    ).thenAnswer((_) async {});
+    when(() => seerr.ensureInitialized(force: any(named: 'force')))
+        .thenAnswer((_) async {});
     when(() => seerr.isAvailable).thenAnswer((_) => seerrSignedIn);
     when(signInToSeerr).thenAnswer((_) async => seerrSignedIn = true);
     GetIt.instance.registerLazySingletonAsync<SeerrRepository>(
@@ -128,10 +127,10 @@ void main() {
     verifyNever(signInToSeerr);
   });
 
-  test('signing in to Seerr asks the home to load its rows again', () async {
+  test('an available plugin cannot enable Seerr sign-in in this app', () async {
     expect(await service.refreshAvailability(client), isTrue);
 
-    expect(await service.configureSeerr(client), isTrue);
-    verify(signInToSeerr).called(1);
+    expect(await service.configureSeerr(client), isFalse);
+    verifyNever(signInToSeerr);
   });
 }

@@ -6,6 +6,8 @@ import 'package:moonfin_design/moonfin_design.dart';
 import '../../preference/preference_constants.dart';
 import '../../preference/user_preferences.dart';
 import '../../util/idiom/app_ui_idiom.dart';
+import '../../util/platform_detection.dart';
+import '../tv/tv_page_transitions.dart';
 
 class AppTheme {
   const AppTheme._();
@@ -14,7 +16,7 @@ class AppTheme {
     final c = spec.colors;
     final base = ThemeData(
       brightness: Brightness.dark,
-      fontFamily: spec.fontFamily,
+      fontFamily: 'Inter',
     ).textTheme;
     if (spec.textGlow.isEmpty) {
       return base;
@@ -23,7 +25,9 @@ class AppTheme {
     final themedShadows = spec.textGlow;
 
     TextStyle? neonDisplay(TextStyle? style) {
-      if (style == null) return null;
+      if (style == null) {
+        return null;
+      }
       return style.copyWith(
         color: c.accent,
         shadows: themedShadows,
@@ -33,7 +37,9 @@ class AppTheme {
     }
 
     TextStyle? neonBody(TextStyle? style) {
-      if (style == null) return null;
+      if (style == null) {
+        return null;
+      }
       return style.copyWith(
         fontFamily: 'NeonPulseBody',
         color: c.onSurface,
@@ -66,23 +72,55 @@ class AppTheme {
     // Apple idioms get continuous-corner squircles instead of round-rects.
     final pixel = spec.isPixel;
     final apple = AppUiIdiomResolver.current != AppUiIdiom.material;
-    final OutlinedBorder buttonShape = pixel
+    final OutlinedBorder buttonShape = PlatformDetection.isTV
+        ? const StadiumBorder()
+        : pixel
         ? const RoundedRectangleBorder(borderRadius: BorderRadius.zero)
         : apple
-            ? AppShapes.squircle(AppShapes.small)
-            : JellyfinTokens.shapes.smallShape;
-    final inputRadius =
-        pixel ? BorderRadius.zero : JellyfinTokens.shapes.smallRadius;
+        ? AppShapes.squircle(AppShapes.small)
+        : JellyfinTokens.shapes.smallShape;
+    final inputRadius = PlatformDetection.isTV
+        ? BorderRadius.circular(100)
+        : pixel
+        ? BorderRadius.zero
+        : JellyfinTokens.shapes.smallRadius;
+    final tvButtonStyle = ButtonStyle(
+      backgroundColor: WidgetStateProperty.resolveWith(
+        (states) =>
+            states.contains(WidgetState.focused) ||
+                states.contains(WidgetState.hovered)
+            ? Tv26Style.foreground
+            : Tv26Style.surface,
+      ),
+      foregroundColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.disabled)
+            ? Tv26Style.secondary
+            : states.contains(WidgetState.focused) ||
+                  states.contains(WidgetState.hovered)
+            ? Tv26Style.canvas
+            : Tv26Style.foreground,
+      ),
+      overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+      shape: const WidgetStatePropertyAll(StadiumBorder()),
+      side: const WidgetStatePropertyAll(Tv26Style.surfaceBorderSide),
+      minimumSize: const WidgetStatePropertyAll(Size(64, 40)),
+      padding: const WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+      ),
+      textStyle: WidgetStatePropertyAll(
+        Tv26Style.text(18, weight: FontWeight.w600),
+      ),
+    );
     return ThemeData(
       useMaterial3: true,
       platform: switch (AppUiIdiomResolver.current) {
         AppUiIdiom.iosMobile => TargetPlatform.iOS,
         AppUiIdiom.macDesktop => TargetPlatform.macOS,
         AppUiIdiom.material => TargetPlatform.android,
-        AppUiIdiom.tvosLeanback => null,
+        AppUiIdiom.tvosLeanback => TargetPlatform.android,
       },
       brightness: Brightness.dark,
-      fontFamily: spec.fontFamily,
+      fontFamily: 'Inter',
       // Roboto stops at about 900 codepoints and the pixel font at fewer, so
       // NotoSans stands behind every theme for the wider Latin, Greek and
       // Cyrillic a title can carry. The emoji fonts come after it, one per
@@ -99,13 +137,17 @@ class AppTheme {
         surface: c.surface,
         surfaceContainerHighest: c.surfaceVariant,
         error: c.error ?? JellyfinTokens.colors.error,
-        errorContainer: (c.error ?? JellyfinTokens.colors.error).withValues(alpha: 0.2),
+        errorContainer: (c.error ?? JellyfinTokens.colors.error).withValues(
+          alpha: 0.2,
+        ),
         onErrorContainer: c.error ?? JellyfinTokens.colors.error,
         onPrimary: c.onAccent,
         onSurface: c.onSurface,
         scrim: c.scrim,
       ),
-      scaffoldBackgroundColor: c.background,
+      scaffoldBackgroundColor: PlatformDetection.isTV
+          ? Colors.black
+          : c.background,
       textSelectionTheme: TextSelectionThemeData(
         selectionColor: c.accent.withValues(alpha: 0.40),
         selectionHandleColor: c.accent,
@@ -117,11 +159,24 @@ class AppTheme {
         color: c.card,
         shape: buttonShape,
       ),
-      appBarTheme: AppBarTheme(
-        backgroundColor: c.background,
-        elevation: 0,
-      ),
-      pageTransitionsTheme: AppUiIdiomResolver.current == AppUiIdiom.iosMobile
+      appBarTheme: AppBarTheme(backgroundColor: c.background, elevation: 0),
+      snackBarTheme: PlatformDetection.isTV
+          ? SnackBarThemeData(
+              backgroundColor: Tv26Style.surface,
+              contentTextStyle: Tv26Style.text(18),
+              actionTextColor: Tv26Style.foreground,
+              behavior: SnackBarBehavior.floating,
+              width: 560,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(Tv26Style.radius),
+                side: Tv26Style.surfaceBorderSide,
+              ),
+            )
+          : null,
+      pageTransitionsTheme: PlatformDetection.isTV
+          ? _tvTransitions
+          : AppUiIdiomResolver.current == AppUiIdiom.iosMobile
           ? _cupertinoTransitions
           : _fadeScaleTransitions,
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
@@ -130,21 +185,28 @@ class AppTheme {
         unselectedItemColor: JellyfinTokens.colors.textSecondary,
       ),
       filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          backgroundColor: c.buttonNormal,
-          foregroundColor: c.onButtonNormal,
-          disabledBackgroundColor: c.buttonDisabled,
-          disabledForegroundColor: c.onButtonDisabled,
-          shape: buttonShape,
-        ),
+        style: PlatformDetection.isTV
+            ? tvButtonStyle
+            : FilledButton.styleFrom(
+                backgroundColor: c.buttonNormal,
+                foregroundColor: c.onButtonNormal,
+                disabledBackgroundColor: c.buttonDisabled,
+                disabledForegroundColor: c.onButtonDisabled,
+                shape: buttonShape,
+              ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: c.onSurface,
-          side: BorderSide(color: c.inputBorder),
-          shape: buttonShape,
-        ),
+        style: PlatformDetection.isTV
+            ? tvButtonStyle
+            : OutlinedButton.styleFrom(
+                foregroundColor: c.onSurface,
+                side: BorderSide(color: c.inputBorder),
+                shape: buttonShape,
+              ),
       ),
+      textButtonTheme: PlatformDetection.isTV
+          ? TextButtonThemeData(style: tvButtonStyle)
+          : null,
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: c.inputBackground,
@@ -172,19 +234,25 @@ class AppTheme {
         shape: pixel ? buttonShape : JellyfinTokens.shapes.extraLargeShape,
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: spec.isGlass ? const Color(0xD90E1117) : c.surface,
+        backgroundColor: PlatformDetection.isTV
+            ? Tv26Style.modalSurface
+            : spec.isGlass
+            ? const Color(0xD90E1117)
+            : c.surface,
         surfaceTintColor: spec.isGlass ? Colors.transparent : null,
-        shape: spec.isGlass
+        shape: PlatformDetection.isTV
+            ? Tv26Style.modalShape
+            : spec.isGlass
             ? RoundedRectangleBorder(
                 borderRadius: AppRadius.circular(20),
                 side: const BorderSide(color: Color(0x33FFFFFF), width: 1),
               )
             : pixel
-                ? RoundedRectangleBorder(
-                    borderRadius: BorderRadius.zero,
-                    side: BorderSide(color: c.surfaceVariant, width: 2),
-                  )
-                : JellyfinTokens.shapes.largeShape,
+            ? RoundedRectangleBorder(
+                borderRadius: BorderRadius.zero,
+                side: BorderSide(color: c.surfaceVariant, width: 2),
+              )
+            : JellyfinTokens.shapes.largeShape,
       ),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith<Color?>((states) {
@@ -197,7 +265,9 @@ class AppTheme {
     );
   }
 
-  static final darkTheme = buildTheme(ThemeRegistry.resolveById(ThemeRegistry.moonfinId));
+  static final darkTheme = buildTheme(
+    ThemeRegistry.resolveById(ThemeRegistry.moonfinId),
+  );
 
   static const _fadeScaleTransitions = PageTransitionsTheme(
     builders: {
@@ -218,6 +288,13 @@ class AppTheme {
       TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
       TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
       TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+    },
+  );
+
+  static final _tvTransitions = PageTransitionsTheme(
+    builders: {
+      for (final platform in TargetPlatform.values)
+        platform: const TvPageTransitionsBuilder(),
     },
   );
 }
@@ -302,10 +379,7 @@ class _FadeScalePageTransitionsBuilder extends PageTransitionsBuilder {
 
     return FadeTransition(
       opacity: curved,
-      child: ScaleTransition(
-        scale: scaleTween.animate(curved),
-        child: child,
-      ),
+      child: ScaleTransition(scale: scaleTween.animate(curved), child: child),
     );
   }
 }

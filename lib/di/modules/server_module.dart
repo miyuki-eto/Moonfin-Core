@@ -1,3 +1,5 @@
+import '../../config/app_features.dart';
+
 import 'dart:async';
 
 import 'package:get_it/get_it.dart';
@@ -118,19 +120,21 @@ void setActiveServerClient(
   _getIt.registerSingleton<DownloadService>(downloadService);
 
   // Absent on the background isolates, which never draw a nav bar.
-  if (_getIt.isRegistered<OfflineRepository>()) {
+  if (AppFeatures.has(AppFeature.downloads) &&
+      _getIt.isRegistered<OfflineRepository>()) {
     _getIt.registerSingleton<SavedMediaPresence>(
       SavedMediaPresence(_getIt<OfflineRepository>(), downloadService),
     );
   }
 
-  if (AutoDownloadService.isSupportedPlatform) {
+  if (AppFeatures.has(AppFeature.downloads) &&
+      AutoDownloadService.isSupportedPlatform) {
     _replaceAutoDownloadService(
       rawClient,
       downloadService,
       background: background,
     );
-  } else {
+  } else if (AppFeatures.has(AppFeature.downloads)) {
     downloadService.recoverIncompleteDownloads();
   }
 
@@ -173,7 +177,10 @@ void _replaceAutoDownloadService(
   required bool background,
 }) {
   _tearDownAutoDownload(disable: false);
-  if (!AutoDownloadService.isSupportedPlatform) return;
+  if (!AppFeatures.has(AppFeature.downloads) ||
+      !AutoDownloadService.isSupportedPlatform) {
+    return;
+  }
 
   // Recovery reconciles the native task database; checks wait for it so
   // they see those transfers as in flight.
@@ -202,7 +209,9 @@ void _replaceAutoDownloadService(
   unawaited(
     recovered.whenComplete(() {
       // The account may have changed again while recovery ran.
-      if (!service.isDisposed) service.onServerConnected();
+      if (!service.isDisposed) {
+        service.onServerConnected();
+      }
     }),
   );
 }

@@ -1290,7 +1290,7 @@ class _SpotlightCardsBuilder {
           builder: (context, firstFocusNode) {
             if (vm.playlistSortRefreshing ||
                 (vm.playlistIndexBuilding && !hasPlaylistItems)) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(child: LoadingThrobber());
             }
             return DetailTrackList(
               tracks: tracks,

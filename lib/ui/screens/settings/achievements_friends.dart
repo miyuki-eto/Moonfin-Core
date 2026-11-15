@@ -46,7 +46,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
   Widget _buildBody(BuildContext context, AppLocalizations l10n) {
     final friends = _service.friends;
     if (friends == null) {
-      if (_loading) return const Center(child: CircularProgressIndicator());
+      if (_loading) return const Center(child: LoadingThrobber());
       return _RetryPanel(
         message: l10n.friendsLoadFailed,
         onRetry: () {
@@ -467,7 +467,7 @@ class _FriendProfileScreenState extends State<_FriendProfileScreen>
     return _AchievementsScaffold(
       title: widget.name,
       builder: (context) => loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: LoadingThrobber())
           : ListenableBuilder(
               listenable: _service,
               builder: (context, _) => _buildBody(context, l10n),
@@ -774,7 +774,7 @@ class _FindPeopleScreenState extends State<_FindPeopleScreen>
     return _AchievementsScaffold(
       title: l10n.friendsAdd,
       builder: (context) {
-        if (loading) return const Center(child: CircularProgressIndicator());
+        if (loading) return const Center(child: LoadingThrobber());
         final matches = _matches();
         return ListView(
           padding: _listPadding(context),
@@ -887,7 +887,7 @@ class _SocialPrivacyScreenState extends State<_SocialPrivacyScreen>
     return _AchievementsScaffold(
       title: l10n.friendsPrivacy,
       builder: (context) {
-        if (loading) return const Center(child: CircularProgressIndicator());
+        if (loading) return const Center(child: LoadingThrobber());
         final privacy = _privacy;
         if (privacy == null) {
           return _RetryPanel(

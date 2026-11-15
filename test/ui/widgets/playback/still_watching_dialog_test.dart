@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moonfin/l10n/app_localizations.dart';
 import 'package:moonfin/ui/theme/app_theme.dart';
 import 'package:moonfin/ui/widgets/playback/still_watching_dialog.dart';
 import 'package:moonfin_design/moonfin_design.dart';
+import 'package:moonfin/util/platform_detection.dart';
+import 'package:moonfin/ui/tv/tv26_button.dart';
 
 /// The player exits playback on any answer other than continue, so a pop that
 /// misses the dialog reads to the viewer as continue throwing them out.
@@ -69,6 +72,57 @@ void main() {
     );
     expect(answer, isTrue);
   });
+
+  for (final stop in [false, true]) {
+    testWidgets('TV remote answers still watching (stop=$stop)', (
+      tester,
+    ) async {
+      PlatformDetection.setInterfaceLayout(InterfaceLayout.tv);
+      addTearDown(
+        () => PlatformDetection.setInterfaceLayout(InterfaceLayout.automatic),
+      );
+      bool? answer;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.buildTheme(ThemeRegistry.active),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: const [Locale('en')],
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () async =>
+                    answer = await StillWatchingDialog.show(context),
+                child: const Text('Open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      expect(
+        FocusManager.instance.primaryFocus?.context
+            ?.findAncestorWidgetOfExactType<Tv26Button>()
+            ?.label,
+        l10n.stillWatchingContinue,
+      );
+      if (stop) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await tester.pump();
+        expect(
+          FocusManager.instance.primaryFocus?.context
+              ?.findAncestorWidgetOfExactType<Tv26Button>()
+              ?.label,
+          l10n.stillWatchingStop,
+        );
+      }
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(answer, !stop);
+      expect(find.byType(StillWatchingDialog), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('stop answers false and leaves the player up', (tester) async {
     final answer = await showFromNestedNavigator(

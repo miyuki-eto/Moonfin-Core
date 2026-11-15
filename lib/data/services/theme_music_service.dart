@@ -6,6 +6,7 @@ import 'package:playback_core/playback_core.dart';
 import 'package:server_core/server_core.dart';
 
 import '../../preference/user_preferences.dart';
+import '../../util/platform_detection.dart';
 import '../models/aggregated_item.dart';
 import 'theme_audio_player.dart';
 
@@ -98,6 +99,8 @@ class ThemeMusicService implements AudioOwnable {
   }
 
   Future<void> playForItem(AggregatedItem item) async {
+    // The Samsung build reserves its native decoder for main playback.
+    if (PlatformDetection.isTizen) return;
     if (!_prefs.get(UserPreferences.themeMusicEnabled)) return;
     final activeItem = _playbackManager.queueService.currentItem;
     if (activeItem != null) return;

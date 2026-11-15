@@ -82,6 +82,32 @@ void main() {
     GetIt.instance.registerSingleton<UserPreferences>(UserPreferences(store));
   });
 
+  testWidgets(
+    'TV Right leaves Home for the poster grid instead of searching within the panel',
+    (tester) async {
+      PlatformDetection.setInterfaceLayout(InterfaceLayout.tv);
+      addTearDown(
+        () => PlatformDetection.setInterfaceLayout(InterfaceLayout.automatic),
+      );
+      final calls = _Calls();
+      final model = _model(calls, alphabetOn: false);
+      final scope = FocusScopeNode();
+      addTearDown(scope.dispose);
+      await _pump(
+        tester,
+        DockedLibraryPanel(
+          model: model,
+          scopeNode: scope,
+          onExitRight: () => calls.exitRight++,
+        ),
+      );
+      model.homeFocusNode.requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      expect(calls.exitRight, 1);
+    },
+  );
+
   group('on desktop', () {
     setUp(() => PlatformDetection.setInterfaceLayout(InterfaceLayout.desktop));
     tearDown(
@@ -113,6 +139,8 @@ void main() {
       ]) {
         expect(find.text(text), findsOneWidget, reason: text);
       }
+      expect(find.byIcon(Icons.settings), findsNothing);
+      expect(find.text('Display'), findsNothing);
       expect(model.homeFocusNode.context, isNotNull);
       expect(model.allLetterFocusNode.context, isNotNull);
 
@@ -163,12 +191,12 @@ void main() {
         'None',
         'Show',
         'All',
-        'Display',
-        'Poster',
         'Jump to letter',
       ]) {
         expect(find.text(text), findsOneWidget, reason: text);
       }
+      expect(find.byIcon(Icons.settings), findsNothing);
+      expect(find.text('Display'), findsNothing);
       expect(model.homeFocusNode.context, isNotNull);
       expect(model.allLetterFocusNode.context, isNotNull);
 
@@ -206,6 +234,8 @@ void main() {
       ]) {
         expect(find.text(text), findsOneWidget, reason: text);
       }
+      expect(find.byIcon(Icons.settings), findsNothing);
+      expect(find.text('Display'), findsNothing);
       expect(model.homeFocusNode.context, isNotNull);
       expect(
         model.allLetterFocusNode.context,
@@ -225,9 +255,9 @@ void main() {
         DockedLibraryBar(model: _model(calls, alphabetOn: false)),
       );
       await tester.tap(find.text('A to Z'));
-      await tester.tap(find.text('Display'));
+      expect(find.text('Display'), findsNothing);
       expect(calls.toggleAlphabet, 1);
-      expect(calls.display, 1);
+      expect(calls.display, 0);
 
       await _pump(
         tester,

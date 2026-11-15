@@ -246,7 +246,7 @@ abstract class MusicCategoryState<T extends StatefulWidget>
     _reloadTimer = Timer(const Duration(milliseconds: 400), reload);
   }
 
-  Widget get loadingIndicator => const Center(child: CircularProgressIndicator());
+  Widget get loadingIndicator => const Center(child: LoadingThrobber());
 
   /// The page in the app's chrome, with the header and the rail up while it
   /// loads.

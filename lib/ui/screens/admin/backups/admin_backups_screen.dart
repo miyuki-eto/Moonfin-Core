@@ -374,7 +374,7 @@ class _AdminBackupsScreenState extends State<AdminBackupsScreen> {
     if (progress != null) return _buildProgress(progress.title, progress.text);
 
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: LoadingThrobber());
     }
 
     if (_error != null) {
@@ -485,7 +485,7 @@ class _AdminBackupsScreenState extends State<AdminBackupsScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.spaceLg),
-              const LinearProgressIndicator(),
+              const LoadingThrobber(),
             ],
           ),
         ),

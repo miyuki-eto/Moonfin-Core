@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:custom_tv_text_field/custom_tv_text_field.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,6 +11,7 @@ import 'package:moonfin/l10n/app_localizations.dart';
 import 'package:moonfin/preference/user_preferences.dart';
 import 'package:moonfin/ui/screens/auth/add_server_dialog.dart';
 import 'package:moonfin/ui/theme/app_theme.dart';
+import 'package:moonfin/util/platform_detection.dart';
 import 'package:moonfin_design/moonfin_design.dart';
 import 'package:server_core/server_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -46,6 +50,7 @@ void main() {
   });
 
   tearDown(() async {
+    PlatformDetection.setInterfaceLayout(InterfaceLayout.automatic);
     await GetIt.instance.reset();
     gAllowSelfSignedCertificates = false;
   });
@@ -55,6 +60,7 @@ void main() {
     WidgetTester tester, {
     ServerRepository? serverRepo,
     String address = 'http://localhos',
+    bool settle = true,
   }) async {
     final controller = TextEditingController(text: address);
     late Future<AddServerOutcome?> closed;
@@ -80,7 +86,11 @@ void main() {
       ),
     );
     await tester.tap(find.text('Open'));
-    await tester.pumpAndSettle();
+    if (settle) {
+      await tester.pumpAndSettle();
+    } else {
+      await tester.pump(const Duration(milliseconds: 600));
+    }
     return (controller: controller, closed: closed);
   }
 
@@ -181,6 +191,30 @@ void main() {
     final outcome = await closed;
     expect(outcome, isA<AddServerPlexSignIn>());
     expect((outcome! as AddServerPlexSignIn).address, isNull);
+  });
+
+  testWidgets('TV cannot reopen the address keyboard while connecting', (
+    tester,
+  ) async {
+    PlatformDetection.setInterfaceLayout(InterfaceLayout.tv);
+    final pending = Completer<Server?>();
+    final repo = repoThatFinds(const []);
+    when(() => repo.addServer(any())).thenAnswer((_) => pending.future);
+    await openDialog(tester, serverRepo: repo, settle: false);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(CustomTVTextField.isKeyboardVisibleNotifier.value, isFalse);
+    verify(() => repo.addServer('http://localhos')).called(1);
+
+    pending.complete(_server);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.text(l10n.addServerFound), findsOneWidget);
   });
 
   testWidgets('Emby Connect closes with its own outcome', (tester) async {

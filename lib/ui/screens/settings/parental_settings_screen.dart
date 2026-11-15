@@ -252,7 +252,7 @@ class _ParentalSettingsScreenState extends State<ParentalSettingsScreen> {
                 if (_loadingRatings)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Center(child: CircularProgressIndicator()),
+                    child: Center(child: LoadingThrobber()),
                   )
                 else if (ratings.isEmpty)
                   Padding(

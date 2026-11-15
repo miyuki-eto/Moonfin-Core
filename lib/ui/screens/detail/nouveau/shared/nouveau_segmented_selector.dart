@@ -6,6 +6,9 @@ import 'package:moonfin_design/moonfin_design.dart';
 
 import '../../../../../util/focus/dpad_keys.dart';
 import '../../../../widgets/focus/focusable_wrapper.dart';
+import '../../../../../util/platform_detection.dart';
+import '../../../../tv/tv26_button.dart';
+import '../../../../tv/tv_segmented_surface.dart';
 
 class NouveauSegmentedSelector<T> extends StatefulWidget {
   final List<T> values;
@@ -20,6 +23,7 @@ class NouveauSegmentedSelector<T> extends StatefulWidget {
   final bool selectOnFocus;
   final double height;
   final double minimumSegmentWidth;
+  final bool standaloneTabs;
 
   const NouveauSegmentedSelector({
     super.key,
@@ -35,6 +39,7 @@ class NouveauSegmentedSelector<T> extends StatefulWidget {
     this.selectOnFocus = false,
     this.height = 40,
     this.minimumSegmentWidth = 88,
+    this.standaloneTabs = false,
   });
 
   @override
@@ -191,6 +196,31 @@ class NouveauSegmentedSelectorState<T>
   @override
   Widget build(BuildContext context) {
     final foreground = AppColorScheme.onSurface;
+    final scroll = SingleChildScrollView(
+      controller: _scrollController,
+      scrollDirection: Axis.horizontal,
+      clipBehavior: Clip.none,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var index = 0; index < widget.values.length; index++) ...[
+            if (index > 0 && PlatformDetection.isTV && widget.standaloneTabs)
+              const SizedBox(width: Tv26Style.gap),
+            _buildSegment(context, index, widget.values[index]),
+          ],
+        ],
+      ),
+    );
+
+    if (PlatformDetection.isTV) {
+      if (widget.standaloneTabs) {
+        return SizedBox(
+          height: widget.height,
+          child: ClipRect(child: scroll),
+        );
+      }
+      return TvSegmentedSurface(height: widget.height, child: scroll);
+    }
 
     return Container(
       height: widget.height,
@@ -201,21 +231,7 @@ class NouveauSegmentedSelectorState<T>
         borderRadius: BorderRadius.circular(20),
       ),
       // Keeps segments scrolled past either end inside the pill's outline.
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(17),
-        child: SingleChildScrollView(
-          controller: _scrollController,
-          scrollDirection: Axis.horizontal,
-          clipBehavior: Clip.none,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var index = 0; index < widget.values.length; index++)
-                _buildSegment(context, index, widget.values[index]),
-            ],
-          ),
-        ),
-      ),
+      child: ClipRRect(borderRadius: BorderRadius.circular(17), child: scroll),
     );
   }
 
@@ -225,6 +241,42 @@ class NouveauSegmentedSelectorState<T>
     final hovered = value == _hoveredValue;
     final leading = widget.leadingBuilder?.call(value);
 
+    if (PlatformDetection.isTV) {
+      return ConstrainedBox(
+        constraints: BoxConstraints(minWidth: widget.minimumSegmentWidth),
+        child: Tv26Button(
+          label: widget.labelBuilder(value),
+          focusNode: node,
+          skipTraversal: true,
+          height: widget.standaloneTabs
+              ? widget.height
+              : widget.height - Tv26Style.segmentInset * 2,
+          fontSize: widget.standaloneTabs ? 16 : 14,
+          transparent: widget.standaloneTabs,
+          foregroundColor: widget.standaloneTabs ? Tv26Style.secondary : null,
+          selected: selected,
+          leading: leading,
+          onPressed: () => _activate(value),
+          onUp: widget.onNavigateUp == null
+              ? null
+              : () {
+                  widget.onNavigateUp!();
+                },
+          onDown: widget.onNavigateDown == null
+              ? null
+              : () {
+                  widget.onNavigateDown!();
+                },
+          onLeft: index == 0 && widget.allowLeftEdgeExit
+              ? null
+              : () => _focusAdjacent(index, -1),
+          onRight: index == widget.values.length - 1 && !widget.trapRightEdge
+              ? null
+              : () => _focusAdjacent(index, 1),
+          onFocusChange: (focused) => _handleFocusChanged(focused, value),
+        ),
+      );
+    }
     final theme = Theme.of(context);
     final foreground = AppColorScheme.onSurface;
 
@@ -253,7 +305,6 @@ class NouveauSegmentedSelectorState<T>
         borderRadius: 16,
         suppressFocusGlow: true,
         disableScale: true,
-        semanticLabel: widget.labelBuilder(value),
         onSelect: () {
           _activate(value);
         },

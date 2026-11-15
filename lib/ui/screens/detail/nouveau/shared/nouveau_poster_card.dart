@@ -6,6 +6,7 @@ import 'package:moonfin_design/moonfin_design.dart';
 
 import '../../../../../util/platform_detection.dart';
 import '../../../../widgets/media_badge.dart';
+import '../../../../widgets/media_card.dart';
 import '../../../../widgets/offline_aware_image.dart';
 import 'nouveau_overflow_text.dart';
 
@@ -176,6 +177,27 @@ class _NouveauPosterCardState extends State<NouveauPosterCard> {
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformDetection.isTV) {
+      return MediaCard(
+        title: widget.title,
+        subtitle: widget.subtitle,
+        imageUrl: widget.imageUrl,
+        width: widget.width,
+        aspectRatio: widget.width / widget.height,
+        externalIsFocused: widget.isFocused,
+        cardFocusExpansion: false,
+        showLabel: false,
+        isFavorite: widget.isFavorite,
+        isPlayed: widget.isPlayed,
+        playedPercentage: _progress * 100,
+        imageOverlays: [
+          if (widget.topRightOverlay != null)
+            Positioned(top: 6, right: 6, child: widget.topRightOverlay!),
+        ],
+        onTap: widget.onTap,
+        onLongPress: widget.onLongPress,
+      );
+    }
     final theme = Theme.of(context);
     final foreground = AppColorScheme.onSurface;
 
@@ -593,10 +615,7 @@ class _NouveauFavoriteIndicator extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColorScheme.recordingActive,
         shape: BoxShape.circle,
-        border: Border.all(
-          color: Colors.white,
-          width: 1.5,
-        ),
+        border: Border.all(color: Colors.white, width: 1.5),
         boxShadow: kMediaBadgeShadow,
       ),
       alignment: Alignment.center,

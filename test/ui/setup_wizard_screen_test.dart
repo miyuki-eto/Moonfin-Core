@@ -128,10 +128,19 @@ void main() {
     await settle(tester);
   }
 
-  // TV runs first: the media bar's default is read once per test run, and on
-  // a TV it's Moonfin, the first row.
   group('on a TV', () {
     setUp(() => PlatformDetection.setInterfaceLayout(InterfaceLayout.tv));
+
+    testWidgets(
+      'fresh installs start on the selected sidebar and Banner defaults',
+      (tester) async {
+        await pumpWizard(tester);
+        expect(_focusLabel(), 'setupOption navbar 1');
+        await press(tester, LogicalKeyboardKey.arrowRight);
+        await press(tester, LogicalKeyboardKey.enter);
+        expect(_focusLabel(), 'setupOption mediaBar 4');
+      },
+    );
 
     testWidgets('the preview follows focus and the list ends lead out', (
       tester,
@@ -142,6 +151,8 @@ void main() {
       // The chip and the last step of the settings path.
       expect(find.text('Navigation Style'), findsNWidgets(2));
       expect(find.text('Navigation Bar'), findsOneWidget);
+      expect(_focusLabel(), 'setupOption navbar 1');
+      await press(tester, LogicalKeyboardKey.arrowUp);
       expect(_focusLabel(), 'setupOption navbar 0');
       expect(find.text('Tabs across the top of the screen.'), findsOneWidget);
 
@@ -156,7 +167,7 @@ void main() {
       expect(
         find.descendant(
           of: find.ancestor(
-            of: find.text('Top Bar'),
+            of: find.text('Left Sidebar'),
             matching: find.byType(Row),
           ),
           matching: find.text('Current'),
@@ -170,9 +181,11 @@ void main() {
       await press(tester, LogicalKeyboardKey.enter);
       expect(find.text('Step 2 of 5'), findsOneWidget);
       expect(find.text('Media Bar Style'), findsNWidgets(2));
-      expect(_focusLabel(), 'setupOption mediaBar 0');
+      expect(_focusLabel(), 'setupOption mediaBar 4');
 
-      await press(tester, LogicalKeyboardKey.arrowUp);
+      for (var i = 0; i < 5; i++) {
+        await press(tester, LogicalKeyboardKey.arrowUp);
+      }
       expect(_focusLabel(), 'setupWizardSkip');
     });
 
@@ -191,7 +204,6 @@ void main() {
 
     testWidgets('a step opens with only its chosen row lit', (tester) async {
       await pumpWizard(tester);
-      await press(tester, LogicalKeyboardKey.arrowDown);
       expect(_focusLabel(), 'setupOption navbar 1');
       expect(_litRows(tester), 1);
 
@@ -199,7 +211,7 @@ void main() {
       await tester.tap(find.text('Next'));
       await settle(tester);
       expect(find.text('Step 2 of 5'), findsOneWidget);
-      expect(_focusLabel(), 'setupOption mediaBar 0');
+      expect(_focusLabel(), 'setupOption mediaBar 4');
       expect(_litRows(tester), 1);
     });
 
@@ -212,7 +224,9 @@ void main() {
       await press(tester, LogicalKeyboardKey.enter);
       expect(find.text('Step 2 of 5'), findsOneWidget);
 
-      await press(tester, LogicalKeyboardKey.arrowDown);
+      for (var i = 0; i < 3; i++) {
+        await press(tester, LogicalKeyboardKey.arrowUp);
+      }
       expect(_focusLabel(), 'setupOption mediaBar 1');
       await press(tester, LogicalKeyboardKey.enter);
       expect(find.text('Step 2 of 5'), findsOneWidget);

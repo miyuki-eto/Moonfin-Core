@@ -64,7 +64,7 @@ class _AdminTaskDetailScreenState
     final taskAsync = ref.watch(adminTaskProvider(widget.taskId));
 
     return taskAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: LoadingThrobber()),
       error: (error, _) => Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

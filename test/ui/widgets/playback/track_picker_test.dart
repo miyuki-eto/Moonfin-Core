@@ -58,6 +58,11 @@ class _Backend extends Fake implements MediaKitPlayerBackend {
   Future<void> setAudioDelay(double seconds) async => audioDelays.add(seconds);
 }
 
+class _PgsBackend extends _Backend implements AsyncPgsSubtitleBackend {
+  @override
+  bool get loadsEmbeddedPgsAsFiles => true;
+}
+
 class _Manager extends PlaybackManager {
   _Manager(this._backend, {this.resolution, this.primaryIndex, this.secondaryIndex});
 
@@ -304,6 +309,31 @@ void main() {
           await tester.pumpAndSettle();
         }
       }
+    }
+  });
+
+  testWidgets('native PGS keeps delay but hides ineffective text appearance controls', (tester) async {
+    for (final selected in [-1, 2, 3]) {
+      final manager = _Manager(
+        _PgsBackend(),
+        primaryIndex: selected,
+        resolution: StreamResolutionResult(
+          streamUrl: 'https://host/stream',
+          mediaSourceId: 'source',
+          playMethod: StreamPlayMethod.directPlay,
+          mediaStreams: [
+            {'Type': 'Subtitle', 'Index': 2, 'Codec': 'PGSSUB'},
+            {'Type': 'Subtitle', 'Index': 3, 'Codec': 'subrip'},
+          ],
+        ),
+      );
+      addTearDown(manager.dispose);
+      await openPicker(tester, manager, audio: false);
+      expect(find.text(l10n.subtitleDelay), findsOneWidget);
+      expect(find.text(l10n.subtitleSize), selected == 2 ? findsNothing : findsOneWidget);
+      expect(find.text(l10n.verticalOffset), selected == 2 ? findsNothing : findsOneWidget);
+      Navigator.of(tester.element(find.byType(Dialog))).pop();
+      await tester.pumpAndSettle();
     }
   });
 

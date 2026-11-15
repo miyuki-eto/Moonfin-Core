@@ -249,7 +249,7 @@ class _AdminLogViewerScreenState extends State<AdminLogViewerScreen> {
     final theme = Theme.of(context);
 
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: LoadingThrobber());
     }
 
     if (_error != null) {

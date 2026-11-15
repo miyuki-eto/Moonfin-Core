@@ -9,6 +9,7 @@ import '../../../../../util/platform_detection.dart';
 import '../../../../widgets/detail_reviews.dart';
 import '../../../../widgets/focus/locked_focus_row.dart';
 import '../../../../widgets/navigation_layout.dart';
+import '../../../../tv/tv_card_focus_frame.dart';
 import '../shared/nouveau_spacing.dart';
 
 class NouveauReviewsSection extends StatefulWidget {
@@ -106,6 +107,9 @@ class NouveauReviewsSectionState extends State<NouveauReviewsSection> {
             : MediaQuery.sizeOf(context).width;
 
         final cardWidth = metrics.itemWidth(availableWidth);
+        final gap = PlatformDetection.isTV
+            ? Tv26Style.railItemGap
+            : metrics.gap;
 
         return Column(
           mainAxisSize: MainAxisSize.min,
@@ -113,7 +117,9 @@ class NouveauReviewsSectionState extends State<NouveauReviewsSection> {
           children: [
             Text(
               AppLocalizations.of(context).reviews,
-              style: compact
+              style: PlatformDetection.isTV
+                  ? Tv26Style.sectionTitle
+                  : compact
                   ? textTheme.titleLarge?.copyWith(
                       fontSize: 22,
                       fontWeight: FontWeight.w700,
@@ -132,12 +138,16 @@ class NouveauReviewsSectionState extends State<NouveauReviewsSection> {
               width: double.infinity,
               height: reviewCardHeight,
               child: LockedFocusRow<TmdbReview>(
+                paintOutset: PlatformDetection.isTV ? Tv26Style.focusOutset : 0,
+                viewportInsets: PlatformDetection.isTV
+                    ? Tv26Style.railPadding
+                    : EdgeInsets.zero,
                 key: _rowKey,
                 items: reviews,
                 hubKey: _hubKey,
                 controller: _scrollController,
                 height: reviewCardHeight,
-                itemExtent: cardWidth + metrics.gap,
+                itemExtent: cardWidth + gap,
                 clipBehavior: Clip.none,
                 onVerticalNavigation: (isUp) =>
                     (isUp ? widget.onNavigateUp : widget.onNavigateDown)
@@ -149,6 +159,17 @@ class NouveauReviewsSectionState extends State<NouveauReviewsSection> {
                 onLeftEdge: _navbarIsLeft ? _handleLeftEdge : null,
                 itemBuilder: (context, review, index, isFocused) {
                   final hasNext = index < reviews.length - 1;
+                  if (PlatformDetection.isTV) {
+                    return Padding(
+                      padding: EdgeInsets.only(right: hasNext ? gap : 0),
+                      child: TvCardFocusFrame(
+                        focused: isFocused,
+                        child: ExcludeFocus(
+                          child: ReviewCard(review: review, width: cardWidth),
+                        ),
+                      ),
+                    );
+                  }
 
                   return Padding(
                     padding: EdgeInsets.only(right: hasNext ? metrics.gap : 0),

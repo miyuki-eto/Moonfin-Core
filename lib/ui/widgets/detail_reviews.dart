@@ -104,7 +104,12 @@ class _ReviewDialogBodyState extends State<_ReviewDialogBody> {
             onKeyEvent: _onKey,
             child: SingleChildScrollView(
               controller: _scroll,
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+              padding: EdgeInsets.fromLTRB(
+                PlatformDetection.isTV ? 16 : 24,
+                8,
+                PlatformDetection.isTV ? 16 : 24,
+                16,
+              ),
               child: MessageMarkdown(markdown: review.content),
             ),
           ),

@@ -1,3 +1,7 @@
+import '../../tv/tv_status_view.dart';
+import '../../tv/tv_async_content.dart';
+import '../../tv/tv_browse_header.dart';
+
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
@@ -71,7 +75,9 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
   }
 
   void _onChanged() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _onScroll() {
@@ -200,14 +206,14 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
         _lastTappedItemId == item.id &&
         _lastItemTapAt != null &&
         now.difference(_lastItemTapAt!) < const Duration(milliseconds: 500);
-    if (isDuplicateTap) return;
+    if (isDuplicateTap) {
+      return;
+    }
     _lastTappedItemId = item.id;
     _lastItemTapAt = now;
 
     if (_vm.isNavigableFolder(item)) {
-      context.push(
-        Destinations.folder(item.id, serverId: item.serverId),
-      );
+      context.push(Destinations.folder(item.id, serverId: item.serverId));
     } else {
       context.push(
         Destinations.itemOrPhoto(
@@ -230,9 +236,16 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
 
   @override
   Widget build(BuildContext context) => RequestInitialFocus(
-        targetNode: _vm.items.isNotEmpty ? _getGridItemFocusNode(0) : _initialFocusNode,
-        child: _buildContent(context),
-      );
+    targetNode: _vm.items.isNotEmpty
+        ? _getGridItemFocusNode(0)
+        : _initialFocusNode,
+    child: PlatformDetection.isTV
+        ? TvAsyncContent(
+            ready: _vm.state != FolderBrowseState.loading,
+            child: _buildContent(context),
+          )
+        : _buildContent(context),
+  );
 
   Widget _buildContent(BuildContext context) {
     return Scaffold(
@@ -249,7 +262,15 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 80),
+                  if (PlatformDetection.isTV)
+                    TvBrowseHeader(
+                      title: _vm.breadcrumbs.isEmpty
+                          ? AppLocalizations.of(context).libraries
+                          : _vm.breadcrumbs.last.name,
+                      onHome: () => context.go(Destinations.home),
+                    )
+                  else
+                    const SizedBox(height: 80),
                   if (_vm.breadcrumbs.isNotEmpty) _buildBreadcrumbs(),
                   Divider(
                     color: ThemeRegistry.active.borders.chipBorder.color,
@@ -318,6 +339,14 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
         return const SkeletonLibraryGrid();
       case FolderBrowseState.error:
         final l10n = AppLocalizations.of(context);
+        if (PlatformDetection.isTV) {
+          return TvStatusView(
+            message: l10n.failedToLoadFolderError(
+              describeError(_vm.error!, l10n),
+            ),
+            onRetry: () => _vm.loadFolder(widget.folderId),
+          );
+        }
         return Center(
           child: Text(
             l10n.failedToLoadFolderError(describeError(_vm.error!, l10n)),
@@ -325,6 +354,11 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
           ),
         );
       case FolderBrowseState.ready when _vm.items.isEmpty:
+        if (PlatformDetection.isTV) {
+          return TvStatusView(
+            message: AppLocalizations.of(context).thisFolderIsEmpty,
+          );
+        }
         return Center(
           child: Text(
             AppLocalizations.of(context).thisFolderIsEmpty,
@@ -340,7 +374,9 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
   /// and shorter ones leave a gap. Walking every item to find it is only worth
   /// doing when the list itself changes, not on each rebuild.
   void _ensureGridMetrics() {
-    if (identical(_metricsSource, _vm.items)) return;
+    if (identical(_metricsSource, _vm.items)) {
+      return;
+    }
     _metricsSource = _vm.items;
 
     var minAspectRatio = 16 / 9;
@@ -348,7 +384,9 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
     for (final item in _vm.items) {
       final isFolder = _vm.isNavigableFolder(item);
       final ratio = isFolder ? 16 / 9 : MediaCard.aspectRatioForType(item.type);
-      if (ratio < minAspectRatio) minAspectRatio = ratio;
+      if (ratio < minAspectRatio) {
+        minAspectRatio = ratio;
+      }
       anySubtitles = anySubtitles || _subtitleText(item, isFolder) != null;
     }
     _minAspectRatio = minAspectRatio;
@@ -415,7 +453,7 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
               });
             }
             if (index >= _vm.items.length) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(child: LoadingThrobber());
             }
             final item = _vm.items[index];
             final isFolder = _vm.isNavigableFolder(item);
@@ -448,11 +486,15 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
 
   String? _subtitleText(AggregatedItem item, bool isFolder) {
     final parts = <String>[];
-    if (item.type != null) parts.add(item.type!);
+    if (item.type != null) {
+      parts.add(item.type!);
+    }
     if (isFolder && item.childCount != null) {
       parts.add(AppLocalizations.of(context).itemCountLabel(item.childCount!));
     }
-    if (item.productionYear != null) parts.add('${item.productionYear}');
+    if (item.productionYear != null) {
+      parts.add('${item.productionYear}');
+    }
     return parts.isEmpty ? null : parts.join(' · ');
   }
 }
@@ -502,15 +544,15 @@ class _BreadcrumbChipState extends State<_BreadcrumbChip> {
             color: _isFocused
                 ? focusColor.withAlpha(70)
                 : (widget.isLast
-                    ? AppColorScheme.accent.withAlpha(35)
-                    : AppColorScheme.onSurface.withAlpha(15)),
+                      ? AppColorScheme.accent.withAlpha(35)
+                      : AppColorScheme.onSurface.withAlpha(15)),
             borderRadius: AppRadius.circular(8),
             border: Border.all(
               color: _isFocused
                   ? focusColor
                   : (widget.isLast
-                      ? ThemeRegistry.active.borders.chipBorder.color
-                      : Colors.transparent),
+                        ? ThemeRegistry.active.borders.chipBorder.color
+                        : Colors.transparent),
               width: _isFocused ? 2 : 1,
             ),
           ),
@@ -520,11 +562,12 @@ class _BreadcrumbChipState extends State<_BreadcrumbChip> {
               color: _isFocused
                   ? focusColor
                   : (widget.isLast
-                      ? AppColorScheme.onSurface
-                      : AppColorScheme.accent),
+                        ? AppColorScheme.onSurface
+                        : AppColorScheme.accent),
               fontSize: 14,
-              fontWeight:
-                  _isFocused || widget.isLast ? FontWeight.w600 : FontWeight.normal,
+              fontWeight: _isFocused || widget.isLast
+                  ? FontWeight.w600
+                  : FontWeight.normal,
             ),
           ),
         ),

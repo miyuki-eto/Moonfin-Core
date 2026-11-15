@@ -62,6 +62,19 @@ void main() {
     expect(backend.position, Duration.zero);
   });
 
+  test('the first video frame belongs to the current source', () async {
+    await backend.play('https://server.test/first.mp4');
+    final oldFrame = backend.waitForFirstVideoFrame();
+    await backend.stop();
+    expect(await oldFrame, isFalse);
+
+    await backend.play('https://server.test/next.mp4');
+    final nextFrame = backend.waitForFirstVideoFrame();
+    await _send({'event': 'firstFrameRendered'});
+    expect(await nextFrame, isTrue);
+    expect(await backend.waitForFirstVideoFrame(), isTrue);
+  });
+
   test('ignores ticks still carrying the previous item position', () async {
     await tick(_endMs);
     await backend.play('https://server.test/next.mp4');

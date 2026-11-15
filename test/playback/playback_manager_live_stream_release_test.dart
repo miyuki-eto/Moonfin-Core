@@ -10,7 +10,8 @@ class _TestBackend extends Fake implements PlayerBackend {
   Duration get position => Duration.zero;
 
   @override
-  Duration get duration => playing ? const Duration(minutes: 30) : Duration.zero;
+  Duration get duration =>
+      playing ? const Duration(minutes: 30) : Duration.zero;
 
   @override
   Duration get buffer => Duration.zero;
@@ -221,7 +222,8 @@ void main() {
   testWidgets(
     'a direct-played channel closed at start is not closed again on stop',
     (tester) async {
-      final resolver = _TestResolver()..playMethod = StreamPlayMethod.directPlay;
+      final resolver = _TestResolver()
+        ..playMethod = StreamPlayMethod.directPlay;
       final service = _TestService();
       final manager = _manager(_TestBackend(), resolver, service);
 
@@ -238,36 +240,35 @@ void main() {
     },
   );
 
-  testWidgets(
-    'a channel re-resolved for its audio track releases both opens',
-    (tester) async {
-      // Jellyfin lists a live channel's tracks at -1, which never matches the
-      // unset index a new queue starts with.
-      final resolver = _TestResolver()
-        ..playMethod = StreamPlayMethod.transcode
-        ..mediaStreams = const [
-          {'Type': 'Video', 'Index': -1},
-          {'Type': 'Audio', 'Index': -1},
-        ];
-      final service = _TestService();
-      final manager = _manager(_TestBackend(), resolver, service)
-        ..audioTrackSelector = (streams, explicitIndex) =>
-            explicitIndex ?? streams.first['Index'] as int?;
+  testWidgets('a channel re-resolved for its audio track releases both opens', (
+    tester,
+  ) async {
+    // Jellyfin lists a live channel's tracks at -1, which never matches the
+    // unset index a new queue starts with.
+    final resolver = _TestResolver()
+      ..playMethod = StreamPlayMethod.transcode
+      ..mediaStreams = const [
+        {'Type': 'Video', 'Index': -1},
+        {'Type': 'Audio', 'Index': -1},
+      ];
+    final service = _TestService();
+    final manager = _manager(_TestBackend(), resolver, service)
+      ..audioTrackSelector = (_, streams, explicitIndex, _) =>
+          explicitIndex ?? streams.first['Index'] as int?;
 
-      await manager.playItems(<dynamic>[_channel], enableDirectPlay: false);
-      await tester.pump();
+    await manager.playItems(<dynamic>[_channel], enableDirectPlay: false);
+    await tester.pump();
 
-      expect(resolver.calls, 2);
-      expect(service.releases, <String>['direct:live-channel']);
+    expect(resolver.calls, 2);
+    expect(service.releases, <String>['direct:live-channel']);
 
-      await manager.stop();
-      await tester.pump();
+    await manager.stop();
+    await tester.pump();
 
-      expect(service.stops, <String>['session-2']);
-      expect(service.releases, <String>['direct:live-channel', 'session-2']);
-      manager.dispose();
-    },
-  );
+    expect(service.stops, <String>['session-2']);
+    expect(service.releases, <String>['direct:live-channel', 'session-2']);
+    manager.dispose();
+  });
 
   testWidgets(
     'a channel forced to transcode by the client releases the dropped open',
@@ -311,10 +312,7 @@ void main() {
 
       // Both re-resolves stop session-1, since the failed one never replaced
       // it, but only the first attempts to release its stream.
-      expect(
-        service.stops.where((s) => s == 'session-1'),
-        hasLength(2),
-      );
+      expect(service.stops.where((s) => s == 'session-1'), hasLength(2));
       expect(service.releases, <String>['session-1']);
       manager.dispose();
     },

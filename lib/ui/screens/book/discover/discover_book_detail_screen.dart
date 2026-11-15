@@ -262,7 +262,7 @@ class _DiscoverBookDetailScreenState extends State<DiscoverBookDetailScreen> {
                   if (snapshot.connectionState == ConnectionState.waiting)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 10),
-                      child: CircularProgressIndicator(color: bookDiscoverAccent),
+                      child: LoadingThrobber(color: bookDiscoverAccent),
                     )
                   else
                     Text(

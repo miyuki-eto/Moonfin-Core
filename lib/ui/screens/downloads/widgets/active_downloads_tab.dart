@@ -230,6 +230,7 @@ class TileTrackedProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (value == null) return const Center(child: LoadingThrobber());
     final base = PlatformDetection.isTV
         ? DefaultTextStyle.of(context).style.color ?? AppColorScheme.onSurface
         : AppColorScheme.onSurface;

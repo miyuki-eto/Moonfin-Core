@@ -1,3 +1,8 @@
+import '../../util/error_message.dart';
+import '../../tv/tv_status_view.dart';
+import '../../tv/tv_async_content.dart';
+import '../../tv/tv_browse_header.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -52,6 +57,7 @@ class _LibraryGenresScreenState extends State<LibraryGenresScreen> {
 
   List<GenreCardData> _genres = [];
   bool _isLoading = true;
+  Object? _error;
   String _libraryName = '';
   String? _collectionType;
   bool _lastGroupCollections = false;
@@ -62,15 +68,17 @@ class _LibraryGenresScreenState extends State<LibraryGenresScreen> {
 
   bool _disposed = false;
 
-  ImageType get _imageType =>
-      _prefs.get(UserPreferences.libraryImageType(widget.libraryId));
+  ImageType get _imageType => PlatformDetection.isTV
+      ? ImageType.thumb
+      : _prefs.get(UserPreferences.libraryImageType(widget.libraryId));
 
   PosterSize get _posterSize => _prefs.resolveLibraryPosterSize();
 
   void _onChanged() {
-    if (!mounted) return;
-    final currentGroup =
-        _prefs.get(UserPreferences.groupItemsIntoCollections);
+    if (!mounted) {
+      return;
+    }
+    final currentGroup = _prefs.get(UserPreferences.groupItemsIntoCollections);
     if (_lastGroupCollections != currentGroup) {
       _lastGroupCollections = currentGroup;
       _load();
@@ -82,10 +90,13 @@ class _LibraryGenresScreenState extends State<LibraryGenresScreen> {
   @override
   void initState() {
     super.initState();
-    _lastGroupCollections =
-        _prefs.get(UserPreferences.groupItemsIntoCollections);
+    _lastGroupCollections = _prefs.get(
+      UserPreferences.groupItemsIntoCollections,
+    );
     _backgroundSub = _backgroundService.backgroundStream.listen((url) {
-      if (mounted) setState(() => _backdropUrl = url);
+      if (mounted) {
+        setState(() => _backdropUrl = url);
+      }
     });
     _backdropUrl = _backgroundService.currentUrl;
     _prefs.addListener(_onChanged);
@@ -102,6 +113,10 @@ class _LibraryGenresScreenState extends State<LibraryGenresScreen> {
 
   Future<void> _load() async {
     final token = ++_loadToken;
+    _error = null;
+    if (mounted) {
+      setState(() => _isLoading = true);
+    }
     try {
       _usedArtworkIds.clear();
       final parentData = await _client.itemsApi.getItem(widget.libraryId);
@@ -119,23 +134,26 @@ class _LibraryGenresScreenState extends State<LibraryGenresScreen> {
       );
 
       final items = (response['Items'] as List?) ?? [];
-      final temp = items.map((g) {
-        final data = g as Map<String, dynamic>;
-        final count = data['ChildCount'] as int? ??
-            (data['MovieCount'] as int? ?? 0) +
-                (data['SeriesCount'] as int? ?? 0) +
-                (data['AlbumCount'] as int? ?? 0) +
-                (data['SongCount'] as int? ?? 0) +
-                (data['ArtistCount'] as int? ?? 0) +
-                (data['MusicVideoCount'] as int? ?? 0);
-        return (
-          data: data,
-          itemCount: count,
-        );
-      }).where((genre) {
-        if (_collectionType == 'music') return true;
-        return genre.itemCount > 0 || !genreReportsCounts(genre.data);
-      }).toList();
+      final temp = items
+          .map((g) {
+            final data = g as Map<String, dynamic>;
+            final count =
+                data['ChildCount'] as int? ??
+                (data['MovieCount'] as int? ?? 0) +
+                    (data['SeriesCount'] as int? ?? 0) +
+                    (data['AlbumCount'] as int? ?? 0) +
+                    (data['SongCount'] as int? ?? 0) +
+                    (data['ArtistCount'] as int? ?? 0) +
+                    (data['MusicVideoCount'] as int? ?? 0);
+            return (data: data, itemCount: count);
+          })
+          .where((genre) {
+            if (_collectionType == 'music') {
+              return true;
+            }
+            return genre.itemCount > 0 || !genreReportsCounts(genre.data);
+          })
+          .toList();
 
       _genres = temp.map((x) {
         final data = x.data;
@@ -155,6 +173,9 @@ class _LibraryGenresScreenState extends State<LibraryGenresScreen> {
         );
       }).toList();
     } catch (e) {
+      if (token == _loadToken) {
+        _error = e;
+      }
       // The empty state looks the same as a library with no genres, so a
       // refused request is logged.
       if (GetIt.instance.isRegistered<LogService>()) {
@@ -167,9 +188,13 @@ class _LibraryGenresScreenState extends State<LibraryGenresScreen> {
       }
     }
 
-    if (token != _loadToken) return;
+    if (token != _loadToken) {
+      return;
+    }
     _isLoading = false;
-    if (!_disposed && mounted) setState(() {});
+    if (!_disposed && mounted) {
+      setState(() {});
+    }
 
     _loadArtwork(token);
   }
@@ -193,7 +218,9 @@ class _LibraryGenresScreenState extends State<LibraryGenresScreen> {
         )
         .toList();
 
-    if (needsWork.isEmpty) return;
+    if (needsWork.isEmpty) {
+      return;
+    }
 
     final toLoad = needsWork.take(_initialArtworkBatch).toList();
     await Future.wait(
@@ -227,7 +254,9 @@ class _LibraryGenresScreenState extends State<LibraryGenresScreen> {
     bool groupCollections,
     int token,
   ) async {
-    if (_disposed || token != _loadToken) return;
+    if (_disposed || token != _loadToken) {
+      return;
+    }
     try {
       final isVideo = includeType == 'Movie' || includeType == 'Series';
       final includeItemTypes = isVideo && groupCollections
@@ -257,7 +286,9 @@ class _LibraryGenresScreenState extends State<LibraryGenresScreen> {
         }
 
         genre.itemCount = totalCount;
-        if (!_disposed && mounted) setState(() {});
+        if (!_disposed && mounted) {
+          setState(() {});
+        }
         return;
       }
 
@@ -278,8 +309,9 @@ class _LibraryGenresScreenState extends State<LibraryGenresScreen> {
       final items = (response['Items'] as List?) ?? [];
 
       final rawTotalCount = response['TotalRecordCount'];
-      final totalCount =
-          rawTotalCount is num ? rawTotalCount.toInt() : items.length;
+      final totalCount = rawTotalCount is num
+          ? rawTotalCount.toInt()
+          : items.length;
       if (totalCount <= 0 || items.isEmpty) {
         if (_genres.remove(genre) && !_disposed && mounted) {
           setState(() {});
@@ -304,7 +336,9 @@ class _LibraryGenresScreenState extends State<LibraryGenresScreen> {
             );
             genre.imageUrl = primaryUrl;
             genre.backdropUrl ??= primaryUrl;
-            if (!_disposed && mounted) setState(() {});
+            if (!_disposed && mounted) {
+              setState(() {});
+            }
             return;
           }
         }
@@ -317,7 +351,9 @@ class _LibraryGenresScreenState extends State<LibraryGenresScreen> {
           );
           genre.imageUrl = primaryUrl;
           genre.backdropUrl ??= primaryUrl;
-          if (!_disposed && mounted) setState(() {});
+          if (!_disposed && mounted) {
+            setState(() {});
+          }
           return;
         }
       } else {
@@ -336,18 +372,26 @@ class _LibraryGenresScreenState extends State<LibraryGenresScreen> {
 
           genre.imageUrl = imageUrl;
           genre.backdropUrl = backdropUrl;
-          if (usedId != null) _usedArtworkIds.add(usedId);
+          if (usedId != null) {
+            _usedArtworkIds.add(usedId);
+          }
         }
       }
-      if (!_disposed && mounted) setState(() {});
+      if (!_disposed && mounted) {
+        setState(() {});
+      }
     } catch (_) {}
   }
 
   int _genreCardRequestMaxWidth() {
     final requestScale = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 2.0);
     final widthPx = (_cardWidth() * requestScale).round();
-    if (widthPx < 160) return 160;
-    if (widthPx > 720) return 720;
+    if (widthPx < 160) {
+      return 160;
+    }
+    if (widthPx > 720) {
+      return 720;
+    }
     return widthPx;
   }
 
@@ -392,12 +436,17 @@ class _LibraryGenresScreenState extends State<LibraryGenresScreen> {
   }
 
   double _desktopUiScaleFactor() {
-    return _prefs.get(UserPreferences.desktopUiScale).scaleFactor;
+    return PlatformDetection.isTV
+        ? 1
+        : _prefs.get(UserPreferences.desktopUiScale).scaleFactor;
   }
 
   @override
-  Widget build(BuildContext context) =>
-      RequestInitialFocus(child: _buildContent(context));
+  Widget build(BuildContext context) => RequestInitialFocus(
+    child: PlatformDetection.isTV
+        ? TvAsyncContent(ready: !_isLoading, child: _buildContent(context))
+        : _buildContent(context),
+  );
 
   Widget _buildContent(BuildContext context) {
     final isMobile = _isCompact(context);
@@ -421,13 +470,20 @@ class _LibraryGenresScreenState extends State<LibraryGenresScreen> {
           ),
           Column(
             children: [
-              _GenresHeader(
-                libraryName: _libraryName,
-                isMusic: _collectionType == 'music',
-                onBack: () => PlatformDetection.isWeb
-                    ? context.popOrHome()
-                    : context.pop(),
-              ),
+              if (PlatformDetection.isTV)
+                TvBrowseHeader(
+                  title: AppLocalizations.of(context).genres,
+                  subtitle: _libraryName,
+                  onHome: () => context.go(Destinations.home),
+                )
+              else
+                _GenresHeader(
+                  libraryName: _libraryName,
+                  isMusic: _collectionType == 'music',
+                  onBack: () => PlatformDetection.isWeb
+                      ? context.popOrHome()
+                      : context.pop(),
+                ),
               Expanded(child: _buildBody()),
             ],
           ),
@@ -441,7 +497,18 @@ class _LibraryGenresScreenState extends State<LibraryGenresScreen> {
       return const SkeletonLibraryGrid(aspectRatio: 16 / 9);
     }
 
+    if (_error != null && _genres.isEmpty) {
+      return TvStatusView(
+        message: describeError(_error!, AppLocalizations.of(context)),
+        onRetry: _load,
+      );
+    }
     if (_genres.isEmpty) {
+      if (PlatformDetection.isTV) {
+        return TvStatusView(
+          message: AppLocalizations.of(context).noGenresFound,
+        );
+      }
       return Center(
         child: Text(
           AppLocalizations.of(context).noGenresFound,
@@ -459,17 +526,20 @@ class _LibraryGenresScreenState extends State<LibraryGenresScreen> {
         final desktopScale = _desktopUiScaleFactor();
         final horizontalPadding = isMobile
             ? _mobileHorizontalPadding
-            : _horizontalPadding * desktopScale;
-        final spacing = 16.0 * desktopScale;
+            : (PlatformDetection.isTV
+                  ? Tv26Style.inset
+                  : _horizontalPadding * desktopScale);
+        final spacing = PlatformDetection.isTV ? 24.0 : 16.0 * desktopScale;
         final minColumns = _imageType == ImageType.banner
             ? (constraints.maxWidth < 600 ? 1 : 2)
             : (isMobile ? 1 : 2);
         final maxColumns = isMobile ? 4 : 8;
-        final crossAxisCount =
-            ((constraints.maxWidth - horizontalPadding * 2 + spacing) /
-                    (_cardWidth() + spacing))
-                .floor()
-                .clamp(minColumns, maxColumns);
+        final crossAxisCount = PlatformDetection.isTV
+            ? 4
+            : ((constraints.maxWidth - horizontalPadding * 2 + spacing) /
+                      (_cardWidth() + spacing))
+                  .floor()
+                  .clamp(minColumns, maxColumns);
 
         return GridView.builder(
           padding: EdgeInsets.fromLTRB(
@@ -489,6 +559,9 @@ class _LibraryGenresScreenState extends State<LibraryGenresScreen> {
             final genre = _genres[index];
             return GenreGridCard(
               genre: genre,
+              index: index,
+              itemCount: _genres.length,
+              columns: crossAxisCount,
               cardFocusExpansion: _prefs.get(
                 UserPreferences.cardFocusExpansion,
               ),
@@ -504,7 +577,9 @@ class _LibraryGenresScreenState extends State<LibraryGenresScreen> {
                 );
               },
               onLongPress: () {
-                final serverId = GetIt.instance<UserRepository>().currentUser?.serverId ?? '';
+                final serverId =
+                    GetIt.instance<UserRepository>().currentUser?.serverId ??
+                    '';
                 final aggregatedItem = AggregatedItem(
                   id: genre.id,
                   serverId: serverId,
@@ -514,7 +589,11 @@ class _LibraryGenresScreenState extends State<LibraryGenresScreen> {
                     'Id': genre.id,
                   },
                 );
-                showContextMenu(context, aggregatedItem, onChanged: () => setState(() {}));
+                showContextMenu(
+                  context,
+                  aggregatedItem,
+                  onChanged: () => setState(() {}),
+                );
               },
               onHover: isMobile
                   ? null

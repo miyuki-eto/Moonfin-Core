@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart'
     show CupertinoAlertDialog, CupertinoDialogAction;
@@ -614,7 +615,7 @@ void main() {
         );
         await tester.tap(find.text('Record'));
         await tester.pump();
-        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+        expect(find.byType(LoadingThrobber), findsOneWidget);
         expect(recordings, 0);
         current = !changed;
         await tester.pump(const Duration(seconds: 4));
@@ -626,7 +627,7 @@ void main() {
               ? RecordAiringOutcome.cancelled
               : RecordAiringOutcome.recorded,
         );
-        expect(find.byType(CircularProgressIndicator), findsNothing);
+        expect(find.byType(LoadingThrobber), findsNothing);
         if (changed) {
           final context = tester.element(find.text('Record'));
           expect(

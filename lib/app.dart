@@ -1,3 +1,5 @@
+import 'config/app_features.dart';
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -32,6 +34,7 @@ import 'data/services/topshelf_service.dart';
 import 'data/services/watch_next_service.dart';
 import 'di/providers.dart';
 import 'l10n/app_localizations.dart';
+import 'platform/web_startup_splash.dart';
 import 'preference/preference_constants.dart' show GlassSettledQuality;
 import 'preference/user_preferences.dart';
 import 'syncplay/syncplay_manager.dart';
@@ -42,6 +45,7 @@ import 'ui/navigation/destinations.dart';
 import 'ui/navigation/home_refresh_bus.dart';
 import 'ui/theme/app_theme.dart';
 import 'ui/theme/app_theme_controller.dart';
+import 'ui/tv/tv_remote_navigation.dart';
 import 'ui/widgets/app_update_banner.dart';
 import 'ui/widgets/cast_mini_player.dart';
 import 'ui/widgets/video_mini_player.dart';
@@ -67,11 +71,14 @@ import 'util/idiom/glass_capability.dart';
 import 'util/platform_detection.dart';
 import 'util/tv_ui_scale.dart';
 import 'ui/widgets/overlay_sheet.dart';
+
 import 'package:moonfin_design/moonfin_design.dart';
+
 import 'util/focus/key_event_utils.dart';
 import 'util/focus/gamepad/gamepad_navigation_scope.dart';
 import 'util/focus/gamepad/gamepad_key_synthesizer.dart';
 import 'util/focus/open_popup.dart';
+
 import 'package:custom_tv_text_field/custom_tv_text_field.dart';
 
 class MoonfinApp extends StatefulWidget {
@@ -91,8 +98,8 @@ class _MoonfinAppState extends State<MoonfinApp> {
   void initState() {
     super.initState();
     _prefs = GetIt.instance<UserPreferences>();
-    CustomKeyboard.onStylePicked = (style) =>
-        _prefs.set(UserPreferences.keyboardStyle, style);
+    CustomKeyboard.fixedStyle = KeyboardStyle.docked;
+    CustomKeyboard.onStylePicked = null;
     _themeController = AppThemeController.fromPreferences(_prefs);
     _lastResolvedLocale = _resolveLocale();
     AppUiIdiomResolver.setOverride(_prefs.get(UserPreferences.interfaceStyle));
@@ -135,6 +142,25 @@ class _MoonfinAppState extends State<MoonfinApp> {
     // OS-registered moonfin:// links. The service no-ops on platforms without
     // an app_links backend.
     _deepLinks.startListener(navigateWhenReady);
+    if (kIsWeb) {
+      appRouter.routerDelegate.addListener(_scheduleSplashHandoff);
+      _scheduleSplashHandoff();
+    }
+  }
+
+  void _scheduleSplashHandoff() {
+    if (!webStartupSplashVisible) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final path = appRouter.routerDelegate.currentConfiguration.uri.path;
+      // These routes keep the splash until their content or prompt is ready.
+      if (path != Destinations.startup &&
+          path != Destinations.home &&
+          path != Destinations.server &&
+          path != Destinations.login) {
+        finishWebStartupSplash();
+      }
+    });
   }
 
   void _syncThemeFromPrefs() {
@@ -192,7 +218,9 @@ class _MoonfinAppState extends State<MoonfinApp> {
     );
     // GlassBackdrop reads GlassSettings.cheapBackdrop in build, so a
     // throttle step needs a shell rebuild to collapse or restore the bloom.
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _syncLocaleFromPrefs() {
@@ -220,6 +248,7 @@ class _MoonfinAppState extends State<MoonfinApp> {
 
   @override
   void dispose() {
+    if (kIsWeb) appRouter.routerDelegate.removeListener(_scheduleSplashHandoff);
     _prefs.removeListener(_syncThemeFromPrefs);
     _prefs.removeListener(_syncLocaleFromPrefs);
     _prefs.removeListener(_syncIdiomFromPrefs);
@@ -288,81 +317,81 @@ class _MoonfinAppState extends State<MoonfinApp> {
                     path == '/live-tv/player' ||
                     Destinations.isSignedOutRoute(path);
 
-                final overlay = Overlay(
-                  initialEntries: [
-                    OverlayEntry(
-                      builder: (context) {
-                        final Widget shell = Column(
-                          children: [
-                            Expanded(
-                              child: Stack(
-                                children: [
-                                  _ConnectivityListener(
-                                    child: child ?? const SizedBox.shrink(),
+                final overlay = Overlay.wrap(
+                  child: Builder(
+                    builder: (context) {
+                      final Widget shell = Column(
+                        children: [
+                          Expanded(
+                            child: Stack(
+                              children: [
+                                _ConnectivityListener(
+                                  child: child ?? const SizedBox.shrink(),
+                                ),
+                                const Align(
+                                  alignment: Alignment.topCenter,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      OfflineBanner(),
+                                      AppUpdateBanner(),
+                                    ],
                                   ),
-                                  const Align(
-                                    alignment: Alignment.topCenter,
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        OfflineBanner(),
-                                        AppUpdateBanner(),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                            if (!hidePlayer)
-                              const RepaintBoundary(child: CastMiniPlayer()),
-                            if (!hidePlayer) const VideoMiniPlayer(),
-                          ],
-                        );
-                        final glass = AppColorScheme.isGlass;
-                        // The backdrop slot stays in the tree even when empty so
-                        // toggling the glass theme only swaps this one child and
-                        // never restructures the shell below it. Restructuring
-                        // would tear down the navigator subtree and drop the
-                        // screen the user is on (e.g. an open settings page).
-                        Widget content = Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            Positioned.fill(
-                              child: VideoMiniPlayerHoleClip(
-                                child: glass
-                                    ? GlassBackdrop(
-                                        animated:
-                                            GlassSettings.animatedBackdrop,
-                                      )
-                                    : const SizedBox.shrink(),
-                              ),
+                          ),
+                          if (!hidePlayer &&
+                              AppFeatures.has(AppFeature.casting))
+                            const RepaintBoundary(child: CastMiniPlayer()),
+                          if (!hidePlayer) const VideoMiniPlayer(),
+                        ],
+                      );
+                      final glass = AppColorScheme.isGlass;
+                      // The backdrop slot stays in the tree even when empty so
+                      // toggling the glass theme only swaps this one child and
+                      // never restructures the shell below it. Restructuring
+                      // would tear down the navigator subtree and drop the
+                      // screen the user is on (e.g. an open settings page).
+                      Widget content = Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Positioned.fill(
+                            child: VideoMiniPlayerHoleClip(
+                              child: glass
+                                  ? GlassBackdrop(
+                                      animated: GlassSettings.animatedBackdrop,
+                                    )
+                                  : const SizedBox.shrink(),
                             ),
-                            TimesUpFocusGuard(child: shell),
-                            if (PlatformDetection.isTV) const ScreensaverHost(),
-                            // Last, so nothing sits above it and nothing can be
-                            // reached through it while the schedule is closed.
-                            const TimesUpGate(),
-                          ],
+                          ),
+                          TimesUpFocusGuard(child: shell),
+                          if (PlatformDetection.isTV) const ScreensaverHost(),
+                          // Last, so nothing sits above it and nothing can be
+                          // reached through it while the schedule is closed.
+                          const TimesUpGate(),
+                        ],
+                      );
+                      if (GlassSettings.usePackageRenderer) {
+                        // Governs every package-rendered glass pane below.
+                        // Benchmarks the device, throttles quality under
+                        // GPU and thermal pressure, and recovers when it
+                        // cools. The persisted settled quality skips the
+                        // warm-up on repeat launches.
+                        // ignore: experimental_member_use
+                        content = GlassAdaptiveScope(
+                          maxQuality: GlassCapability.adaptiveMaxQuality,
+                          initialQuality: _settledGlassInitialQuality(),
+                          onQualityChanged: _onGlassQualityChanged,
+                          child: content,
                         );
-                        if (GlassSettings.usePackageRenderer) {
-                          // Governs every package-rendered glass pane below.
-                          // Benchmarks the device, throttles quality under
-                          // GPU and thermal pressure, and recovers when it
-                          // cools. The persisted settled quality skips the
-                          // warm-up on repeat launches.
-                          // ignore: experimental_member_use
-                          content = GlassAdaptiveScope(
-                            maxQuality: GlassCapability.adaptiveMaxQuality,
-                            initialQuality: _settledGlassInitialQuality(),
-                            onQualityChanged: _onGlassQualityChanged,
-                            child: content,
-                          );
-                        }
-                        // Has to sit inside MaterialApp for ScrollIntent to
-                        // resolve, above the router so every route is covered,
-                        // and inside the Overlay so dialogs and sheets share
-                        // the same focus subtree.
-                        return GamepadNavigationScope(
+                      }
+                      // Has to sit inside MaterialApp for ScrollIntent to
+                      // resolve, above the router so every route is covered,
+                      // and inside the Overlay so dialogs and sheets share
+                      // the same focus subtree.
+                      return GamepadNavigationScope(
+                        child: TvRemoteNavigation(
                           child: InputModeTracker(
                             child: _GlobalShortcutScope(
                               child: Material(
@@ -379,10 +408,10 @@ class _MoonfinAppState extends State<MoonfinApp> {
                               ),
                             ),
                           ),
-                        );
-                      },
-                    ),
-                  ],
+                        ),
+                      );
+                    },
+                  ),
                 );
 
                 return ListenableBuilder(
@@ -396,9 +425,8 @@ class _MoonfinAppState extends State<MoonfinApp> {
                     final scale = _prefs
                         .get(UserPreferences.desktopUiScale)
                         .scaleFactor;
-                    final systemScale = MediaQuery.textScalerOf(
-                      context,
-                    ).scale(1.0);
+                    final systemScale = MediaQuery.textScalerOf(context)
+                        .scale(1.0);
                     // The pixel font renders far larger and wider than a normal
                     // face at a given size, so shrink all text to keep dense
                     // layouts from overflowing.
@@ -558,7 +586,9 @@ class _GlobalShortcutScopeState extends State<_GlobalShortcutScope>
   }
 
   bool _handleMouseBackNavigation() {
-    if (TimesUpGate.isShowing()) return true;
+    if (TimesUpGate.isShowing()) {
+      return true;
+    }
     if (_isPlayerRoute()) {
       return false;
     }
@@ -578,7 +608,9 @@ class _GlobalShortcutScopeState extends State<_GlobalShortcutScope>
       return true;
     }
 
-    if (_leaveAdminArea()) return true;
+    if (_leaveAdminArea()) {
+      return true;
+    }
 
     if (!_exitDialogShowing) {
       _exitDialogShowing = true;
@@ -594,7 +626,9 @@ class _GlobalShortcutScopeState extends State<_GlobalShortcutScope>
   /// instead of offering to close the app.
   bool _leaveAdminArea() {
     final path = appRouter.routerDelegate.currentConfiguration.uri.path;
-    if (!path.startsWith(Destinations.admin)) return false;
+    if (!path.startsWith(Destinations.admin)) {
+      return false;
+    }
     appRouter.go(Destinations.home);
     return true;
   }
@@ -656,17 +690,31 @@ class _GlobalShortcutScopeState extends State<_GlobalShortcutScope>
 
   @override
   Future<bool> didPopRoute() async {
-    if (TimesUpGate.isShowing()) return true;
+    if (TimesUpGate.isShowing()) {
+      return true;
+    }
     if (PlatformDetection.isTV && _screensaverController.dismissIfVisible()) {
       return true;
     }
-    if (DialogBackSuppressor.consume()) return true;
-    if (CustomTVTextField.closeTopKeyboard()) return true;
-    if (OverlaySheetController.closeTopSheet()) return true;
-    if (InlineBackInterceptor.handleBack()) return true;
-    if (_isPlayerRoute()) return false;
+    if (DialogBackSuppressor.consume()) {
+      return true;
+    }
+    if (CustomTVTextField.closeTopKeyboard()) {
+      return true;
+    }
+    if (OverlaySheetController.closeTopSheet()) {
+      return true;
+    }
+    if (InlineBackInterceptor.handleBack()) {
+      return true;
+    }
+    if (_isPlayerRoute()) {
+      return false;
+    }
     final navigatorState = appRouter.routerDelegate.navigatorKey.currentState;
-    if (navigatorState == null) return false;
+    if (navigatorState == null) {
+      return false;
+    }
     if (_hasPagelessRouteOnTop(navigatorState)) {
       await navigatorState.maybePop();
       return true;
@@ -685,7 +733,9 @@ class _GlobalShortcutScopeState extends State<_GlobalShortcutScope>
   /// stays on that tab. Only the match list names what is actually on screen.
   String _currentRoutePath() {
     final matches = appRouter.routerDelegate.currentConfiguration.matches;
-    if (matches.isEmpty) return '';
+    if (matches.isEmpty) {
+      return '';
+    }
     return matches.last.matchedLocation;
   }
 
@@ -703,7 +753,9 @@ class _GlobalShortcutScopeState extends State<_GlobalShortcutScope>
   /// player path, so it is checked first.
   void _showKeyboardShortcuts() {
     final navContext = appRouter.routerDelegate.navigatorKey.currentContext;
-    if (navContext == null || !navContext.mounted) return;
+    if (navContext == null || !navContext.mounted) {
+      return;
+    }
     if (_shortcutsDialogOpen) {
       Navigator.of(navContext, rootNavigator: true).pop();
       return;
@@ -727,7 +779,9 @@ class _GlobalShortcutScopeState extends State<_GlobalShortcutScope>
 
   bool _isEditingText() {
     final focusContext = FocusManager.instance.primaryFocus?.context;
-    if (focusContext == null) return false;
+    if (focusContext == null) {
+      return false;
+    }
     if (focusContext.findAncestorWidgetOfExactType<EditableText>() != null) {
       return true;
     }
@@ -760,7 +814,9 @@ class _GlobalShortcutScopeState extends State<_GlobalShortcutScope>
     final isBackspace = key == LogicalKeyboardKey.backspace;
     if (key.isBackKey) {
       // Nothing to go back to while the schedule is closed.
-      if (TimesUpGate.isShowing()) return true;
+      if (TimesUpGate.isShowing()) {
+        return true;
+      }
       final fromRemote = GamepadKeySynthesizer.isRemote(event.physicalKey);
       if (isBackspace && _isEditingText()) {
         return false;
@@ -824,11 +880,15 @@ class _GlobalShortcutScopeState extends State<_GlobalShortcutScope>
         scheduleRoutePop(appRouter, isMounted: () => mounted);
       } else if (!_exitDialogShowing) {
         // A server remote only navigates, it can't quit the app it's driving.
-        if (fromRemote) return true;
+        if (fromRemote) {
+          return true;
+        }
         if (PlatformDetection.isAndroid && key == LogicalKeyboardKey.goBack) {
           return true;
         }
-        if (_leaveAdminArea()) return true;
+        if (_leaveAdminArea()) {
+          return true;
+        }
         _exitDialogShowing = true;
         unawaited(_showExitConfirmation());
       }
@@ -845,11 +905,13 @@ class _GlobalShortcutScopeState extends State<_GlobalShortcutScope>
       return true;
     }
 
-    final altPressed = keys.contains(LogicalKeyboardKey.altLeft) ||
+    final altPressed =
+        keys.contains(LogicalKeyboardKey.altLeft) ||
         keys.contains(LogicalKeyboardKey.altRight);
 
     if (PlatformDetection.useDesktopUi &&
-        (key == LogicalKeyboardKey.f11 || (key == LogicalKeyboardKey.enter && altPressed))) {
+        (key == LogicalKeyboardKey.f11 ||
+            (key == LogicalKeyboardKey.enter && altPressed))) {
       unawaited(FullscreenHelper.toggle());
       return true;
     }
@@ -892,12 +954,16 @@ class _GlobalShortcutScopeState extends State<_GlobalShortcutScope>
   }
 
   void _maybePausePlaybackForBackground(AppLifecycleState state) {
-    if (!PlatformDetection.isTV) return;
+    if (!PlatformDetection.isTV) {
+      return;
+    }
     final isBackground =
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached;
-    if (!isBackground) return;
+    if (!isBackground) {
+      return;
+    }
 
     if (GetIt.instance.isRegistered<PlaybackManager>()) {
       final manager = GetIt.instance<PlaybackManager>();
@@ -916,12 +982,18 @@ class _GlobalShortcutScopeState extends State<_GlobalShortcutScope>
           }
         } catch (_) {}
       }
-      if (isAudio) return;
+      if (isAudio) {
+        return;
+      }
     }
 
-    if (!GetIt.instance.isRegistered<PlaybackArbiter>()) return;
+    if (!GetIt.instance.isRegistered<PlaybackArbiter>()) {
+      return;
+    }
     final arbiter = GetIt.instance<PlaybackArbiter>();
-    if (arbiter.pipActive) return;
+    if (arbiter.pipActive) {
+      return;
+    }
     if (GetIt.instance.isRegistered<CastService>() &&
         GetIt.instance<CastService>().activeKind != null) {
       return;
@@ -960,7 +1032,9 @@ class _GlobalShortcutScopeState extends State<_GlobalShortcutScope>
       await prefs.set(UserPreferences.windowMaximized, _isMaximized);
       // Keep the last windowed bounds. Neither state reports the size the
       // window would return to, so saving either would lose the real one.
-      if (isFullScreen || _isMaximized) return;
+      if (isFullScreen || _isMaximized) {
+        return;
+      }
       final size = await windowManager.getSize();
       final pos = await windowManager.getPosition();
       await prefs.set(UserPreferences.windowWidth, size.width);
@@ -1016,8 +1090,12 @@ class _GlobalShortcutScopeState extends State<_GlobalShortcutScope>
 
   @override
   void onWindowFocus() {
-    if (_isPlayerRoute()) return;
-    if (_isHomeRoute()) return;
+    if (_isPlayerRoute()) {
+      return;
+    }
+    if (_isHomeRoute()) {
+      return;
+    }
     if (FocusManager.instance.primaryFocus == null && !_focusNode.hasFocus) {
       _focusNode.requestFocus();
     }
@@ -1030,10 +1108,12 @@ class _GlobalShortcutScopeState extends State<_GlobalShortcutScope>
 
     final key = event.logicalKey;
     final keys = HardwareKeyboard.instance.logicalKeysPressed;
-    final altPressed = keys.contains(LogicalKeyboardKey.altLeft) ||
+    final altPressed =
+        keys.contains(LogicalKeyboardKey.altLeft) ||
         keys.contains(LogicalKeyboardKey.altRight);
 
-    if ((key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.select) && !altPressed) {
+    if ((key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.select) &&
+        !altPressed) {
       return activateFocusedTarget(context);
     }
 
@@ -1047,6 +1127,8 @@ class _GlobalShortcutScopeState extends State<_GlobalShortcutScope>
       onPointerDown: _onPointerDown,
       child: Focus(
         autofocus: !kIsWeb,
+        skipTraversal: true,
+        includeSemantics: false,
         focusNode: _focusNode,
         onKeyEvent: _onKeyEvent,
         child: widget.child,
@@ -1078,10 +1160,13 @@ class _ConnectivityListenerState extends ConsumerState<_ConnectivityListener>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    ref.read(syncPlayRuntimeCoordinatorProvider);
-    final manager = ref.read(syncPlayManagerProvider);
-    _syncPlayEventsSub = manager.uiEvents.listen(_handleSyncPlayEvent);
-    if (GetIt.instance.isRegistered<PluginSyncService>() &&
+    if (AppFeatures.has(AppFeature.syncPlay)) {
+      ref.read(syncPlayRuntimeCoordinatorProvider);
+      final manager = ref.read(syncPlayManagerProvider);
+      _syncPlayEventsSub = manager.uiEvents.listen(_handleSyncPlayEvent);
+    }
+    if (AppFeatures.has(AppFeature.seerr) &&
+        GetIt.instance.isRegistered<PluginSyncService>() &&
         GetIt.instance.isRegistered<SeerrNotificationService>()) {
       final notificationService = GetIt.instance<SeerrNotificationService>();
       _seerrNotificationSub = GetIt.instance<PluginSyncService>()
@@ -1096,17 +1181,20 @@ class _ConnectivityListenerState extends ConsumerState<_ConnectivityListener>
             ),
           );
     }
-    if (GetIt.instance.isRegistered<ServerMessagesService>()) {
+    if (AppFeatures.has(AppFeature.serverMessages) &&
+        GetIt.instance.isRegistered<ServerMessagesService>()) {
       GetIt.instance<ServerMessagesService>().addListener(
         _handleServerMessagesChanged,
       );
     }
-    if (GetIt.instance.isRegistered<DownloadService>()) {
+    if (AppFeatures.has(AppFeature.downloads) &&
+        GetIt.instance.isRegistered<DownloadService>()) {
       _downloadErrorSub = GetIt.instance<DownloadService>().errors.listen(
         _handleDownloadError,
       );
     }
-    if (GetIt.instance.isRegistered<AchievementsService>()) {
+    if (AppFeatures.has(AppFeature.social) &&
+        GetIt.instance.isRegistered<AchievementsService>()) {
       final achievements = GetIt.instance<AchievementsService>();
       _chatMessageSub = achievements.incomingMessages.listen(
         _handleIncomingChat,
@@ -1123,7 +1211,8 @@ class _ConnectivityListenerState extends ConsumerState<_ConnectivityListener>
     _chatMessageSub?.cancel();
     _unlockSub?.cancel();
     _seerrNotificationSub?.cancel();
-    if (GetIt.instance.isRegistered<ServerMessagesService>()) {
+    if (AppFeatures.has(AppFeature.serverMessages) &&
+        GetIt.instance.isRegistered<ServerMessagesService>()) {
       GetIt.instance<ServerMessagesService>().removeListener(
         _handleServerMessagesChanged,
       );
@@ -1157,13 +1246,19 @@ class _ConnectivityListenerState extends ConsumerState<_ConnectivityListener>
   /// Mobile only, because desktop and TV stay foreground-like and need to keep
   /// answering remote control commands.
   SessionRepository? get _backgroundAwareSession {
-    if (!PlatformDetection.isMobile) return null;
-    if (!GetIt.instance.isRegistered<SessionRepository>()) return null;
+    if (!PlatformDetection.isMobile) {
+      return null;
+    }
+    if (!GetIt.instance.isRegistered<SessionRepository>()) {
+      return null;
+    }
     return GetIt.instance<SessionRepository>();
   }
 
   void _handleSyncPlayEvent(SyncPlayUiEvent event) {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     final l10n = AppLocalizations.of(context);
     switch (event) {
       case SyncPlayUserJoinedEvent(:final userName):
@@ -1201,7 +1296,9 @@ class _ConnectivityListenerState extends ConsumerState<_ConnectivityListener>
   }
 
   void _handleDownloadError(String message) {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(
       SnackBar(
@@ -1227,7 +1324,9 @@ class _ConnectivityListenerState extends ConsumerState<_ConnectivityListener>
       return;
     }
     final navContext = _navigatorContext();
-    if (navContext == null) return;
+    if (navContext == null) {
+      return;
+    }
     final l10n = AppLocalizations.of(navContext);
     FloatingNotification.show(
       navContext,
@@ -1241,15 +1340,21 @@ class _ConnectivityListenerState extends ConsumerState<_ConnectivityListener>
   /// decides between one banner for the lot and one each, shown in turn so
   /// they don't stack. Tapping one opens the achievements.
   void _handleUnlocks(AchievementUnlocks unlocks) {
-    if (unlocks.muteDuringPlayback && _onPlayerRoute()) return;
+    if (unlocks.muteDuringPlayback && _onPlayerRoute()) {
+      return;
+    }
     final navContext = _navigatorContext();
-    if (navContext == null) return;
+    if (navContext == null) {
+      return;
+    }
     final l10n = AppLocalizations.of(navContext);
     final badges = unlocks.badges;
 
     void show(String title, String body, IconData icon) {
       final context = _navigatorContext();
-      if (context == null) return;
+      if (context == null) {
+        return;
+      }
       FloatingNotification.show(
         context,
         title,
@@ -1285,7 +1390,9 @@ class _ConnectivityListenerState extends ConsumerState<_ConnectivityListener>
   }
 
   BuildContext? _navigatorContext() {
-    if (!mounted) return null;
+    if (!mounted) {
+      return null;
+    }
     final navContext =
         appRouter.routerDelegate.navigatorKey.currentContext ?? context;
     return navContext.mounted ? navContext : null;
@@ -1295,10 +1402,14 @@ class _ConnectivityListenerState extends ConsumerState<_ConnectivityListener>
   /// window". Nothing else opens on its own.
   void _handleServerMessagesChanged() {
     final service = GetIt.instance<ServerMessagesService>();
-    if (service.pendingPopups.isEmpty) return;
+    if (service.pendingPopups.isEmpty) {
+      return;
+    }
 
     final navContext = _navigatorContext();
-    if (navContext == null) return;
+    if (navContext == null) {
+      return;
+    }
 
     service.markPopupsRead();
     showServerMessagesDialog(navContext);
@@ -1324,7 +1435,9 @@ class _ConnectivityListenerState extends ConsumerState<_ConnectivityListener>
 
     if (_wasOnline != null && _wasOnline != isOnline) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
         ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

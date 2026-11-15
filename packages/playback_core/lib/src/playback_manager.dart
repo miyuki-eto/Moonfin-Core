@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'chapter_steps.dart';
 import 'media_stream_resolver.dart';
@@ -9,6 +10,34 @@ import 'player_state.dart';
 import 'queue_service.dart';
 import 'stream_resolution_result.dart';
 import 'track_ordinal_mapper.dart';
+
+class _PreviewNeighbor {
+  _PreviewNeighbor(
+    this.item,
+    this.offset,
+    this.resolver,
+    this.backend,
+    this.service,
+  );
+
+  final Object item;
+  final Duration offset;
+  final MediaStreamResolver resolver;
+  final PreviewStreamPreloader backend;
+  final PlayerService? service;
+  late final Future<StreamResolutionResult?> future;
+  String? profileKey;
+  int? audioIndex;
+  int? subtitleIndex;
+  StreamResolutionResult? resolved;
+  StreamResolutionResult? buffered;
+  Timer? expiration;
+  Timer? encoderHandoff;
+  bool parked = false;
+  bool lookahead = false;
+  bool get usesEncoder =>
+      buffered != null && buffered!.playMethod != StreamPlayMethod.directPlay;
+}
 
 class _ProgressGeneration {
   _ProgressGeneration({
@@ -140,6 +169,7 @@ class PlaybackManager implements AudioOwnable {
     PlayerBackend currentBackend,
   )?
   _backendSelector;
+
   /// Returns the reason this client refused direct play, or null to let
   /// the resolution stand. A reason is needed because a client-side
   /// refusal leaves the server's transcodingReasons empty, so a report
@@ -166,10 +196,29 @@ class PlaybackManager implements AudioOwnable {
   _startupRecoveryDecider;
   void Function(PlaybackDecisionContext context)? _playbackDecisionLogger;
   void Function(String message)? _diagnosticLogger;
-  int? Function(List<Map<String, dynamic>> audioStreams, int? explicitIndex)? audioTrackSelector;
-  int? Function(List<Map<String, dynamic>> subtitleStreams, List<Map<String, dynamic>> audioStreams, int? explicitIndex)? subtitleTrackSelector;
-  int? Function(String itemId, List<Map<String, dynamic>> subtitleStreams)? secondarySubtitleTrackSelector;
-  Future<void> Function(String itemId, int streamIndex, Map<String, dynamic>? stream)? onSecondarySubtitleTrackSelected;
+  int? Function(
+    Object item,
+    List<Map<String, dynamic>> audioStreams,
+    int? explicitIndex,
+    bool preview,
+  )?
+  audioTrackSelector;
+  int? Function(
+    Object item,
+    List<Map<String, dynamic>> subtitleStreams,
+    List<Map<String, dynamic>> audioStreams,
+    int? explicitIndex,
+    bool preview,
+  )?
+  subtitleTrackSelector;
+  int? Function(String itemId, List<Map<String, dynamic>> subtitleStreams)?
+  secondarySubtitleTrackSelector;
+  Future<void> Function(
+    String itemId,
+    int streamIndex,
+    Map<String, dynamic>? stream,
+  )?
+  onSecondarySubtitleTrackSelected;
   final QueueService queueService = QueueService();
   final PlayerState state = PlayerState();
   final Set<PlayerBackend> _retainedBackends = <PlayerBackend>{};
@@ -221,6 +270,11 @@ class PlaybackManager implements AudioOwnable {
   bool suppressAutoNext = false;
   bool autoAdvanceEnabled = true;
   bool _isOfflinePlayback = false;
+  bool _previewPlayback = false;
+  bool _allowPreviewSubtitleTranscoding = false;
+  final _previewNeighbors = <_PreviewNeighbor>[];
+  String? _activePreviewProfileKey;
+  int _playItemsRequest = 0;
   bool _forceTranscodeForQueue = false;
   // What playItems was asked to allow for this queue. A recovery re-resolve
   // defaults enableDirectPlay to true, and without this it would silently
@@ -288,6 +342,7 @@ class PlaybackManager implements AudioOwnable {
         return _liveRecoveryDebounce;
     }
   }
+
   int _liveRecoveryAttempts = 0;
   DateTime? _lastLiveRecoveryAt;
   bool _liveRecoveryInFlight = false;
@@ -571,20 +626,23 @@ class PlaybackManager implements AudioOwnable {
       ].reduce((a, b) => a > b ? a : b),
     );
   }
+
   Stream<PlayerBackend> get backendChangedStream =>
       _backendChangedController.stream;
   PlaybackBringupState get bringupState => _bringupState;
   dynamic _lastPlayedItem;
   dynamic get lastPlayedItem => _lastPlayedItem;
 
-  void Function(String itemId, int? subtitleStreamIndex)? onSubtitleTrackChanged;
+  void Function(String itemId, int? subtitleStreamIndex)?
+  onSubtitleTrackChanged;
   void Function(String itemId, int? audioStreamIndex)? onAudioTrackChanged;
 
   /// Fired only when the viewer picks a track, unlike the changed callbacks
   /// above which also report the automatic pick for a new item and the reset
   /// when one finishes. The index arrives raw, so -1 still reads as subtitles
   /// off rather than as no choice at all.
-  void Function(String itemId, int subtitleStreamIndex)? onSubtitleTrackSelected;
+  void Function(String itemId, int subtitleStreamIndex)?
+  onSubtitleTrackSelected;
   void Function(String itemId, int audioStreamIndex)? onAudioTrackSelected;
 
   Stream<PlaybackBringupState> get bringupStateStream =>
@@ -615,8 +673,9 @@ class PlaybackManager implements AudioOwnable {
   static const secondarySubtitleMinOffset = 0.0;
   static const secondarySubtitleMaxOffset = 0.06;
 
-  static double clampSecondarySubtitleOffset(double value) =>
-      value.clamp(secondarySubtitleMinOffset, secondarySubtitleMaxOffset).toDouble();
+  static double clampSecondarySubtitleOffset(double value) => value
+      .clamp(secondarySubtitleMinOffset, secondarySubtitleMaxOffset)
+      .toDouble();
 
   int? get secondarySubtitleStreamIndex => _secondarySubtitleStreamIndex;
   double get secondarySubtitleDelaySeconds => _secondarySubtitleDelaySeconds;
@@ -828,8 +887,9 @@ class PlaybackManager implements AudioOwnable {
     // Music and audiobooks are audio whatever their streams say. Media3 only
     // plays audio with no view when the payload says audio, so a stray video
     // stream must not change that.
-    final resolvedMediaType =
-        audioLike ? 'audio' : mediaType?.trim().toLowerCase();
+    final resolvedMediaType = audioLike
+        ? 'audio'
+        : mediaType?.trim().toLowerCase();
 
     final Map<String, dynamic>? audioStream;
     if (audioStreamIndex != null) {
@@ -922,7 +982,8 @@ class PlaybackManager implements AudioOwnable {
       if (audioStream != null) ...{
         'audioCodec': (audioStream['Codec'] ?? '').toString(),
         'audioProfile': (audioStream['Profile'] ?? '').toString(),
-        if (audioStream['Channels'] is int) 'audioChannels': audioStream['Channels'],
+        if (audioStream['Channels'] is int)
+          'audioChannels': audioStream['Channels'],
       },
       if (audioContainerIndex != null) 'audioStreamIndex': audioContainerIndex,
       if (audioTrackOrdinal != null) 'audioTrackOrdinal': audioTrackOrdinal,
@@ -931,7 +992,8 @@ class PlaybackManager implements AudioOwnable {
         'preferredTextLanguage': subtitleStreamLang,
       if (videoStream != null && videoStream['DvProfile'] is int)
         'videoDvProfile': videoStream['DvProfile'],
-      if (videoStream != null && videoStream['DvBlSignalCompatibilityId'] is int)
+      if (videoStream != null &&
+          videoStream['DvBlSignalCompatibilityId'] is int)
         'videoDvBlCompatId': videoStream['DvBlSignalCompatibilityId'],
       if (videoStream != null &&
           (videoStream['Codec']?.toString().isNotEmpty ?? false))
@@ -1167,7 +1229,9 @@ class PlaybackManager implements AudioOwnable {
       }
     }
     final type = meta['Type'];
-    return type == 'Audio' || type == 'AudioBook' || meta['MediaType'] == 'Audio';
+    return type == 'Audio' ||
+        type == 'AudioBook' ||
+        meta['MediaType'] == 'Audio';
   }
 
   @override
@@ -1276,6 +1340,14 @@ class PlaybackManager implements AudioOwnable {
     }
     _streamSubs.addAll([
       backend.positionStream.listen((pos) {
+        // Stopping the old source emits zero before the replacement source
+        // restores its playhead. Keep the visible position during that reload.
+        if (_teardownForReResolve &&
+            !_currentItemIsLive &&
+            pos == Duration.zero &&
+            state.position > Duration.zero) {
+          return;
+        }
         state.setPosition(pos);
         if (pos > Duration.zero) _lastKnownPosition = pos;
         // A backend can refuse a speed it was given - bitstreamed audio cannot
@@ -1402,6 +1474,13 @@ class PlaybackManager implements AudioOwnable {
     if (_currentItemIsLive) {
       _logCompletion('live');
       unawaited(_recoverStalledStream());
+      return;
+    }
+
+    if (_previewPlayback) {
+      if (_bringupState.phase == PlaybackBringupPhase.ready) {
+        _notifySessionEnded();
+      }
       return;
     }
 
@@ -1534,12 +1613,12 @@ class PlaybackManager implements AudioOwnable {
     final now = clock();
     final lastAt = _lastLiveRecoveryAt;
     final sinceLast = lastAt == null ? null : now.difference(lastAt);
-    final windowExpired =
-        sinceLast != null && sinceLast >= _liveRecoveryWindow;
+    final windowExpired = sinceLast != null && sinceLast >= _liveRecoveryWindow;
     // The attempt this event would become if it ran now, so it is held for
     // that attempt's own gap rather than a single fixed debounce.
-    final nextAttempt =
-        (sinceLast == null || windowExpired) ? 1 : _liveRecoveryAttempts + 1;
+    final nextAttempt = (sinceLast == null || windowExpired)
+        ? 1
+        : _liveRecoveryAttempts + 1;
     final gap = _liveRecoveryGapBefore(nextAttempt);
     // Hold a burst, never drop one. By the time a second failure arrives the
     // player is usually stopped, and nothing else would ever ask again, so a
@@ -2203,7 +2282,6 @@ class PlaybackManager implements AudioOwnable {
     } catch (_) {}
   }
 
-
   Future<void> playItems(
     List<dynamic> items, {
     int startIndex = 0,
@@ -2216,6 +2294,10 @@ class PlaybackManager implements AudioOwnable {
     bool enableDirectPlay = true,
     bool enableDirectStream = true,
     bool enableTranscoding = true,
+    // Preview playback opens media without reporting a watch session.
+    bool preview = false,
+    // Full-screen Retro TV keeps subtitles even when they require an encode.
+    bool allowPreviewSubtitleTranscoding = false,
     // False loads the item and leaves it paused at [startPosition]: a
     // SyncPlay handshake wants the player at the group's position without a
     // frame of playback until the group's own Unpause.
@@ -2225,6 +2307,7 @@ class PlaybackManager implements AudioOwnable {
     // the next episode. The track arguments are ignored then.
     bool carryTrackSelections = false,
   }) async {
+    final request = ++_playItemsRequest;
     _abandonLiveRecovery('the viewer tuned somewhere else');
     _viewerPaused = false;
     _clearPendingItemOverrides();
@@ -2262,6 +2345,17 @@ class PlaybackManager implements AudioOwnable {
       }
     }
 
+    _discardPreviewNeighbors(
+      keep: (neighbor) =>
+          preview &&
+          _allowPreviewSubtitleTranscoding == allowPreviewSubtitleTranscoding &&
+          (identical(neighbor.item, pendingItem) || neighbor.lookahead),
+    );
+    if (preview &&
+        _allowPreviewSubtitleTranscoding == allowPreviewSubtitleTranscoding) {
+      _parkCurrentPreview(pendingItem);
+    }
+
     _setBringupState(
       PlaybackBringupState(
         phase: PlaybackBringupPhase.stoppingPrevious,
@@ -2270,6 +2364,9 @@ class PlaybackManager implements AudioOwnable {
       ),
     );
     await _stopAndReportCurrent();
+    if (request != _playItemsRequest) return;
+    _previewPlayback = preview;
+    _allowPreviewSubtitleTranscoding = allowPreviewSubtitleTranscoding;
     _secondarySubtitleStreamIndex = null;
     _secondarySubtitleDelaySeconds = 0;
     _resetBackendSelectionLock();
@@ -2287,7 +2384,10 @@ class PlaybackManager implements AudioOwnable {
         _traceItemId(pendingItem) == _streamFromServerItemId;
     _streamFromServerItemId = null;
     final adjuster = _startPositionAdjuster;
-    if (adjuster != null && startPosition > Duration.zero && items.isNotEmpty) {
+    if (!preview &&
+        adjuster != null &&
+        startPosition > Duration.zero &&
+        items.isNotEmpty) {
       final currentItem = items[startIndex.clamp(0, items.length - 1)];
       final adjusted = adjuster(currentItem, startPosition);
       startPosition = adjusted < Duration.zero ? Duration.zero : adjusted;
@@ -2298,7 +2398,9 @@ class PlaybackManager implements AudioOwnable {
     _forceExternalPlayerOnce = false;
 
     final externalDecider = _externalPlaybackDecider;
-    if (forceExternal || (externalDecider != null && externalDecider(items))) {
+    if (!preview &&
+        (forceExternal ||
+            (externalDecider != null && externalDecider(items)))) {
       _deferredStartPosition = startPosition;
       _deferPlaybackToExternalPlayer = true;
       _setBringupState(const PlaybackBringupState.idle());
@@ -2402,8 +2504,12 @@ class PlaybackManager implements AudioOwnable {
 
     // The backstop for everything the queue filter couldn't answer without a
     // lookup. Prerolls carry no rating of their own and are skipped.
+    final requestToken = _playbackSessionToken;
+    final preview = _previewPlayback;
     final refusal = _playContentRefusal;
-    if (refusal != null && !_isPreroll(item) && await refusal(item)) {
+    final refused = refusal != null && !_isPreroll(item) && await refusal(item);
+    if (requestToken != _playbackSessionToken) return;
+    if (refused) {
       suppressAutoNext = true;
       queueService.clear();
       state.reset();
@@ -2440,8 +2546,10 @@ class PlaybackManager implements AudioOwnable {
       _translateTrackSelectionsForNewItem(item);
     }
     _lastItemId = itemId;
-    _lastPlayedItem = item;
-    _preFetchNextSeasonIfNeeded();
+    if (!preview) {
+      _lastPlayedItem = item;
+      _preFetchNextSeasonIfNeeded();
+    }
 
     _setBringupState(
       PlaybackBringupState(
@@ -2496,11 +2604,29 @@ class PlaybackManager implements AudioOwnable {
       }
     }
 
+    StreamResolutionResult? prepared;
     Future<StreamResolutionResult> resolve(
       int? cap, {
       bool originalFile = false,
     }) async {
       try {
+        if (prepared != null) {
+          _releasePreviewResources(prepared!);
+          prepared = null;
+        } else if (preview &&
+            !originalFile &&
+            enableDirectPlay &&
+            enableDirectStream &&
+            enableTranscoding &&
+            _audioStreamIndex == null &&
+            _subtitleStreamIndex == null &&
+            _mediaSourceId == null) {
+          prepared = await _takePreviewNeighbor(item, startPosition, profile);
+          if (prepared != null) return prepared!;
+        }
+        if (sessionToken != _playbackSessionToken) {
+          throw StateError('Playback request was superseded');
+        }
         return await _resolver!.resolve(
           item,
           deviceProfile: profile,
@@ -2535,7 +2661,7 @@ class PlaybackManager implements AudioOwnable {
     var resolution = await resolve(maxBitrate);
 
     if (sessionToken != _playbackSessionToken) {
-      _cleanupPreemptedSession(item, resolution);
+      _cleanupPreemptedSession(item, resolution, preview: preview);
       return;
     }
 
@@ -2564,7 +2690,7 @@ class PlaybackManager implements AudioOwnable {
       _mediaSourceId = resolution.mediaSourceId;
       resolution = await resolve(maxBitrate);
       if (sessionToken != _playbackSessionToken) {
-        _cleanupPreemptedSession(item, resolution);
+        _cleanupPreemptedSession(item, resolution, preview: preview);
         return;
       }
     }
@@ -2585,7 +2711,7 @@ class PlaybackManager implements AudioOwnable {
         profile['MaxStreamingBitrate'] = cap;
         resolution = await resolve(cap);
         if (sessionToken != _playbackSessionToken) {
-          _cleanupPreemptedSession(item, resolution);
+          _cleanupPreemptedSession(item, resolution, preview: preview);
           return;
         }
       }
@@ -2602,7 +2728,7 @@ class PlaybackManager implements AudioOwnable {
         _backend!.decodesHevcOnlyFromOriginalFile) {
       resolution = await resolve(maxBitrate, originalFile: true);
       if (sessionToken != _playbackSessionToken) {
-        _cleanupPreemptedSession(item, resolution);
+        _cleanupPreemptedSession(item, resolution, preview: preview);
         return;
       }
     }
@@ -2642,6 +2768,7 @@ class PlaybackManager implements AudioOwnable {
       // through to the decision logger.
       _clientTranscodeReason = transcodeSelector(resolution);
       if (_clientTranscodeReason != null) {
+        if (prepared != null) _releasePreviewResources(prepared!);
         try {
           await _playCurrentItem(
             startPosition: startPosition,
@@ -2660,17 +2787,24 @@ class PlaybackManager implements AudioOwnable {
 
     bool needsReResolve = false;
 
-    final audioStreams = resolution.mediaStreams.where((s) => s['Type'] == 'Audio').toList();
-    final subtitleStreams = resolution.mediaStreams.where((s) => s['Type'] == 'Subtitle').toList();
+    final audioStreams = resolution.mediaStreams
+        .where((s) => s['Type'] == 'Audio')
+        .toList();
+    final subtitleStreams = resolution.mediaStreams
+        .where((s) => s['Type'] == 'Subtitle')
+        .toList();
 
     if (audioTrackSelector != null) {
       final targetIdx = audioTrackSelector!(
+        item,
         audioStreams,
         _audioSelectionExplicit ? _audioStreamIndex : null,
+        preview,
       );
       if (targetIdx != null && _audioStreamIndex != targetIdx) {
         _audioStreamIndex = targetIdx;
-        if (resolution.playMethod == StreamPlayMethod.transcode) {
+        if (resolution.playMethod == StreamPlayMethod.transcode &&
+            (!preview || targetIdx != resolution.selectedAudioStreamIndex)) {
           needsReResolve = true;
         }
       }
@@ -2692,17 +2826,17 @@ class PlaybackManager implements AudioOwnable {
       }
     }
 
+    final previousSubtitleIndex = _subtitleStreamIndex;
     if (subtitleTrackSelector != null) {
       final targetIdx = subtitleTrackSelector!(
+        item,
         subtitleStreams,
         audioStreams,
         _subtitleSelectionExplicit ? _subtitleStreamIndex : null,
+        preview,
       );
-      if (targetIdx != null && _subtitleStreamIndex != targetIdx) {
+      if (targetIdx != null) {
         _subtitleStreamIndex = targetIdx;
-        if (resolution.playMethod == StreamPlayMethod.transcode) {
-          needsReResolve = true;
-        }
       }
     } else {
       if (_lastExplicitSubtitleEnabled == false) {
@@ -2729,20 +2863,42 @@ class PlaybackManager implements AudioOwnable {
 
     final pickedSubtitleIndex =
         _subtitleStreamIndex ?? resolution.selectedSubtitleStreamIndex;
-    final pickedSubtitle = resolution.mediaStreams.firstWhere(
+    var pickedSubtitle = resolution.mediaStreams.firstWhere(
       (s) => s['Type'] == 'Subtitle' && s['Index'] == pickedSubtitleIndex,
       orElse: () => const <String, dynamic>{},
     );
+    if (preview &&
+        !_subtitleSelectionExplicit &&
+        _skipAutomaticPreviewSubtitle(pickedSubtitle)) {
+      _subtitleStreamIndex = -1;
+      pickedSubtitle = const {};
+      if (resolution.playMethod != StreamPlayMethod.directPlay &&
+          (previousSubtitleIndex != -1 ||
+              (resolution.selectedSubtitleStreamIndex ?? -1) != -1)) {
+        needsReResolve = true;
+      }
+    }
+    if (subtitleTrackSelector != null &&
+        _subtitleStreamIndex != null &&
+        _subtitleStreamIndex != previousSubtitleIndex &&
+        resolution.playMethod == StreamPlayMethod.transcode &&
+        (!preview ||
+            _subtitleStreamIndex !=
+                (resolution.selectedSubtitleStreamIndex ?? -1))) {
+      needsReResolve = true;
+    }
     final pickedEmbeddedPgs = MediaStreamResolver.isEmbeddedPgsSubtitle(
       pickedSubtitle,
     );
     if (pickedEmbeddedPgs &&
+        !_loadsEmbeddedPgsAsFiles &&
         !withholdExternalPgs &&
         pickedSubtitle['DeliveryMethod'] == 'External') {
       needsReResolve = true;
     }
 
     if (needsReResolve && !_reResolvingForTrackMatch) {
+      if (prepared != null) _releasePreviewResources(prepared!);
       _reResolvingForTrackMatch = true;
       try {
         await _playCurrentItem(
@@ -2752,7 +2908,7 @@ class PlaybackManager implements AudioOwnable {
           enableTranscoding: enableTranscoding,
           allowStartupRecovery: allowStartupRecovery,
           autoPlay: autoPlay,
-          withholdExternalPgs: pickedEmbeddedPgs,
+          withholdExternalPgs: pickedEmbeddedPgs && !_loadsEmbeddedPgsAsFiles,
         );
         return;
       } finally {
@@ -2769,7 +2925,9 @@ class PlaybackManager implements AudioOwnable {
     _itemKnownDuration = _resolvedItemDuration(item, resolution.mediaSourceId);
 
     if (_audioStreamIndex != null && _audioSelectionExplicit) {
-      final audioStreams = resolution.mediaStreams.where((s) => s['Type'] == 'Audio').toList();
+      final audioStreams = resolution.mediaStreams
+          .where((s) => s['Type'] == 'Audio')
+          .toList();
       final stream = audioStreams.firstWhere(
         (s) => s['Index'] == _audioStreamIndex,
         orElse: () => const <String, dynamic>{},
@@ -2787,7 +2945,9 @@ class PlaybackManager implements AudioOwnable {
         _lastExplicitSubtitleLanguage = null;
       } else {
         _lastExplicitSubtitleEnabled = true;
-        final subtitleStreams = resolution.mediaStreams.where((s) => s['Type'] == 'Subtitle').toList();
+        final subtitleStreams = resolution.mediaStreams
+            .where((s) => s['Type'] == 'Subtitle')
+            .toList();
         final stream = subtitleStreams.firstWhere(
           (s) => s['Index'] == _subtitleStreamIndex,
           orElse: () => const <String, dynamic>{},
@@ -2803,8 +2963,9 @@ class PlaybackManager implements AudioOwnable {
       // If it is missing, fall back to the file's default audio track.
       _audioStreamIndex = resolution.selectedAudioStreamIndex;
       if (_audioStreamIndex == null) {
-        final audioStreams =
-            resolution.mediaStreams.where((s) => s['Type'] == 'Audio').toList();
+        final audioStreams = resolution.mediaStreams
+            .where((s) => s['Type'] == 'Audio')
+            .toList();
         if (audioStreams.isNotEmpty) {
           final defaultAudio = audioStreams.firstWhere(
             (s) => s['IsDefault'] == true,
@@ -2820,8 +2981,9 @@ class PlaybackManager implements AudioOwnable {
       // If it is missing, fall back to the file's default subtitle track.
       _subtitleStreamIndex = resolution.selectedSubtitleStreamIndex;
       if (_subtitleStreamIndex == null) {
-        final subtitleStreams =
-            resolution.mediaStreams.where((s) => s['Type'] == 'Subtitle').toList();
+        final subtitleStreams = resolution.mediaStreams
+            .where((s) => s['Type'] == 'Subtitle')
+            .toList();
         if (subtitleStreams.isNotEmpty) {
           final defaultSubtitle = subtitleStreams.firstWhere(
             (s) => s['IsDefault'] == true,
@@ -2874,7 +3036,8 @@ class PlaybackManager implements AudioOwnable {
         secondaryStreams,
       );
       if (restoredSecondaryIndex != null) {
-        _secondarySubtitleStreamIndex = restoredSecondaryIndex >= 0 &&
+        _secondarySubtitleStreamIndex =
+            restoredSecondaryIndex >= 0 &&
                 restoredSecondaryIndex != _subtitleStreamIndex &&
                 canUseAsSecondarySubtitle(restoredSecondaryIndex)
             ? restoredSecondaryIndex
@@ -2893,7 +3056,7 @@ class PlaybackManager implements AudioOwnable {
         hybridAudioUrl: resolution.hybridAudioUrl,
         isLive: resolution.liveStreamId != null || _isLiveTvItem(item),
         autoPlay: autoPlay,
-        externalSubtitles: resolution.externalSubtitles,
+        externalSubtitles: _currentExternalSubtitles,
         audioLike: _isAudioLikeItem(item),
         secondarySubtitleUrl:
             _secondarySubtitleStreamIndex != null &&
@@ -2910,9 +3073,10 @@ class PlaybackManager implements AudioOwnable {
             ? _subtitleLanguageForStream(_secondarySubtitleStreamIndex!)
             : null,
       );
+      if (preview) backendMediaPayload['preview'] = true;
       await _arbiter?.acquire(AudioProducer.mainPlayback);
       if (sessionToken != _playbackSessionToken) {
-        _cleanupPreemptedSession(item, resolution);
+        _cleanupPreemptedSession(item, resolution, preview: preview);
         return;
       }
       // Reset before the source opens, not after: web (and possibly
@@ -2925,12 +3089,12 @@ class PlaybackManager implements AudioOwnable {
         startPosition: useNativeStart ? startPosition : Duration.zero,
       );
       if (sessionToken != _playbackSessionToken) {
-        _cleanupPreemptedSession(item, resolution);
+        _cleanupPreemptedSession(item, resolution, preview: preview);
         return;
       }
       await _syncBackendRepeatModeIfSupported();
       if (sessionToken != _playbackSessionToken) {
-        _cleanupPreemptedSession(item, resolution);
+        _cleanupPreemptedSession(item, resolution, preview: preview);
         return;
       }
       if (_backend!.requiresStartupMediaReadyCheck) {
@@ -2951,7 +3115,7 @@ class PlaybackManager implements AudioOwnable {
         mediaReady = true;
       }
       if (sessionToken != _playbackSessionToken) {
-        _cleanupPreemptedSession(item, resolution);
+        _cleanupPreemptedSession(item, resolution, preview: preview);
         return;
       }
     } catch (e, st) {
@@ -2965,11 +3129,11 @@ class PlaybackManager implements AudioOwnable {
     }
 
     if (sessionToken != _playbackSessionToken) {
-      _cleanupPreemptedSession(item, resolution);
+      _cleanupPreemptedSession(item, resolution, preview: preview);
       return;
     }
 
-    if (!mediaReady) {
+    if (!mediaReady && (!preview || startupError == null)) {
       final backend = _backend!;
       if (backend.position > Duration.zero ||
           backend.buffer > Duration.zero ||
@@ -2983,6 +3147,13 @@ class PlaybackManager implements AudioOwnable {
       try {
         await _backend!.stop();
       } catch (_) {}
+      if (sessionToken != _playbackSessionToken) return;
+      if (preview) {
+        _releasePreviewResources(resolution);
+        if (identical(_lastPlaybackResolution, resolution)) {
+          _lastPlaybackResolution = null;
+        }
+      }
 
       if (_isPreroll(item)) {
         await next();
@@ -3010,6 +3181,7 @@ class PlaybackManager implements AudioOwnable {
               );
             } catch (_) {}
           }
+          if (sessionToken != _playbackSessionToken) return;
 
           if (decision == PlaybackStartupRecoveryDecision.abortPlayback) {
             _setBringupState(
@@ -3087,9 +3259,10 @@ class PlaybackManager implements AudioOwnable {
         startPosition,
         resumeAfterSeek: autoPlay,
       );
+      if (sessionToken != _playbackSessionToken) return;
     }
 
-    if (resolution.externalSubtitles.isNotEmpty) {
+    if (_currentExternalSubtitles.isNotEmpty) {
       _waitAndAddExternalSubtitles(sessionToken, resolution);
     } else {
       _externalSubsLoaded = Future.value();
@@ -3129,13 +3302,8 @@ class PlaybackManager implements AudioOwnable {
       }
     }
 
-    _service?.onPlaybackStart(
-      item,
-      resolution,
-      positionTicks: startTicks,
-      audioStreamIndex: _audioStreamIndex,
-      subtitleStreamIndex: _subtitleStreamIndex,
-    );
+    _activePreviewProfileKey = preview ? jsonEncode(profile) : null;
+    if (!preview) _reportPlaybackStart(item, resolution, startTicks);
 
     // Live TV played directly from the upstream URL no longer needs the server's
     // live-stream session; close it so only the client's connection remains
@@ -3168,8 +3336,390 @@ class PlaybackManager implements AudioOwnable {
     }
   }
 
+  /// Favor the next channel in the surf direction and share a single offscreen
+  /// encoder between the parked stream and the candidates ahead.
+  void preparePreviewNeighbors(
+    List<(Object, Duration)> neighbors, {
+    (Object, Duration)? lookahead,
+  }) {
+    _discardPreviewNeighbors(
+      keep: (entry) =>
+          (entry.parked || entry.lookahead) &&
+          (neighbors.any((pair) => identical(pair.$1, entry.item)) ||
+              identical(lookahead?.$1, entry.item)),
+    );
+    final backend = _backend;
+    final resolver = _resolver;
+    if (!_previewPlayback ||
+        _bringupState.phase != PlaybackBringupPhase.ready ||
+        backend == null ||
+        backend is! PreviewStreamPreloader ||
+        resolver == null) {
+      return;
+    }
+    final preloader = backend as PreviewStreamPreloader;
+    _PreviewNeighbor prepare(
+      Object item,
+      Duration offset, {
+      required bool buffer,
+      bool lookahead = false,
+      _PreviewNeighbor? previous,
+      _PreviewNeighbor? priority,
+    }) {
+      final neighbor = _PreviewNeighbor(
+        item,
+        offset,
+        resolver,
+        preloader,
+        _service,
+      )..lookahead = lookahead;
+      _previewNeighbors.add(neighbor);
+      neighbor.future = _preparePreviewNeighbor(
+        neighbor,
+        backend,
+        buffer,
+        previous,
+        priority,
+      );
+      return neighbor;
+    }
+
+    var buffer = true;
+    _PreviewNeighbor? priority;
+    for (final (item, offset) in neighbors.take(2)) {
+      var existing = _previewNeighbors
+          .where((entry) => identical(entry.item, item))
+          .firstOrNull;
+      if (existing == null ||
+          (existing.lookahead && existing.buffered == null)) {
+        if (existing != null) {
+          _previewNeighbors.remove(existing);
+          unawaited(_discardPreviewNeighbor(existing));
+        }
+        existing = prepare(item, offset, buffer: buffer, previous: existing);
+      }
+      if (!existing.parked) {
+        priority ??= existing;
+        buffer = false;
+      }
+    }
+    if (lookahead case (final item, final offset)) {
+      if (!_previewNeighbors.any((entry) => identical(entry.item, item))) {
+        prepare(
+          item,
+          offset,
+          buffer: true,
+          lookahead: true,
+          priority: priority,
+        );
+      }
+    }
+  }
+
+  void _parkCurrentPreview(Object? target) {
+    final item = queueService.currentItem;
+    final backend = _backend;
+    final resolver = _resolver;
+    final resolution = _currentResolution;
+    final profileKey = _activePreviewProfileKey;
+    if (!_previewPlayback ||
+        _bringupState.phase != PlaybackBringupPhase.ready ||
+        _stopInFlight != null ||
+        _teardownForReResolve ||
+        item == null ||
+        target == null ||
+        identical(item, target) ||
+        backend is! PreviewStreamPreloader ||
+        resolver == null ||
+        resolution == null ||
+        profileKey == null) {
+      return;
+    }
+    if (resolution.playMethod != StreamPlayMethod.directPlay &&
+        _previewNeighbors.any(
+          (entry) => entry.usesEncoder && !identical(entry.item, target),
+        )) {
+      return;
+    }
+    final preloader = backend as PreviewStreamPreloader;
+    final position = currentPlaybackPosition;
+    if (!preloader.parkPreviewSource(resolution.streamUrl)) return;
+    final parked =
+        _PreviewNeighbor(item, position, resolver, preloader, _service)
+          ..parked = true
+          ..profileKey = profileKey
+          ..audioIndex = _audioStreamIndex
+          ..subtitleIndex = _subtitleStreamIndex
+          ..buffered = resolution
+          ..future = Future.value(resolution);
+    _previewNeighbors.add(parked);
+    _expirePreviewNeighbor(parked);
+  }
+
+  void _expirePreviewNeighbor(_PreviewNeighbor neighbor) {
+    neighbor.expiration = Timer(const Duration(seconds: 25), () {
+      _previewNeighbors.remove(neighbor);
+      unawaited(_discardPreviewNeighbor(neighbor));
+    });
+  }
+
+  Future<StreamResolutionResult?> _preparePreviewNeighbor(
+    _PreviewNeighbor neighbor,
+    PlayerBackend backend,
+    bool buffer,
+    _PreviewNeighbor? previous,
+    _PreviewNeighbor? priority,
+  ) async {
+    try {
+      if (_queueContentFilter?.call(neighbor.item) == true) return null;
+      final refusal = _playContentRefusal;
+      if (refusal != null && await refusal(neighbor.item)) return null;
+      if (!_previewNeighbors.contains(neighbor)) return null;
+      final profile = backend.getDeviceProfile();
+      if (_maxBitrateOverrideMbps != null) {
+        profile['MaxStreamingBitrate'] = _maxBitrateOverrideMbps! * 1000000;
+      }
+      var cap = profile['MaxStreamingBitrate'] as int?;
+      if (cap == null && autoBitrateProvider != null) {
+        final measured = await autoBitrateProvider!();
+        if (measured != null && measured > 0) {
+          cap = _autoBitrateCap(measured, _sourceBitrate(neighbor.item), true);
+          profile['MaxStreamingBitrate'] = cap;
+        }
+      }
+      if (!_previewNeighbors.contains(neighbor)) return null;
+      neighbor.profileKey = jsonEncode(profile);
+      Future<StreamResolutionResult> resolve({int? audio, int? subtitle}) =>
+          neighbor.resolver.resolve(
+            neighbor.item,
+            deviceProfile: profile,
+            maxStreamingBitrate: cap,
+            startTimeTicks: neighbor.offset.inMicroseconds * 10,
+            audioStreamIndex: audio,
+            subtitleStreamIndex: subtitle,
+          );
+      final cached =
+          previous?.offset == neighbor.offset &&
+              previous?.profileKey == neighbor.profileKey &&
+              identical(previous?.resolver, neighbor.resolver)
+          ? previous?.resolved
+          : null;
+      var resolution = cached ?? await resolve();
+      if (!_previewNeighbors.contains(neighbor)) return null;
+      if (neighbor.lookahead &&
+          resolution.playMethod != StreamPlayMethod.directPlay) {
+        neighbor.resolved = resolution;
+        final ahead = await priority?.future;
+        if (!_previewNeighbors.contains(neighbor)) return null;
+        if (ahead?.playMethod != StreamPlayMethod.directPlay) return resolution;
+      }
+      if (resolution.playMethod == StreamPlayMethod.transcode) {
+        final audio = resolution.mediaStreams
+            .where((s) => s['Type'] == 'Audio')
+            .toList();
+        final subtitles = resolution.mediaStreams
+            .where((s) => s['Type'] == 'Subtitle')
+            .toList();
+        neighbor.audioIndex = audioTrackSelector?.call(
+          neighbor.item,
+          audio,
+          null,
+          true,
+        );
+        neighbor.subtitleIndex = subtitleTrackSelector?.call(
+          neighbor.item,
+          subtitles,
+          audio,
+          null,
+          true,
+        );
+        final pickedSubtitle = subtitles.firstWhere(
+          (stream) =>
+              stream['Index'] ==
+              (neighbor.subtitleIndex ??
+                  resolution.selectedSubtitleStreamIndex),
+          orElse: () => const <String, dynamic>{},
+        );
+        if (_skipAutomaticPreviewSubtitle(pickedSubtitle)) {
+          neighbor.subtitleIndex = -1;
+        }
+        if ((neighbor.audioIndex != null &&
+                neighbor.audioIndex != resolution.selectedAudioStreamIndex) ||
+            (neighbor.subtitleIndex != null &&
+                neighbor.subtitleIndex !=
+                    (resolution.selectedSubtitleStreamIndex ?? -1))) {
+          resolution = await resolve(
+            audio: neighbor.audioIndex,
+            subtitle: neighbor.subtitleIndex,
+          );
+          if (!_previewNeighbors.contains(neighbor)) return null;
+        }
+      }
+      if (resolution.liveStreamId != null || resolution.isLocalMedia) {
+        return null;
+      }
+      if (buffer && _bringupState.phase == PlaybackBringupPhase.ready) {
+        final encoder = _previewNeighbors
+            .where((entry) => entry.usesEncoder)
+            .firstOrNull;
+        if (resolution.playMethod == StreamPlayMethod.directPlay ||
+            encoder == null) {
+          _bufferPreviewNeighbor(neighbor, resolution);
+        } else if (encoder.parked) {
+          // Keep an immediate reversal warm before warming the channel ahead.
+          neighbor.encoderHandoff = Timer(
+            const Duration(milliseconds: 750),
+            () {
+              unawaited(_handOffPreviewEncoder(encoder, neighbor, resolution));
+            },
+          );
+        }
+      }
+      return resolution;
+    } catch (_) {
+      // A speculative resolution may fail independently of active playback.
+      if (_previewNeighbors.remove(neighbor))
+        await _discardPreviewNeighbor(neighbor);
+      return null;
+    }
+  }
+
+  // Inline previews avoid subtitle-driven encodes. Full-screen Retro TV opts
+  // into them so an available dialogue track is not silently disabled.
+  bool _skipAutomaticPreviewSubtitle(Map<String, dynamic> stream) =>
+      !_allowPreviewSubtitleTranscoding &&
+      (stream['DeliveryMethod'] == 'Encode' ||
+          MediaStreamResolver.isEmbeddedPgsSubtitle(stream));
+
+  void _bufferPreviewNeighbor(
+    _PreviewNeighbor neighbor,
+    StreamResolutionResult resolution,
+  ) {
+    neighbor.buffered = resolution;
+    neighbor.backend.preloadPreviewSource(
+      resolution.streamUrl,
+      container: resolution.container,
+      startPosition: neighbor.offset,
+    );
+    _expirePreviewNeighbor(neighbor);
+  }
+
+  Future<void> _handOffPreviewEncoder(
+    _PreviewNeighbor parked,
+    _PreviewNeighbor next,
+    StreamResolutionResult resolution,
+  ) async {
+    if (_bringupState.phase != PlaybackBringupPhase.ready ||
+        !_previewNeighbors.contains(next) ||
+        !_previewNeighbors.remove(parked)) {
+      return;
+    }
+    await _discardPreviewNeighbor(parked);
+    if (_bringupState.phase != PlaybackBringupPhase.ready ||
+        !_previewNeighbors.contains(next) ||
+        _previewNeighbors.any((entry) => entry.usesEncoder)) {
+      return;
+    }
+    try {
+      _bufferPreviewNeighbor(next, resolution);
+    } catch (_) {
+      if (_previewNeighbors.remove(next)) await _discardPreviewNeighbor(next);
+    }
+  }
+
+  Future<StreamResolutionResult?> _takePreviewNeighbor(
+    Object item,
+    Duration offset,
+    Map<String, dynamic> profile,
+  ) async {
+    final neighbor = _previewNeighbors
+        .where((entry) => identical(entry.item, item))
+        .firstOrNull;
+    if (neighbor == null ||
+        !identical(neighbor.resolver, _resolver) ||
+        !identical(neighbor.backend, _backend)) {
+      return null;
+    }
+    final result = await neighbor.future.timeout(
+      const Duration(milliseconds: 750),
+      onTimeout: () => null,
+    );
+    if (!_previewNeighbors.remove(neighbor)) return null;
+    if (result == null ||
+        neighbor.profileKey != jsonEncode(profile) ||
+        ((neighbor.parked || neighbor.offset != offset) &&
+            !neighbor.backend.hasPreviewFrame(result.streamUrl, offset))) {
+      unawaited(_discardPreviewNeighbor(neighbor));
+      return null;
+    }
+    neighbor.expiration?.cancel();
+    neighbor.encoderHandoff?.cancel();
+    _audioStreamIndex = neighbor.audioIndex;
+    _subtitleStreamIndex = neighbor.subtitleIndex;
+    return result;
+  }
+
+  void _discardPreviewNeighbors({bool Function(_PreviewNeighbor)? keep}) {
+    for (final neighbor in _previewNeighbors.toList()) {
+      if (keep?.call(neighbor) == true) continue;
+      _previewNeighbors.remove(neighbor);
+      unawaited(_discardPreviewNeighbor(neighbor));
+    }
+  }
+
+  Future<void> _discardPreviewNeighbor(_PreviewNeighbor neighbor) async {
+    neighbor.expiration?.cancel();
+    neighbor.encoderHandoff?.cancel();
+    final buffered = neighbor.buffered;
+    if (buffered == null) return;
+    neighbor.backend.discardPreviewSource(buffered.streamUrl);
+    if (buffered.playMethod != StreamPlayMethod.directPlay) {
+      await neighbor.service?.stopTranscoding(buffered).catchError((_) {});
+    }
+  }
+
+  /// Turns a ready preview into a normal watch session at its current playhead.
+  bool commitPreview() {
+    final item = queueService.currentItem;
+    final resolution = _currentResolution;
+    if (!_previewPlayback ||
+        _bringupState.phase != PlaybackBringupPhase.ready ||
+        _stopInFlight != null ||
+        _teardownForReResolve ||
+        item == null ||
+        resolution == null) {
+      return false;
+    }
+    _discardPreviewNeighbors();
+    _previewPlayback = false;
+    _lastPlayedItem = item;
+    _preFetchNextSeasonIfNeeded();
+    _reportPlaybackStart(
+      item,
+      resolution,
+      currentPlaybackPosition.inMicroseconds * 10,
+    );
+    _startProgressTimer();
+    return true;
+  }
+
+  void _reportPlaybackStart(
+    dynamic item,
+    StreamResolutionResult resolution,
+    int? positionTicks,
+  ) {
+    _service?.onPlaybackStart(
+      item,
+      resolution,
+      positionTicks: positionTicks,
+      audioStreamIndex: _audioStreamIndex,
+      subtitleStreamIndex: _subtitleStreamIndex,
+    );
+  }
+
   void _startProgressTimer() {
     _stopProgressTimer();
+    if (_previewPlayback) return;
     final item = queueService.currentItem;
     final resolution = _currentResolution;
     if (item == null || resolution == null) return;
@@ -3373,8 +3923,16 @@ class PlaybackManager implements AudioOwnable {
 
   Future<void> stop({bool userInitiated = true}) async {
     if (userInitiated && await _maybeIntercept(TransportAction.stop)) return;
+    ++_playItemsRequest;
+    _discardPreviewNeighbors();
     _abandonLiveRecovery('the viewer stopped playback');
     _viewerPaused = false;
+    await _stopAndReportCurrent();
+  }
+
+  /// Abandon a stalled tune while keeping the other channels' buffers.
+  Future<void> cancelPreviewTune() async {
+    ++_playItemsRequest;
     await _stopAndReportCurrent();
   }
 
@@ -3385,6 +3943,7 @@ class PlaybackManager implements AudioOwnable {
         !identical(queueService.currentItem, expectedItem)) {
       return false;
     }
+    _discardPreviewNeighbors();
     return _stopAndReportCurrent(
       skipQueueChange: true,
       expectedItem: expectedItem,
@@ -3456,8 +4015,7 @@ class PlaybackManager implements AudioOwnable {
 
   Future<void> previous() async {
     if (await _maybeIntercept(TransportAction.previous)) return;
-    final chapter =
-        previousChapterStart(_currentChapterStarts, state.position);
+    final chapter = previousChapterStart(_currentChapterStarts, state.position);
     if (chapter != null) {
       await seekTo(chapter);
       return;
@@ -3711,7 +4269,7 @@ class PlaybackManager implements AudioOwnable {
   }
 
   String? _externalSubtitleUrlForStream(int streamIndex) {
-    final externals = _currentResolution?.externalSubtitles ?? const [];
+    final externals = _currentExternalSubtitles;
     for (final sub in externals) {
       if (sub.streamIndex != streamIndex) continue;
       if (sub.deliveryUrl.isNotEmpty) {
@@ -3753,7 +4311,8 @@ class PlaybackManager implements AudioOwnable {
   /// Use original embedded track numbers only during direct play.
   int? _secondaryEmbeddedTrackId(int streamIndex) {
     if (_currentResolution?.playMethod != StreamPlayMethod.directPlay ||
-        _embeddedSubtitlesUnavailable || _isSubtitleExternal(streamIndex)) {
+        _embeddedSubtitlesUnavailable ||
+        _isSubtitleExternal(streamIndex)) {
       return null;
     }
     return _mpvTrackIdForStream(streamIndex, 'Subtitle');
@@ -3778,9 +4337,8 @@ class PlaybackManager implements AudioOwnable {
     final uri = Uri.tryParse(url);
     if (uri == null) return url;
     final hasApiKey = uri.queryParameters.keys.any(
-      (k) => k.toLowerCase() == 'api_key',
+      (k) => k.replaceAll('_', '').toLowerCase() == 'apikey',
     );
-    if (hasApiKey) return url;
     final streamUrl = _currentResolution?.streamUrl;
     if (streamUrl == null || streamUrl.isEmpty) return url;
     final baseUri = Uri.tryParse(streamUrl);
@@ -3791,16 +4349,17 @@ class PlaybackManager implements AudioOwnable {
         resolvedUri.port != baseUri.port) {
       return url;
     }
+    if (hasApiKey) return resolvedUri.toString();
     final tokenEntry = baseUri.queryParameters.entries.firstWhere(
-      (entry) => entry.key.toLowerCase() == 'api_key',
+      (entry) => entry.key.replaceAll('_', '').toLowerCase() == 'apikey',
       orElse: () => const MapEntry('', ''),
     );
-    if (tokenEntry.key.isEmpty || tokenEntry.value.isEmpty) return url;
+    if (tokenEntry.key.isEmpty || tokenEntry.value.isEmpty) return resolvedUri.toString();
     final mergedParams = <String, String>{
       ...uri.queryParameters,
       tokenEntry.key: tokenEntry.value,
     };
-    return uri.replace(queryParameters: mergedParams).toString();
+    return resolvedUri.replace(queryParameters: mergedParams).toString();
   }
 
   SubtitleRendererMode _subtitleRendererModeForStream(int streamIndex) {
@@ -3862,8 +4421,11 @@ class PlaybackManager implements AudioOwnable {
         final selectedStream = selectedIndex == null
             ? null
             : _currentMediaStreams
-                .where((s) => s['Type'] == 'Subtitle' && s['Index'] == selectedIndex)
-                .firstOrNull;
+                  .where(
+                    (s) =>
+                        s['Type'] == 'Subtitle' && s['Index'] == selectedIndex,
+                  )
+                  .firstOrNull;
         await onSecondarySubtitleTrackSelected?.call(
           itemId,
           selectedIndex ?? -1,
@@ -3936,7 +4498,10 @@ class PlaybackManager implements AudioOwnable {
     final currentItem = queueService.currentItem;
     if (currentItem != null) {
       final itemId = MediaStreamResolver.extractItemId(currentItem);
-      onSubtitleTrackChanged?.call(itemId, streamIndex >= 0 ? streamIndex : null);
+      onSubtitleTrackChanged?.call(
+        itemId,
+        streamIndex >= 0 ? streamIndex : null,
+      );
       if (userInitiated) onSubtitleTrackSelected?.call(itemId, streamIndex);
     }
 
@@ -4057,8 +4622,9 @@ class PlaybackManager implements AudioOwnable {
     }
 
     await _resetSubtitleRendererMode();
-    if (previousWasBurned || (!_isOfflinePlayback &&
-        !(_backend?.supportsRuntimeTrackSelection ?? true))) {
+    if (previousWasBurned ||
+        (!_isOfflinePlayback &&
+            !(_backend?.supportsRuntimeTrackSelection ?? true))) {
       await _reResolveAtCurrentPosition();
       return;
     }
@@ -4166,12 +4732,14 @@ class PlaybackManager implements AudioOwnable {
     } catch (_) {}
 
     if (item != null && resolution != null) {
-      final stopReport = _service?.onPlaybackStop(
-        item,
-        resolution,
-        currentPos,
-        releaseLiveStream: _claimLiveStreamRelease(resolution),
-      );
+      final stopReport = _previewPlayback
+          ? null
+          : _service?.onPlaybackStop(
+              item,
+              resolution,
+              currentPos,
+              releaseLiveStream: _claimLiveStreamRelease(resolution),
+            );
       if (resolution.playMethod == StreamPlayMethod.directPlay) {
         // No server-side job to tear down, so don't delay the restart.
         if (stopReport != null) {
@@ -4285,7 +4853,7 @@ class PlaybackManager implements AudioOwnable {
       if (sessionToken != _playbackSessionToken) return;
 
       // Always wait for external subtitles to load before setting tracks to avoid auto-selection/re-prepare races
-      if (_currentResolution?.externalSubtitles.isNotEmpty ?? false) {
+      if (_currentExternalSubtitles.isNotEmpty) {
         await _externalSubsLoaded;
         if (sessionToken != _playbackSessionToken) return;
       }
@@ -4350,7 +4918,7 @@ class PlaybackManager implements AudioOwnable {
     );
     final subsToAdd = TrackOrdinalMapper.effectiveExternalSubtitles(
       mediaStreams: _currentMediaStreams,
-      externalSubtitles: resolution.externalSubtitles,
+      externalSubtitles: _currentExternalSubtitles,
       embeddedStripped: _embeddedSubtitlesUnavailable,
     );
 
@@ -4390,13 +4958,37 @@ class PlaybackManager implements AudioOwnable {
   bool get _embeddedSubtitlesUnavailable =>
       _embeddedTracksStripped || !(_backend?.demuxesEmbeddedSubtitles ?? true);
 
+  bool get _loadsEmbeddedPgsAsFiles => switch (_backend) {
+    AsyncPgsSubtitleBackend(loadsEmbeddedPgsAsFiles: true) => true,
+    _ => false,
+  };
+
+  List<ExternalSubtitle> get _currentExternalSubtitles {
+    final resolution = _currentResolution;
+    if (resolution == null) return const [];
+    if (!_loadsEmbeddedPgsAsFiles) return resolution.externalSubtitles;
+    return [
+      ...resolution.externalSubtitles,
+      for (final sub in MediaStreamResolver.extractExternalSubtitles(
+        _currentMediaStreams,
+        '',
+        includeEmbeddedPgs: true,
+      ))
+        if (MediaStreamResolver.isPgsCodec(sub.codec) &&
+            !resolution.externalSubtitles.any(
+              (s) => s.streamIndex == sub.streamIndex,
+            ))
+          sub.withDeliveryUrl(_ensureSubtitleApiKey(sub.deliveryUrl)),
+    ];
+  }
+
   /// The external subtitles that actually get sub-added, in add order.
   List<ExternalSubtitle> get _effectiveExternalSubtitles {
     final resolution = _currentResolution;
     if (resolution == null) return const [];
     return TrackOrdinalMapper.effectiveExternalSubtitles(
       mediaStreams: _currentMediaStreams,
-      externalSubtitles: resolution.externalSubtitles,
+      externalSubtitles: _currentExternalSubtitles,
       embeddedStripped: _embeddedSubtitlesUnavailable,
     );
   }
@@ -4406,9 +4998,7 @@ class PlaybackManager implements AudioOwnable {
   /// transcode/directStream), as opposed to a demuxed embedded track.
   bool _isSubtitleDeliveredExternally(int streamIndex) {
     if (_currentResolution == null) return _isSubtitleExternal(streamIndex);
-    return _effectiveExternalSubtitles.any(
-      (s) => s.streamIndex == streamIndex,
-    );
+    return _effectiveExternalSubtitles.any((s) => s.streamIndex == streamIndex);
   }
 
   int? _mpvTrackIdForStream(int streamIndex, String type) =>
@@ -4416,7 +5006,7 @@ class PlaybackManager implements AudioOwnable {
         streamIndex: streamIndex,
         type: type,
         mediaStreams: _currentMediaStreams,
-        externalSubtitles: _currentResolution?.externalSubtitles,
+        externalSubtitles: _currentExternalSubtitles,
         embeddedStripped: _embeddedSubtitlesUnavailable,
       );
 
@@ -4425,7 +5015,7 @@ class PlaybackManager implements AudioOwnable {
         mpvTrackId: mpvTrackId,
         type: type,
         mediaStreams: _currentMediaStreams,
-        externalSubtitles: _currentResolution?.externalSubtitles,
+        externalSubtitles: _currentExternalSubtitles,
         embeddedStripped: _embeddedSubtitlesUnavailable,
       );
 
@@ -4455,6 +5045,7 @@ class PlaybackManager implements AudioOwnable {
     suppressAutoNext = false;
     await _stopAndReportCurrent();
     _resetBackendSelectionLock();
+    _previewPlayback = false;
     _isOfflinePlayback = true;
     _onOfflineStop = onStop;
     _onOfflineAutoNext = onAutoNext;
@@ -4576,6 +5167,7 @@ class PlaybackManager implements AudioOwnable {
       final item = queueService.currentItem;
       final resolution = _currentResolution ?? _lastPlaybackResolution;
       final reportItem = item ?? _lastPlaybackItem;
+      final preview = _previewPlayback;
       final backendPos = _backend?.position ?? Duration.zero;
       final pos = Duration(
         microseconds: [
@@ -4588,7 +5180,7 @@ class PlaybackManager implements AudioOwnable {
       if (progressGeneration != null) {
         _retireProgressGeneration(progressGeneration, pos);
       }
-      if (reportItem != null && resolution != null) {
+      if (!preview && reportItem != null && resolution != null) {
         if (progressGeneration != null &&
             identical(progressGeneration.item, reportItem) &&
             identical(progressGeneration.resolution, resolution)) {
@@ -4618,7 +5210,17 @@ class PlaybackManager implements AudioOwnable {
       _currentResolution = null;
       _lastPlaybackItem = null;
       _lastPlaybackResolution = null;
-      await _backend?.stop();
+      try {
+        await _backend?.stop();
+      } finally {
+        if (preview &&
+            resolution != null &&
+            !_previewNeighbors.any(
+              (entry) => entry.parked && identical(entry.buffered, resolution),
+            )) {
+          _releasePreviewResources(resolution);
+        }
+      }
       _playbackStartTime = null;
       _waitingForMedia = false;
       if (!skipQueueChange) {
@@ -4643,7 +5245,28 @@ class PlaybackManager implements AudioOwnable {
     }
   }
 
-  void _cleanupPreemptedSession(dynamic item, StreamResolutionResult? resolution) {
+  void _releasePreviewResources(StreamResolutionResult resolution) {
+    final backend = _backend;
+    if (backend is PreviewStreamPreloader) {
+      (backend as PreviewStreamPreloader).discardPreviewSource(
+        resolution.streamUrl,
+      );
+    }
+    _closeLiveStreamOnce(resolution);
+    if (resolution.playMethod != StreamPlayMethod.directPlay) {
+      unawaited(_service?.stopTranscoding(resolution).catchError((_) {}));
+    }
+  }
+
+  void _cleanupPreemptedSession(
+    dynamic item,
+    StreamResolutionResult? resolution, {
+    required bool preview,
+  }) {
+    if (preview && resolution != null) {
+      _releasePreviewResources(resolution);
+      return;
+    }
     if (item != null && resolution != null) {
       unawaited(
         _service
@@ -4659,6 +5282,7 @@ class PlaybackManager implements AudioOwnable {
   }
 
   void dispose() {
+    _discardPreviewNeighbors();
     _liveRecoveryRetry?.cancel();
     _cancelLiveRecoveryProven();
     _endLiveStallWatch();
@@ -4733,8 +5357,18 @@ class PlaybackManager implements AudioOwnable {
 
     final itemId = MediaStreamResolver.extractItemId(item);
     if (itemId.isNotEmpty) {
-      onSubtitleTrackChanged?.call(itemId, _subtitleStreamIndex != null && _subtitleStreamIndex! >= 0 ? _subtitleStreamIndex : null);
-      onAudioTrackChanged?.call(itemId, _audioStreamIndex != null && _audioStreamIndex! >= 0 ? _audioStreamIndex : null);
+      onSubtitleTrackChanged?.call(
+        itemId,
+        _subtitleStreamIndex != null && _subtitleStreamIndex! >= 0
+            ? _subtitleStreamIndex
+            : null,
+      );
+      onAudioTrackChanged?.call(
+        itemId,
+        _audioStreamIndex != null && _audioStreamIndex! >= 0
+            ? _audioStreamIndex
+            : null,
+      );
     }
   }
 }
@@ -5000,7 +5634,8 @@ String _normalizeLanguage(String? language) {
 }
 
 String _toIso3(String language) {
-  if (_kLanguageKeywords.containsKey(language)) return _kLanguageKeywords[language]!;
+  if (_kLanguageKeywords.containsKey(language))
+    return _kLanguageKeywords[language]!;
   if (language.length == 3) return language;
   return _kIso6391To6392[language] ?? language;
 }

@@ -1,3 +1,5 @@
+import '../../config/app_features.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -35,7 +37,9 @@ const serverMessagesPushRoute = 'messages';
 /// widget context to hand in.
 void openServerMessagesFromNotification() {
   final context = appRouter.routerDelegate.navigatorKey.currentContext;
-  if (context == null || !context.mounted) return;
+  if (context == null || !context.mounted) {
+    return;
+  }
   showServerMessagesDialog(context);
 }
 
@@ -47,7 +51,12 @@ bool _dialogOpen = false;
 /// arrives while it is open shows up in place, and opening another over it
 /// would just stack two copies of the same list.
 Future<void> showServerMessagesDialog(BuildContext context) {
-  if (_dialogOpen) return Future<void>.value();
+  if (!AppFeatures.has(AppFeature.serverMessages)) {
+    return Future.value();
+  }
+  if (_dialogOpen) {
+    return Future<void>.value();
+  }
   final service = GetIt.instance<ServerMessagesService>();
 
   // The shared default of 440 leaves a long message in a narrow column, which
@@ -234,9 +243,8 @@ class _MessageCardState extends State<_MessageCard> {
                               child: Text(
                                 message.title.isNotEmpty
                                     ? message.title
-                                    : AppLocalizations.of(
-                                        context,
-                                      ).serverMessages,
+                                    : AppLocalizations.of(context)
+                                          .serverMessages,
                                 style: TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w600,
@@ -425,7 +433,9 @@ class MessageMarkdown extends StatelessWidget {
       imageBuilder: (_, _, _) => const SizedBox.shrink(),
       onTapLink: (text, href, title) {
         final url = ServerMessage.webLink(href);
-        if (url == null) return;
+        if (url == null) {
+          return;
+        }
         showQrOrLaunch(context, url: url, title: text.isEmpty ? url : text);
       },
       // Based on the app theme so every element the parser can produce gets a

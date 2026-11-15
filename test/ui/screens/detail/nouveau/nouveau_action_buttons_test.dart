@@ -229,7 +229,9 @@ void main() {
     // The More button owns focus once overflow kicks in, so drive it directly.
     final moreFocus = tester
         .widgetList<Focus>(find.byType(Focus))
-        .firstWhere((f) => f.focusNode?.debugLabel == 'nouveau-actions-overflow')
+        .firstWhere(
+          (f) => f.focusNode?.debugLabel == 'nouveau-actions-overflow',
+        )
         .focusNode!;
 
     moreFocus.requestFocus();
@@ -319,6 +321,62 @@ void main() {
     );
   });
 
+  for (final count in [0, 1, 2]) {
+    testWidgets(
+      'TV right edge with $count secondary actions has no phantom More target',
+      (tester) async {
+        PlatformDetection.setInterfaceLayout(InterfaceLayout.tv);
+        addTearDown(
+          () => PlatformDetection.setInterfaceLayout(InterfaceLayout.automatic),
+        );
+        final primary = FocusNode();
+        addTearDown(primary.dispose);
+        final secondaryNodes = [
+          for (var index = 0; index < count; index++) FocusNode(),
+        ];
+        addTearDown(() {
+          for (final node in secondaryNodes) {
+            node.dispose();
+          }
+        });
+        var exits = 0;
+        await tester.pumpWidget(
+          _TestApp(
+            child: NouveauActionButtons(
+              primaryAction: NouveauAction(
+                label: 'Play',
+                focusNode: primary,
+                onPressed: () {},
+                onArrowRight: () => exits++,
+              ),
+              secondaryActions: [
+                for (var index = 0; index < count; index++)
+                  NouveauAction(
+                    label: 'Action $index',
+                    focusNode: secondaryNodes[index],
+                    onPressed: () {},
+                    onArrowRight: () => exits++,
+                  ),
+              ],
+            ),
+          ),
+        );
+        primary.requestFocus();
+        await tester.pump();
+        for (var index = 0; index < count; index++) {
+          await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+          await tester.pump();
+        }
+        final last = FocusManager.instance.primaryFocus;
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await tester.pump();
+        expect(exits, 1);
+        expect(FocusManager.instance.primaryFocus, same(last));
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   group('UI scale', () {
     late UserPreferences prefs;
 
@@ -362,13 +420,13 @@ void main() {
       );
       final circle = find.byWidgetPredicate(
         (widget) =>
-            widget.runtimeType.toString() == '_NouveauCircleActionButton',
+            widget.runtimeType.toString() == '_NouveauSecondaryActionButton',
       );
       double playFontSize() =>
           tester.widget<Text>(find.text('Play')).style!.fontSize!;
 
       await pumpRow();
-      expect(tester.getSize(circle), const Size(64, 64));
+      expect(tester.getSize(circle), const Size(46, 46));
       expect(playFontSize(), 16.5);
 
       await prefs.set(
@@ -376,7 +434,7 @@ void main() {
         DesktopUiScale.extraLarge,
       );
       await pumpRow();
-      expect(tester.getSize(circle).width, closeTo(64 * 1.3, 0.001));
+      expect(tester.getSize(circle).width, closeTo(46 * 1.3, 0.001));
       expect(playFontSize(), 16.5);
     });
   });

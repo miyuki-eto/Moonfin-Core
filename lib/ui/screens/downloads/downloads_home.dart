@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:moonfin_design/moonfin_design.dart';
 
+import '../../settings_visibility.dart';
 import '../../../data/database/offline_database.dart';
 import '../../../data/providers/offline_providers.dart';
 import '../../../di/providers.dart';
@@ -289,13 +290,12 @@ class _DownloadsHomeState extends ConsumerState<DownloadsHome> {
           if (_searchOpen) _searchFocusNode.requestFocus();
         },
       ),
-      // Reachable on TV too, because the storage controls live behind it and
-      // a remote has no other way to them.
-      FocusableToolbarButton(
-        icon: Icons.settings_outlined,
-        tooltip: l10n.settings,
-        onTap: () => context.pushSettingsScreen(const DownloadSettingsScreen()),
-      ),
+      if (showAppSettings)
+        FocusableToolbarButton(
+          icon: Icons.settings_outlined,
+          tooltip: l10n.settings,
+          onTap: () => context.pushSettingsScreen(const DownloadSettingsScreen()),
+        ),
       FocusableToolbarButton(
         icon: Icons.more_vert,
         tooltip: l10n.more,

@@ -71,12 +71,14 @@ void main() {
       when(() => client.itemsApi).thenReturn(itemsApi);
       when(() => client.imageApi).thenReturn(_MockImageApi());
       when(() => client.gamesApi).thenReturn(null);
-      when(() => itemsApi.getPersons(
-        searchTerm: any(named: 'searchTerm'),
-        limit: any(named: 'limit'),
-        fields: any(named: 'fields'),
-        enableImageTypes: any(named: 'enableImageTypes'),
-      )).thenAnswer((_) async => {'Items': []});
+      when(
+        () => itemsApi.getPersons(
+          searchTerm: any(named: 'searchTerm'),
+          limit: any(named: 'limit'),
+          fields: any(named: 'fields'),
+          enableImageTypes: any(named: 'enableImageTypes'),
+        ),
+      ).thenAnswer((_) async => {'Items': []});
       servers.add(
         Server(
           id: id,
@@ -141,7 +143,7 @@ void main() {
   ];
 
   test(
-    'program search keeps the episode name from the server response',
+    'video search omits live TV programs from the server response',
     () async {
       when(() => itemsSearch(itemsApis['a']!)).thenAnswer(
         (_) async => {
@@ -157,11 +159,7 @@ void main() {
         },
       );
       final vm = await search(query: 'Kentucky');
-      final item = vm.results.single.items.single;
-      expect(vm.results.single.itemTypes, ['Program']);
-      expect(item.name, 'College Football');
-      expect(item.subtitle, 'South Alabama at Kentucky');
-      expect(item.channelId, 'c1');
+      expect(vm.results.expand((group) => group.items), isEmpty);
     },
   );
 
@@ -179,6 +177,27 @@ void main() {
     expect(vm.serverNameFor(fromB), 'Server b');
   });
 
+  test(
+    'an all-server outage reports failure and the same query can recover',
+    () async {
+      for (final api in itemsApis.values) {
+        when(() => itemsSearch(api)).thenThrow(Exception('offline'));
+      }
+      final vm = await search(across: multiServer);
+      expect(vm.state, SearchState.error);
+      for (final api in itemsApis.values) {
+        when(() => itemsSearch(api))
+            .thenAnswer((_) async => movies(['recovered']));
+      }
+      vm.searchImmediate('alien');
+      while (vm.state == SearchState.loading) {
+        await pumpEventQueue();
+      }
+      expect(vm.state, SearchState.ready);
+      expect(movieResults(vm), [('recovered', 'a'), ('recovered', 'b')]);
+    },
+  );
+
   test('a server that fails leaves the others to answer', () async {
     when(() => itemsSearch(itemsApis['a']!))
         .thenAnswer((_) async => movies(['a1']));
@@ -190,13 +209,16 @@ void main() {
     expect(movieResults(vm), [('a1', 'a')]);
   });
 
-  test('with multi-server search off only the active server is searched', () async {
-    when(() => itemsSearch(itemsApis['a']!))
-        .thenAnswer((_) async => movies(['a1']));
+  test(
+    'with multi-server search off only the active server is searched',
+    () async {
+      when(() => itemsSearch(itemsApis['a']!))
+          .thenAnswer((_) async => movies(['a1']));
 
-    final vm = await search();
+      final vm = await search();
 
-    verifyNever(() => itemsSearch(itemsApis['b']!));
-    expect(vm.serverNameFor(vm.results.single.items.single), isNull);
-  });
+      verifyNever(() => itemsSearch(itemsApis['b']!));
+      expect(vm.serverNameFor(vm.results.single.items.single), isNull);
+    },
+  );
 }

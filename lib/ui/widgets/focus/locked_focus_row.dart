@@ -11,6 +11,7 @@ import '../../../util/focus/key_event_utils.dart';
 import '../../../util/focus/scroll_utils.dart';
 import 'hub_focus_memory.dart';
 import 'row_glide.dart';
+import '../scroll_rail_viewport.dart';
 
 const _kSelectLongPressDuration = Duration(milliseconds: 500);
 
@@ -41,6 +42,9 @@ class LockedFocusRow<T> extends StatefulWidget {
   /// null, position is the identity, which is right for a row whose items
   /// are only ever replaced wholesale.
   final LockedFocusItemKey<T>? itemKey;
+
+  /// Keep the selected item when a live row reorders.
+  final bool preserveFocusedItemOnRefresh;
   final double itemExtent;
   final double leadingPadding;
   final double itemSpacing;
@@ -59,6 +63,15 @@ class LockedFocusRow<T> extends StatefulWidget {
   final double height;
   final bool autofocus;
   final Clip clipBehavior;
+
+  /// Space for artwork focus frames outside the rail's image bounds. The
+  /// masked viewport expands without moving the cards or their scroll offsets.
+  final double paintOutset;
+
+  /// Gutters outside an inset section's layout box. The scroll viewport bleeds
+  /// into them while artwork and headings retain their original alignment.
+  /// Home can supply its gutters as [padding]; inset detail sections use this.
+  final EdgeInsets viewportInsets;
 
   /// When set, the row scrolls by following this glide rather than animating
   /// to each card, and the caller sizes its cards from it.
@@ -86,7 +99,10 @@ class LockedFocusRow<T> extends StatefulWidget {
     this.padding = EdgeInsets.zero,
     this.autofocus = false,
     this.clipBehavior = Clip.hardEdge,
+    this.paintOutset = 0,
+    this.viewportInsets = EdgeInsets.zero,
     this.itemKey,
+    this.preserveFocusedItemOnRefresh = false,
     this.glide,
   });
 
@@ -122,12 +138,16 @@ class LockedFocusRowState<T> extends State<LockedFocusRow<T>>
   @override
   void initState() {
     super.initState();
-    _focusNode = widget.focusNode ??
+    _focusNode =
+        widget.focusNode ??
         FocusNode(debugLabel: 'LockedFocusRow:${widget.hubKey}');
     _ownsFocusNode = widget.focusNode == null;
     _scrollController = widget.controller ?? ScrollController();
     _ownsScrollController = widget.controller == null;
-    _focusedIndex = HubFocusMemory.getForHub(widget.hubKey, widget.items.length);
+    _focusedIndex = HubFocusMemory.getForHub(
+      widget.hubKey,
+      widget.items.length,
+    );
     widget.glide?.jumpTo(_focusedIndex);
     _syncItemKeys();
     _focusNode.addListener(_onRowFocusChange);
@@ -141,34 +161,53 @@ class LockedFocusRowState<T> extends State<LockedFocusRow<T>>
       if (_ownsFocusNode) {
         _focusNode.dispose();
       }
-      _focusNode = widget.focusNode ??
+      _focusNode =
+          widget.focusNode ??
           FocusNode(debugLabel: 'LockedFocusRow:${widget.hubKey}');
       _ownsFocusNode = widget.focusNode == null;
       _focusNode.addListener(_onRowFocusChange);
     }
-    if (widget.items.length != oldWidget.items.length) {
-      final clamped =
-          _focusedIndex.clamp(0, widget.items.isEmpty ? 0 : widget.items.length - 1);
-      if (clamped != _focusedIndex) widget.glide?.jumpTo(clamped);
-      _focusedIndex = clamped;
+    final oldIndex = _focusedIndex;
+    // Identities can move on a same-length refresh, so the keys follow the
+    // list rather than its length.
+    if (!identical(widget.items, oldWidget.items) ||
+        widget.itemKey != oldWidget.itemKey) {
+      final previousKey =
+          widget.preserveFocusedItemOnRefresh && oldIndex < _itemKeys.length
+          ? _itemKeys[oldIndex]
+          : null;
+      _syncItemKeys();
+      final index =
+          _indexByKey[previousKey] ??
+          oldIndex.clamp(0, widget.items.isEmpty ? 0 : widget.items.length - 1);
+      if (index != oldIndex) {
+        _focusedIndex = index;
+        widget.glide?.jumpTo(index);
+        if (widget.preserveFocusedItemOnRefresh && widget.items.isNotEmpty) {
+          HubFocusMemory.set(widget.hubKey, index);
+          if (_hasRowFocus) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && _hasRowFocus && _focusedIndex == index) {
+                _scrollToIndex(index);
+              }
+            });
+          }
+        }
+      }
     }
     if (widget.glide != oldWidget.glide) {
       widget.glide
         ?..jumpTo(_focusedIndex)
         ..active = _hasRowFocus;
     }
-    // Identities can move on a same-length refresh, so the keys follow the
-    // list rather than its length.
-    if (!identical(widget.items, oldWidget.items) ||
-        widget.itemKey != oldWidget.itemKey) {
-      _syncItemKeys();
-    }
-    if (_hasRowFocus && widget.items.isNotEmpty && _focusedIndex < widget.items.length) {
-      final oldItem = (oldWidget.items.length > _focusedIndex)
-          ? oldWidget.items[_focusedIndex]
+    if (_hasRowFocus &&
+        widget.items.isNotEmpty &&
+        _focusedIndex < widget.items.length) {
+      final oldItem = (oldWidget.items.length > oldIndex)
+          ? oldWidget.items[oldIndex]
           : null;
       final newItem = widget.items[_focusedIndex];
-      if (oldItem != newItem) {
+      if (oldIndex != _focusedIndex || oldItem != newItem) {
         widget.onIndexChanged?.call(_focusedIndex, newItem);
       }
     }
@@ -192,8 +231,8 @@ class LockedFocusRowState<T> extends State<LockedFocusRow<T>>
   /// The selected card's layout, while keyboard focus remains on the row.
   BuildContext? get focusedItemContext =>
       _hasRowFocus && _focusedIndex >= 0 && _focusedIndex < _itemKeys.length
-          ? _itemKeys[_focusedIndex].currentContext
-          : null;
+      ? _itemKeys[_focusedIndex].currentContext
+      : null;
 
   /// Keeps the key of every item still present and allocates only for new
   /// ones, so appending a page leaves the existing elements alone.
@@ -299,16 +338,19 @@ class LockedFocusRowState<T> extends State<LockedFocusRow<T>>
   double _layoutDrift() {
     final stride = widget.itemExtent + widget.itemSpacing;
     final leading = Directionality.of(context) == TextDirection.rtl
-        ? widget.padding.right
-        : widget.padding.left;
+        ? widget.padding.right + widget.viewportInsets.right
+        : widget.padding.left + widget.viewportInsets.left;
     for (var i = 0; i < _itemKeys.length; i++) {
       final box = _itemKeys[i].currentContext?.findRenderObject();
       if (box is! RenderBox || !box.attached || !box.hasSize) continue;
       final reveal = RenderAbstractViewport.of(box).getOffsetToReveal(box, 0);
-      return reveal.offset - leading - i * stride;
+      return reveal.offset - leading - _horizontalPaintOutset - i * stride;
     }
     return 0;
   }
+
+  double get _horizontalPaintOutset =>
+      ScrollRailViewport.horizontalPaintOutset(widget.paintOutset);
 
   void _runGlide() {
     final glide = widget.glide;
@@ -328,25 +370,24 @@ class LockedFocusRowState<T> extends State<LockedFocusRow<T>>
       _glideTicker?.stop();
       return;
     }
-    final dt = (elapsed - _glideLastTick).inMicroseconds /
+    final dt =
+        (elapsed - _glideLastTick).inMicroseconds /
         Duration.microsecondsPerSecond;
     _glideLastTick = elapsed;
     final moving = glide.tick(dt.clamp(0.0, 0.05));
     if (_scrollController.hasClients) {
       final position = _scrollController.position;
-      final offset = _glideScrollOffset(glide).clamp(
-        position.minScrollExtent,
-        position.maxScrollExtent,
-      );
+      final offset = _glideScrollOffset(glide)
+          .clamp(position.minScrollExtent, position.maxScrollExtent);
       if (offset != position.pixels) _scrollController.jumpTo(offset);
     }
     if (!moving) _glideTicker?.stop();
   }
 
   double _glideScrollOffset(RowGlide glide) => glide.scrollOffset(
-        leading: widget.leadingPadding + _layoutDrift(),
-        stride: widget.itemExtent + widget.itemSpacing,
-      );
+    leading: widget.leadingPadding + _layoutDrift(),
+    stride: widget.itemExtent + widget.itemSpacing,
+  );
 
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
     if (widget.items.isEmpty) return KeyEventResult.ignored;
@@ -457,33 +498,34 @@ class LockedFocusRowState<T> extends State<LockedFocusRow<T>>
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Focus(
-      focusNode: _focusNode,
-      autofocus: widget.autofocus,
-      onKeyEvent: _onKeyEvent,
-      child: SizedBox(
-        height: widget.height,
-        child: ListView.separated(
-          controller: _scrollController,
-          scrollDirection: Axis.horizontal,
-          clipBehavior: widget.clipBehavior,
-          padding: widget.padding,
-          itemCount: widget.items.length,
-          findItemIndexCallback: _itemIndexForKey,
-          separatorBuilder: (_, _) => SizedBox(width: widget.itemSpacing),
-          itemBuilder: (context, index) => _RowItem<T>(
-            key: _itemKeys[index],
-            index: index,
-            item: widget.items[index],
-            focusedIndex: _focusedIndexNotifier,
-            rowHasFocus: _hasRowFocusNotifier,
-            builder: widget.itemBuilder,
-          ),
+  Widget build(BuildContext context) => Focus(
+    focusNode: _focusNode,
+    autofocus: widget.autofocus,
+    onKeyEvent: _onKeyEvent,
+    child: ScrollRailViewport(
+      height: widget.height,
+      padding: widget.padding,
+      viewportInsets: widget.viewportInsets,
+      paintOutset: widget.paintOutset,
+      builder: (context, padding) => ListView.separated(
+        controller: _scrollController,
+        scrollDirection: Axis.horizontal,
+        clipBehavior: widget.clipBehavior,
+        padding: padding,
+        itemCount: widget.items.length,
+        findItemIndexCallback: _itemIndexForKey,
+        separatorBuilder: (_, _) => SizedBox(width: widget.itemSpacing),
+        itemBuilder: (context, index) => _RowItem<T>(
+          key: _itemKeys[index],
+          index: index,
+          item: widget.items[index],
+          focusedIndex: _focusedIndexNotifier,
+          rowHasFocus: _hasRowFocusNotifier,
+          builder: widget.itemBuilder,
         ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 /// One card of the row. Rebuilds when its own focused flag flips, and when

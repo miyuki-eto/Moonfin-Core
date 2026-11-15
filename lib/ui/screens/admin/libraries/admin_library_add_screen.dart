@@ -417,7 +417,7 @@ class _AdminLibraryAddScreenState
       children: [
         Expanded(
           child: options == null
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: LoadingThrobber())
               : ListView(
                   children: [
                     for (final part in LibraryOptionsPart.values)

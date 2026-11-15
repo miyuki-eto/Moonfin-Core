@@ -3,6 +3,7 @@ import 'dart:async';
 import '../offline_aware_image.dart';
 
 import 'package:flutter/material.dart';
+import '../../tv/tv26_button.dart';
 import 'package:flutter/services.dart';
 import 'package:get_it/get_it.dart';
 import 'package:moonfin_design/moonfin_design.dart';
@@ -184,7 +185,7 @@ class _NextUpOverlayState extends State<NextUpOverlay>
       ],
     );
 
-    final cardRadius = AppColorScheme.isPixel ? 0.0 : 18.0;
+    final cardRadius = AppColorScheme.isPixel ? 0.0 : Tv26Style.panelRadius;
     final cardBorder = ThemeRegistry.active.borders.cardBorder;
     final hasCardBorder =
         cardBorder.style != BorderStyle.none &&
@@ -237,9 +238,7 @@ class _NextUpOverlayState extends State<NextUpOverlay>
                               child: SizedBox(
                                 width: 24,
                                 height: 24,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
+                                child: LoadingThrobber(),
                               ),
                             ),
                           ),
@@ -291,7 +290,19 @@ class _NextUpOverlayState extends State<NextUpOverlay>
                         Row(
                           children: [
                             Expanded(
-                              child: Focus(
+                              child: tvFocusMode
+                                  ? Tv26Button(
+                                      label: l10n.playNext,
+                                      icon: Icons.play_arrow_rounded,
+                                      focusNode: widget.focusNode,
+                                      autofocus: widget.focusNode == null,
+                                      onPressed: widget.onPlayNext,
+                                      onRight: widget.dismissFocusNode?.requestFocus,
+                                      onDown: widget.dismissFocusNode?.requestFocus,
+                                      onLeft: () {},
+                                      onUp: () {},
+                                    )
+                                  : Focus(
                                 focusNode: widget.focusNode,
                                 onFocusChange: (focused) {
                                   if (_playFocused != focused) {
@@ -362,7 +373,20 @@ class _NextUpOverlayState extends State<NextUpOverlay>
                               ),
                             ),
                             const SizedBox(width: 10),
-                            Focus(
+                            if (tvFocusMode)
+                              Tv26Button(
+                                label: l10n.close,
+                                icon: Icons.close_rounded,
+                                iconOnly: true,
+                                width: 44,
+                                focusNode: widget.dismissFocusNode,
+                                onPressed: widget.onDismiss,
+                                onLeft: widget.focusNode?.requestFocus,
+                                onUp: widget.focusNode?.requestFocus,
+                                onRight: () {},
+                                onDown: () {},
+                              )
+                            else Focus(
                               focusNode: widget.dismissFocusNode,
                               onFocusChange: (focused) {
                                 if (_dismissFocused != focused) {

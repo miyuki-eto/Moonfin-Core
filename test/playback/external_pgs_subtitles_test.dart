@@ -82,12 +82,38 @@ class _Backend extends Fake implements PlayerBackend {
   void dispose() {}
 }
 
+class _AsyncPgsBackend extends _Backend implements AsyncPgsSubtitleBackend {
+  @override
+  bool get loadsEmbeddedPgsAsFiles => true;
+  String? loadedUrl;
+  @override
+  Future<void> waitForEmbeddedSubtitleCount(int count) async {}
+  @override
+  Future<void> addExternalSubtitle(
+    String url, {
+    String? title,
+    String? language,
+    String? codec,
+  }) async {}
+  @override
+  Future<void> setSubtitleTrack(
+    int index, {
+    bool isBitmapSubtitle = false,
+    String? subtitleCodec,
+    bool isExternalSubtitle = false,
+    String? externalSubtitleUrl,
+  }) async {
+    loadedUrl = externalSubtitleUrl;
+  }
+}
+
 /// Answers the way Jellyfin does for a file with a PGS track inside it
 /// (index 1) and a .sup file next to it (index 2). Direct play keeps the
 /// embedded track embedded. Otherwise a PGS track goes out as a file when the
 /// profile offers that, and is burned in when it doesn't.
 class _ServerLikeResolver extends MediaStreamResolver {
-  _ServerLikeResolver(this.playMethod);
+  _ServerLikeResolver(this.playMethod, {this.extractedPgs = false});
+  final bool extractedPgs;
 
   final StreamPlayMethod playMethod;
   final List<bool> offeredPgsAsFile = <bool>[];
@@ -108,14 +134,16 @@ class _ServerLikeResolver extends MediaStreamResolver {
     final asFile = _offersPgsAsFile(deviceProfile);
     offeredPgsAsFile.add(asFile);
     String delivery({required bool isExternal}) {
-      if (!isExternal && playMethod == StreamPlayMethod.directPlay) {
+      if (!extractedPgs &&
+          !isExternal &&
+          playMethod == StreamPlayMethod.directPlay) {
         return 'Embed';
       }
       return asFile ? 'External' : 'Encode';
     }
 
     return StreamResolutionResult(
-      streamUrl: 'https://example.test/master.m3u8',
+      streamUrl: 'https://example.test/master.m3u8?ApiKey=test-key',
       mediaSourceId: 'source-1',
       playSessionId: 'session-1',
       playMethod: playMethod,
@@ -127,6 +155,7 @@ class _ServerLikeResolver extends MediaStreamResolver {
           'Codec': 'PGSSUB',
           'IsExternal': false,
           'DeliveryMethod': delivery(isExternal: false),
+          'DeliveryUrl': '/Videos/item/source/Subtitles/1/0/Stream.sup',
         },
         {
           'Type': 'Subtitle',
@@ -161,6 +190,36 @@ Future<List<bool>> _offersWhenPicking(
 }
 
 void main() {
+  for (final method in [
+    StreamPlayMethod.directPlay,
+    StreamPlayMethod.transcode,
+  ]) {
+    test(
+      'async PGS stays a separate authenticated file during $method',
+      () async {
+        final resolver = _ServerLikeResolver(method, extractedPgs: true);
+        final backend = _AsyncPgsBackend();
+        final manager = PlaybackManager()
+          ..setBackend(backend)
+          ..setResolver(resolver);
+        await manager.playItems(
+          [
+            {'Id': 'item', 'Type': 'Movie'},
+          ],
+          subtitleStreamIndex: 1,
+          subtitleSelectionExplicit: true,
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(resolver.offeredPgsAsFile, [true]);
+        expect(
+          backend.loadedUrl,
+          'https://example.test/Videos/item/source/Subtitles/1/0/Stream.sup?ApiKey=test-key',
+        );
+        manager.dispose();
+      },
+    );
+  }
+
   group('withholdExternalPgsSubtitles', () {
     test('drops only the External PGS entries', () {
       final profile = _profileOfferingPgsAsFile();

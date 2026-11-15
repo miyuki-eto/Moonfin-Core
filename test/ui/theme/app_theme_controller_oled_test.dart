@@ -38,86 +38,36 @@ void main() {
     expect(Vibrance.filter.value, isNull);
   });
 
-  test('a cold start with the preference already set is crushed on frame one',
-      () async {
-    final prefs = await _prefs();
-    await prefs.set(UserPreferences.oledMode, OledMode.vivid);
+  test(
+    'saved appearance cannot override the fixed product theme at startup',
+    () async {
+      final prefs = await _prefs();
+      await prefs.set(UserPreferences.visualTheme, VisualThemeId.neonPulse);
+      await prefs.set(UserPreferences.oledMode, OledMode.vivid);
+      final controller = AppThemeController.fromPreferences(prefs);
+      expect(controller.activeThemeId, VisualThemeId.moonfin);
+      expect(controller.activeSpec.colors.background, _black);
+      expect(Vibrance.filter.value, isNull);
+      expect(prefs.get(UserPreferences.visualTheme), VisualThemeId.neonPulse);
+      expect(prefs.get(UserPreferences.oledMode), OledMode.vivid);
+    },
+  );
 
-    final controller = AppThemeController.fromPreferences(prefs);
-
-    expect(controller.activeSpec.colors.background, _black);
-    expect(Vibrance.filter.value, isNotNull);
-  });
-
-  test('toggling the preference notifies and re-derives the spec', () async {
-    final prefs = await _prefs();
-    final controller = AppThemeController.fromPreferences(prefs);
-    var notifications = 0;
-    controller.addListener(() => notifications++);
-
-    await prefs.set(UserPreferences.oledMode, OledMode.vivid);
-    // The app wires this to the UserPreferences listener.
-    controller.refreshFromPreferences(prefs);
-
-    // The toggle changes no theme id, so this catches _apply guarding on the
-    // id alone and skipping the work.
-    expect(notifications, 1);
-    expect(controller.activeSpec.colors.background, _black);
-    expect(Vibrance.filter.value, isNotNull);
-  });
-
-  test('switching back to off restores the authored palette', () async {
-    final prefs = await _prefs();
-    final controller = AppThemeController.fromPreferences(prefs);
-    final authored = ThemeRegistry.resolveById(controller.activeSpec.id);
-
-    await prefs.set(UserPreferences.oledMode, OledMode.vivid);
-    controller.refreshFromPreferences(prefs);
-    expect(controller.activeSpec.colors.background, _black);
-
-    await prefs.set(UserPreferences.oledMode, OledMode.off);
-    controller.refreshFromPreferences(prefs);
-
-    expect(controller.activeSpec.colors.background, authored.colors.background);
-    expect(Vibrance.filter.value, isNull);
-  });
-
-  test('the static AppColorScheme path sees the crushed colours too', () async {
-    final prefs = await _prefs();
-    final controller = AppThemeController.fromPreferences(prefs);
-
-    await prefs.set(UserPreferences.oledMode, OledMode.vivid);
-    controller.refreshFromPreferences(prefs);
-
-    // Plenty of widgets read colours statically instead of via Theme.of.
-    expect(AppColorScheme.background, _black);
-    expect(AppColorScheme.surface, _black);
-  });
-
-  test('the built ThemeData carries the crushed scaffold and card', () async {
-    final prefs = await _prefs();
-    final controller = AppThemeController.fromPreferences(prefs);
-
-    await prefs.set(UserPreferences.oledMode, OledMode.vivid);
-    controller.refreshFromPreferences(prefs);
-    final theme = theming.AppTheme.buildTheme(controller.activeSpec);
-
-    expect(theme.scaffoldBackgroundColor, _black);
-    // Cards read from the fixed palette until this feature, so they are the
-    // easiest thing to leave behind as grey slabs.
-    expect(theme.cardTheme.color, _black);
-  });
-
-  test('changing theme while OLED is on keeps the crush applied', () async {
-    final prefs = await _prefs();
-    final controller = AppThemeController.fromPreferences(prefs);
-
-    await prefs.set(UserPreferences.oledMode, OledMode.vivid);
-    controller.refreshFromPreferences(prefs);
-
-    await controller.applyThemeSelection(prefs, VisualThemeId.neonPulse);
-
-    expect(controller.activeThemeId, VisualThemeId.neonPulse);
-    expect(controller.activeSpec.colors.background, _black);
-  });
+  test(
+    'preference refresh preserves the shared palette and typography',
+    () async {
+      final prefs = await _prefs();
+      final controller = AppThemeController.fromPreferences(prefs);
+      final authored = controller.activeSpec;
+      await prefs.set(UserPreferences.visualTheme, VisualThemeId.neonPulse);
+      await prefs.set(UserPreferences.oledMode, OledMode.vivid);
+      controller.refreshFromPreferences(prefs);
+      expect(controller.activeSpec.colors, authored.colors);
+      expect(AppColorScheme.surface, Tv26Style.surface);
+      expect(Vibrance.filter.value, isNull);
+      final theme = theming.AppTheme.buildTheme(controller.activeSpec);
+      expect(theme.scaffoldBackgroundColor, Tv26Style.canvas);
+      expect(theme.textTheme.bodyMedium?.fontFamily, 'Inter');
+    },
+  );
 }

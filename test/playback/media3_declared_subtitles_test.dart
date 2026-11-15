@@ -43,6 +43,22 @@ void main() {
   Map<dynamic, dynamic> sourceArguments() =>
       calls.singleWhere((call) => call.method == 'setSource').arguments as Map;
 
+  test('unreported full-screen playback uses the main player slot', () async {
+    await backend.play(
+      {'url': 'http://server/video.mkv', 'preview': true},
+      startPosition: const Duration(minutes: 5),
+    );
+
+    expect(sourceArguments()['preview'], isFalse);
+    expect(sourceArguments()['startPositionMs'], 300000);
+  });
+
+  test('inline trailers use the native preview slot', () async {
+    await backend.play('http://server/trailer.mkv', inlinePreview: true);
+
+    expect(sourceArguments()['preview'], isTrue);
+  });
+
   test('the sidecars a source came with go out with the source', () async {
     const sidecars = [
       {

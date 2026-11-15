@@ -1,3 +1,11 @@
+import '../../config/app_features.dart';
+
+import 'dart:async';
+
+import '../../util/platform_detection.dart';
+
+import 'dart:math' show max;
+
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:server_core/server_core.dart' hide ImageType;
@@ -28,13 +36,10 @@ class FavoritesViewModel extends ChangeNotifier {
     FavoriteTypeFilter.episode,
     FavoriteTypeFilter.collection,
     FavoriteTypeFilter.person,
-    FavoriteTypeFilter.musicVideo,
-    FavoriteTypeFilter.musicArtist,
-    FavoriteTypeFilter.musicAlbum,
-    FavoriteTypeFilter.audio,
   ];
 
   FavoritesState _state = FavoritesState.loading;
+  bool _isDisposed = false;
   FavoritesState get state => _state;
 
   Map<FavoriteTypeFilter, List<AggregatedItem>> _rowItems = {};
@@ -46,6 +51,8 @@ class FavoritesViewModel extends ChangeNotifier {
 
   late LibrarySortBy _sortBy;
   LibrarySortBy get sortBy => _sortBy;
+  List<LibrarySortBy> get sortOptions =>
+      LibrarySortBy.optionsFor(isSeriesLibrary: true);
 
   late SortDirection _sortDirection;
   SortDirection get sortDirection => _sortDirection;
@@ -105,63 +112,136 @@ class FavoritesViewModel extends ChangeNotifier {
        _prefs = prefs,
        _mdbListRepository = mdbListRepository {
     _sortBy = _prefs.get(UserPreferences.librarySortBy(_prefKey));
+    if (!sortOptions.contains(_sortBy)) _sortBy = LibrarySortBy.name;
     _sortDirection = _prefs.get(UserPreferences.librarySortDirection(_prefKey));
-    _imageType = _prefs.get(UserPreferences.libraryImageType(_prefKey));
+    _imageType = PlatformDetection.isTV
+        ? ImageType.poster
+        : _prefs.get(UserPreferences.libraryImageType(_prefKey));
     _posterSize = _prefs.resolveScreenPosterSize(
       UserPreferences.favoritesPosterSize,
     );
-    _viewStyle = _prefs.get(UserPreferences.favoritesViewStyle);
+    _viewStyle = PlatformDetection.isTV
+        ? FavoritesViewStyle.library
+        : _prefs.get(UserPreferences.favoritesViewStyle);
     userDataSync.addListener(_onUserDataChanged);
   }
 
-  /// Repaints the watched ticks in place when something here is played or
-  /// unfavourited, on this device or another one.
+  /// Updates watched state and removes unfavourited entries. Removing an entry
+  /// before the paging cursor shifts the next server page back by one.
   void _onUserDataChanged() {
     var changed = false;
+    var needsRefill = false;
 
     Map<FavoriteTypeFilter, List<AggregatedItem>>? rows;
     _rowItems.forEach((type, items) {
-      final patched = userDataSync.applyAll(items);
-      if (identical(patched, items)) return;
+      final patched = _patchFavorites(items);
+      if (identical(patched, items)) {
+        return;
+      }
+      final removed = items.length - patched.length;
+      _rowTotalCounts[type] = max(0, rowTotalCount(type) - removed);
+      _rowFetchedCounts[type] = max(
+        0,
+        (_rowFetchedCounts[type] ?? items.length) - removed,
+      );
+      if (patched.isEmpty && rowTotalCount(type) > 0) {
+        needsRefill = true;
+      }
       rows ??= Map.of(_rowItems);
-      rows![type] = patched;
+      if (patched.isEmpty) {
+        rows!.remove(type);
+      } else {
+        rows![type] = patched;
+      }
     });
     if (rows != null) {
       _rowItems = rows!;
       changed = true;
     }
 
-    final grid = userDataSync.applyAll(_gridItems);
+    final grid = _patchFavorites(_gridItems);
     if (!identical(grid, _gridItems)) {
+      final removed = _gridItems.length - grid.length;
+      _gridTotalCount = max(0, _gridTotalCount - removed);
+      _gridFetchedCount = max(0, _gridFetchedCount - removed);
       _gridItems = grid;
+      if (grid.isEmpty && hasMoreGrid) {
+        needsRefill = true;
+      }
       changed = true;
     }
 
-    if (changed) notifyListeners();
+    final focused = userDataSync.applyOrNull(_focusedItem);
+    if (!identical(focused, _focusedItem)) {
+      _focusedItem = _isUnfavorited(focused) ? null : focused;
+      if (_focusedItem == null) {
+        _focusedRatings = const {};
+      }
+      changed = true;
+    }
+
+    if (changed) {
+      notifyListeners();
+    }
+    // Clearing every loaded entry must not hide favorites on later pages.
+    // Reload from zero because removals have changed the server offsets.
+    if (needsRefill && !_isDisposed) {
+      unawaited(load());
+    }
+  }
+
+  static bool _isUnfavorited(AggregatedItem? item) =>
+      switch (item?.rawData['UserData']) {
+        {'IsFavorite': false} => true,
+        _ => false,
+      };
+
+  static List<AggregatedItem> _patchFavorites(List<AggregatedItem> items) {
+    final patched = userDataSync.applyAll(items);
+    // A favorite query may omit the flag. Only an explicit removal should
+    // filter an entry; an unrelated watched update must keep it.
+    if (!patched.any(_isUnfavorited)) {
+      return patched;
+    }
+    return patched.where((item) => !_isUnfavorited(item)).toList();
   }
 
   @override
   void dispose() {
+    _isDisposed = true;
     userDataSync.removeListener(_onUserDataChanged);
     super.dispose();
+  }
+
+  @override
+  void notifyListeners() {
+    if (!_isDisposed) {
+      super.notifyListeners();
+    }
   }
 
   void setFocusedItem(AggregatedItem? item) {
     _focusedItem = item;
     _focusedRatings = const {};
     notifyListeners();
-    if (item != null) _loadFocusedRatings(item);
+    if (item != null) {
+      _loadFocusedRatings(item);
+    }
   }
 
   Future<void> setViewStyle(FavoritesViewStyle value) async {
-    if (_viewStyle == value) return;
+    if (_viewStyle == value) {
+      return;
+    }
     _viewStyle = value;
     await _prefs.set(UserPreferences.favoritesViewStyle, value);
     await load();
   }
 
   Future<void> _loadFocusedRatings(AggregatedItem item) async {
-    if (!_prefs.get(UserPreferences.enableAdditionalRatings)) return;
+    if (!_prefs.get(UserPreferences.enableAdditionalRatings)) {
+      return;
+    }
     final ratings = await _mdbListRepository.getRatingsForItem(
       item,
       episodeRatingsEnabled: _prefs.canFetchEpisodeRatings,
@@ -230,7 +310,9 @@ class FavoritesViewModel extends ChangeNotifier {
         );
       } on DioException catch (e) {
         final statusCode = e.response?.statusCode ?? 0;
-        if (statusCode < 500) rethrow;
+        if (statusCode < 500) {
+          rethrow;
+        }
         final fallbackSort = sortValue.toLowerCase().contains('isfolder')
             ? 'SortName'
             : sortValue;
@@ -267,11 +349,17 @@ class FavoritesViewModel extends ChangeNotifier {
 
   Future<void> loadMoreForType(FavoriteTypeFilter type) async {
     final items = _rowItems[type];
-    if (items == null || items.isEmpty) return;
+    if (items == null || items.isEmpty) {
+      return;
+    }
     final total = _rowTotalCounts[type] ?? 0;
     final fetched = _rowFetchedCounts[type] ?? items.length;
-    if (fetched >= total) return;
-    if (_inFlightPagingRowTypes.contains(type)) return;
+    if (fetched >= total) {
+      return;
+    }
+    if (_inFlightPagingRowTypes.contains(type)) {
+      return;
+    }
 
     _inFlightPagingRowTypes.add(type);
     try {
@@ -310,11 +398,14 @@ class FavoritesViewModel extends ChangeNotifier {
         limit: pageSize,
         recursive: true,
         isFavorite: true,
+        includeItemTypes: AppFeatures.browseTypes,
         fields: _browseFields,
       );
     } on DioException catch (e) {
       final statusCode = e.response?.statusCode ?? 0;
-      if (statusCode < 500) rethrow;
+      if (statusCode < 500) {
+        rethrow;
+      }
       final fallbackSort = sortValue.toLowerCase().contains('isfolder')
           ? 'SortName'
           : sortValue;
@@ -325,6 +416,7 @@ class FavoritesViewModel extends ChangeNotifier {
         limit: pageSize,
         recursive: true,
         isFavorite: true,
+        includeItemTypes: AppFeatures.browseTypes,
         fields: _browseFields,
         enableTotalRecordCount: false,
       );
@@ -362,7 +454,9 @@ class FavoritesViewModel extends ChangeNotifier {
   }
 
   Future<void> loadMoreGrid() async {
-    if (_loadingMoreGrid || !hasMoreGrid) return;
+    if (_loadingMoreGrid || !hasMoreGrid) {
+      return;
+    }
     _loadingMoreGrid = true;
     notifyListeners();
 
@@ -379,14 +473,18 @@ class FavoritesViewModel extends ChangeNotifier {
   }
 
   Future<void> setSortBy(LibrarySortBy value) async {
-    if (_sortBy == value) return;
+    if (_sortBy == value) {
+      return;
+    }
     _sortBy = value;
     await _prefs.set(UserPreferences.librarySortBy(_prefKey), value);
     await load();
   }
 
   Future<void> setSortDirection(SortDirection value) async {
-    if (_sortDirection == value) return;
+    if (_sortDirection == value) {
+      return;
+    }
     _sortDirection = value;
     await _prefs.set(UserPreferences.librarySortDirection(_prefKey), value);
     await load();
@@ -399,14 +497,18 @@ class FavoritesViewModel extends ChangeNotifier {
   );
 
   Future<void> setImageType(ImageType value) async {
-    if (_imageType == value) return;
+    if (_imageType == value) {
+      return;
+    }
     _imageType = value;
     await _prefs.set(UserPreferences.libraryImageType(_prefKey), value);
     notifyListeners();
   }
 
   Future<void> setPosterSize(PosterSize value) async {
-    if (_posterSize == value) return;
+    if (_posterSize == value) {
+      return;
+    }
     _posterSize = value;
     await _prefs.set(UserPreferences.favoritesPosterSize, value);
     notifyListeners();

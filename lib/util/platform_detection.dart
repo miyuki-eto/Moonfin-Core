@@ -12,6 +12,7 @@ class PlatformDetection {
   static const double _mobileFormFactorBreakpoint = 600;
 
   static const bool isAppleTV = bool.fromEnvironment('MOONFIN_TVOS');
+  static const bool isTizen = bool.fromEnvironment('MOONFIN_TIZEN');
 
   /// True for the dedicated Android TV flavor produced by the Android TV
   /// build commands. Keep this separate from runtime TV detection: the flavor
@@ -22,9 +23,7 @@ class PlatformDetection {
   static bool get isAndroid =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
   static bool get isIOS =>
-      !kIsWeb &&
-      !isAppleTV &&
-      defaultTargetPlatform == TargetPlatform.iOS;
+      !kIsWeb && !isAppleTV && defaultTargetPlatform == TargetPlatform.iOS;
   static int get iosMajorVersion => isIOS ? osMajorVersion() : 0;
   static int? _osMajorCache;
   static int get osMajor => _osMajorCache ??= osMajorVersion();
@@ -33,7 +32,7 @@ class PlatformDetection {
   static bool get isWindows =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
   static bool get isLinux =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
+      !kIsWeb && !isTizen && defaultTargetPlatform == TargetPlatform.linux;
   static bool get isWeb => kIsWeb;
 
   /// The ID this Flatpak was installed under, or null outside a Flatpak.
@@ -57,7 +56,7 @@ class PlatformDetection {
   static bool get isApple => isIOS || isMacOS;
 
   static bool get isTV {
-    if (isAppleTV || isForcedTv) {
+    if (isAppleTV || isTizen || isForcedTv) {
       return true;
     }
     return switch (_interfaceLayout) {
@@ -395,7 +394,8 @@ class PlatformDetection {
 
   /// Offline media is available on phones, tablets, desktops, and Android TV.
   /// Other TV platforms do not currently provide the download backend.
-  static bool get supportsOfflineDownloads => !isTV || isAndroid || isForcedTv;
+  static bool get supportsOfflineDownloads =>
+      !isTizen && (!isTV || isAndroid || isForcedTv);
 
   static bool get useNativeVideoSurface => isAndroid && isTV;
 

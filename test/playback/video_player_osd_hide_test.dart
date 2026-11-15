@@ -207,18 +207,28 @@ void main() {
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       const MethodChannel('window_manager'),
       (call) async {
-        if (call.method == 'isFullScreen') return fullscreen;
+        if (call.method == 'isFullScreen') {
+          return fullscreen;
+        }
         if (call.method == 'setFullScreen') {
           fullscreen = (call.arguments as Map)['isFullScreen'] as bool;
         }
-        if (call.method == 'isVisible') return true;
+        if (call.method == 'isVisible') {
+          return true;
+        }
         return call.method.startsWith('is') ? false : null;
       },
     );
-    addTearDown(() => tester.binding.defaultBinaryMessenger
-        .setMockMethodCallHandler(const MethodChannel('window_manager'), null));
-    await GetIt.instance<UserPreferences>()
-        .set(UserPreferences.cinemaModeSkipEnabled, true);
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel('window_manager'),
+        null,
+      ),
+    );
+    await GetIt.instance<UserPreferences>().set(
+      UserPreferences.cinemaModeSkipEnabled,
+      true,
+    );
     manager.queueService.setQueue([
       {'Id': 'trailer', '__moonfinIsPreroll': true, 'RunTimeTicks': 900000000},
     ]);
@@ -253,14 +263,22 @@ void main() {
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       const MethodChannel('window_manager'),
       (call) async {
-        if (call.method == 'isVisible') return true;
+        if (call.method == 'isVisible') {
+          return true;
+        }
         return call.method.startsWith('is') ? false : null;
       },
     );
-    addTearDown(() => tester.binding.defaultBinaryMessenger
-        .setMockMethodCallHandler(const MethodChannel('window_manager'), null));
-    await GetIt.instance<UserPreferences>()
-        .set(UserPreferences.cinemaModeSkipEnabled, true);
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel('window_manager'),
+        null,
+      ),
+    );
+    await GetIt.instance<UserPreferences>().set(
+      UserPreferences.cinemaModeSkipEnabled,
+      true,
+    );
     manager.queueService.setQueue([
       {'Id': 'trailer', '__moonfinIsPreroll': true, 'RunTimeTicks': 900000000},
     ]);
@@ -293,15 +311,23 @@ void main() {
         return call.method.startsWith('is') ? false : null;
       },
     );
-    addTearDown(() => tester.binding.defaultBinaryMessenger
-        .setMockMethodCallHandler(const MethodChannel('window_manager'), null));
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel('window_manager'),
+        null,
+      ),
+    );
     // Leaving playback resets the orientations, which waits on this channel.
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       SystemChannels.platform,
       (_) async => null,
     );
-    addTearDown(() => tester.binding.defaultBinaryMessenger
-        .setMockMethodCallHandler(SystemChannels.platform, null));
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
     manager.queueService.setQueue([
       {'Id': 'trailer', '__moonfinIsPreroll': true, 'RunTimeTicks': 900000000},
     ]);
@@ -424,7 +450,10 @@ void main() {
   ) async {
     final prefs = GetIt.instance<UserPreferences>();
     await prefs.set(UserPreferences.cinemaModeSkipEnabled, true);
-    await prefs.set(UserPreferences.mediaSegmentActions, 'intro:skip,outro:skip');
+    await prefs.set(
+      UserPreferences.mediaSegmentActions,
+      'intro:skip,outro:skip',
+    );
     (GetIt.instance<MediaServerClient>() as _Client).items.segments = [
       segmentJson(id: 'intro', type: 'Intro', startMs: 1000, endMs: 2000),
       segmentJson(id: 'outro', type: 'Outro', startMs: 3000, endMs: 4000),
@@ -437,7 +466,9 @@ void main() {
           'Id': 'short',
           '__moonfinIsPreroll': true,
           'RunTimeTicks': 50000000,
-          'Chapters': [{'StartPositionTicks': 0}],
+          'Chapters': [
+            {'StartPositionTicks': 0},
+          ],
         },
       ),
     ]);
@@ -661,7 +692,7 @@ void main() {
 
   // Issue #1869: after a cast took over, the player's controls still drove
   // the paused copy on the phone.
-  testWidgets('once cast, the controls drive the receiver', (tester) async {
+  testWidgets('video controls omit casting', (tester) async {
     final cast = GetIt.instance<CastService>() as _Cast;
     manager.queueService.setQueue([
       const AggregatedItem(
@@ -671,44 +702,9 @@ void main() {
       ),
     ]);
     await mountPlayer(tester);
-    manager.state.setDuration(const Duration(minutes: 10));
-    manager.state.setPosition(const Duration(seconds: 20));
-    manager.state.setPlaying(true);
-    await tester.pump();
-
-    await tester.tap(find.byIcon(Icons.cast));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Living Room'));
-    await tester.pump();
-    expect(manager.transport, ['pause'], reason: 'the phone hands off');
-    manager.state.setPlaying(false);
-    await tester.pumpAndSettle();
-    expect(find.text('Casting to Google Cast'), findsOneWidget);
-
-    cast.remoteStateNotifier.value = 'playing';
-    cast.remotePositionNotifier.value = 60 * 10000000;
-    await tester.pump();
-    await tester.tap(find.byIcon(Icons.pause_rounded));
-    await tester.pump();
-    expect(cast.calls, ['pause']);
-
-    cast.remoteStateNotifier.value = 'paused';
-    await tester.pump();
-    await tester.tap(find.byIcon(Icons.play_arrow_rounded).first);
-    await tester.pump();
-    expect(cast.calls, ['pause', 'play']);
-
-    await tester.tapAt(const Offset(700, 300));
-    await tester.pump(const Duration(milliseconds: 100));
-    await tester.tapAt(const Offset(700, 300));
-    await tester.pump();
-    expect(cast.calls.last, 'seek 90s', reason: 'skips start from the cast');
-
-    cast.activeKindNotifier.value = null;
-    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.cast), findsNothing);
     expect(find.text('Casting to Google Cast'), findsNothing);
-    expect(manager.hasTransportInterceptor, isFalse);
-
+    expect(cast.calls, isEmpty);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -722,7 +718,9 @@ void main() {
       const MethodChannel('window_manager'),
       (call) async {
         calls.add(call);
-        if (call.method == 'isVisible') return true;
+        if (call.method == 'isVisible') {
+          return true;
+        }
         return call.method.startsWith('is') ? false : null;
       },
     );
@@ -776,7 +774,8 @@ void main() {
 
     testWidgets('sit in the middle of the video by default', (tester) async {
       await mountPlayer(tester);
-      final height = tester.view.physicalSize.height / tester.view.devicePixelRatio;
+      final height =
+          tester.view.physicalSize.height / tester.view.devicePixelRatio;
       expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
       expect(playButtonY(tester), closeTo(height / 2, height * 0.1));
       await tester.pumpWidget(const SizedBox());
@@ -788,7 +787,8 @@ void main() {
         PlayerTransportPosition.docked,
       );
       await mountPlayer(tester);
-      final height = tester.view.physicalSize.height / tester.view.devicePixelRatio;
+      final height =
+          tester.view.physicalSize.height / tester.view.devicePixelRatio;
       expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
       expect(playButtonY(tester), greaterThan(height * 0.75));
       await tester.pumpWidget(const SizedBox());

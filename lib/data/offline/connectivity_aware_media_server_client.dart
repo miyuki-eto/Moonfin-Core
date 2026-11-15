@@ -2,6 +2,7 @@ import 'package:get_it/get_it.dart';
 import 'package:server_core/server_core.dart';
 
 import '../../util/platform_detection.dart';
+import '../../config/app_features.dart';
 import '../services/connectivity_service.dart';
 import '../services/storage_path_service.dart';
 import '../repositories/offline_repository.dart';
@@ -15,7 +16,8 @@ import 'offline_user_views_api.dart';
 /// Whether browse and read calls should come from the downloads catalog.
 bool shouldUseOfflineCatalog() {
   final getIt = GetIt.instance;
-  return PlatformDetection.supportsOfflineDownloads &&
+  return AppFeatures.has(AppFeature.downloads) &&
+      PlatformDetection.supportsOfflineDownloads &&
       getIt.isRegistered<ConnectivityService>() &&
       !getIt<ConnectivityService>().canReachServer;
 }
@@ -68,8 +70,7 @@ class ConnectivityAwareMediaServerClient implements MediaServerClient {
   ImageApi get imageApi => _useOffline() ? _offlineImages : _online.imageApi;
 
   @override
-  TrickplayApi? get trickplayApi =>
-      _useOffline() ? null : _online.trickplayApi;
+  TrickplayApi? get trickplayApi => _useOffline() ? null : _online.trickplayApi;
 
   @override
   UserViewsApi get userViewsApi =>

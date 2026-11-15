@@ -559,14 +559,16 @@ class _IdentifyDialogState extends State<IdentifyDialog> {
 
     return Dialog(
       backgroundColor: theme.colorScheme.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: AppRadius.circular(16),
-      ),
+      shape: _isTV
+          ? Tv26Style.modalShape
+          : RoundedRectangleBorder(borderRadius: AppRadius.circular(16)),
       child: SizedBox(
         width: width,
         height: height,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
+          padding: _isTV
+              ? Tv26Style.modalContentPadding
+              : const EdgeInsets.fromLTRB(20, 14, 20, 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -656,7 +658,7 @@ class _IdentifyDialogState extends State<IdentifyDialog> {
 
               Expanded(
                 child: _loadingItem || _applying
-                    ? const Center(child: CircularProgressIndicator())
+                    ? const Center(child: LoadingThrobber())
                     : _searchResults != null
                         ? _buildResultsList(context)
                         : _buildSearchForm(context),
@@ -751,8 +753,7 @@ class _IdentifyDialogState extends State<IdentifyDialog> {
                                   ? const SizedBox(
                                       width: 14,
                                       height: 14,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
+                                      child: LoadingThrobber(
                                         color: Colors.white,
                                       ),
                                     )

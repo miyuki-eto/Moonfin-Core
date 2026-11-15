@@ -1,3 +1,7 @@
+import '../../../../settings_visibility.dart';
+import '../../../../tv/tv26_button.dart';
+import '../../../../tv/tv_text_dialog.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:moonfin_design/moonfin_design.dart';
@@ -70,7 +74,8 @@ class NouveauPersonHeroState extends State<NouveauPersonHero> {
     return [
       _favoriteFocusNode,
       _displayFocusNode,
-    ].any((node) => node.canRequestFocus && node.context != null);
+      _overviewFocusNode,
+    ].any((node) => node.canRequestFocus && node.context?.mounted == true);
   }
 
   bool focusBottom() {
@@ -79,9 +84,13 @@ class NouveauPersonHeroState extends State<NouveauPersonHero> {
     }
 
     final node =
-        _favoriteFocusNode.canRequestFocus && _favoriteFocusNode.context != null
+        _favoriteFocusNode.canRequestFocus &&
+            _favoriteFocusNode.context?.mounted == true
         ? _favoriteFocusNode
-        : _displayFocusNode;
+        : _displayFocusNode.context?.mounted == true &&
+              _displayFocusNode.canRequestFocus
+        ? _displayFocusNode
+        : _overviewFocusNode;
 
     node.requestFocus();
 
@@ -237,7 +246,9 @@ class NouveauPersonHeroState extends State<NouveauPersonHero> {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: foreground.withValues(alpha: 0.22), width: 1),
+        border: PlatformDetection.isTV
+            ? Tv26Style.surfaceBorder
+            : Border.all(color: foreground.withValues(alpha: 0.22), width: 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.34),
@@ -356,8 +367,11 @@ class NouveauPersonHeroState extends State<NouveauPersonHero> {
               focusNode: _overviewFocusNode,
               onFocusableChanged: _handleOverviewFocusableChanged,
               onNavigateDown: () {
-                if (_favoriteFocusNode.canRequestFocus) {
+                if (_favoriteFocusNode.context?.mounted == true &&
+                    _favoriteFocusNode.canRequestFocus) {
                   _favoriteFocusNode.requestFocus();
+                } else {
+                  widget.onNavigateDown?.call();
                 }
               },
             ),
@@ -383,30 +397,33 @@ class NouveauPersonHeroState extends State<NouveauPersonHero> {
                 onNavigateUp: _focusAbove,
                 onNavigateLeft: NavigationLayout.focusNavbar,
                 onNavigateRight: () {
-                  _displayFocusNode.requestFocus();
+                  if (showAppSettings) {
+                    _displayFocusNode.requestFocus();
+                  }
                 },
                 onNavigateDown: widget.onNavigateDown,
               ),
 
-            _PersonHeroAction(
-              // With no heart, Display takes over its focus.
-              focusNode: canFavorite ? _displayFocusNode : _favoriteFocusNode,
-              icon: Icons.tune_rounded,
-              label: l10n.display,
-              compact: compact,
-              compactLandscape: compactLandscape,
-              onPressed: () {
-                _showDisplaySettings(context);
-              },
-              onNavigateUp: _focusAbove,
-              onNavigateLeft: canFavorite
-                  ? () {
-                      _favoriteFocusNode.requestFocus();
-                    }
-                  : NavigationLayout.focusNavbar,
-              onNavigateRight: () {},
-              onNavigateDown: widget.onNavigateDown,
-            ),
+            if (showAppSettings)
+              _PersonHeroAction(
+                // With no heart, Display takes over its focus.
+                focusNode: canFavorite ? _displayFocusNode : _favoriteFocusNode,
+                icon: Icons.tune_rounded,
+                label: l10n.display,
+                compact: compact,
+                compactLandscape: compactLandscape,
+                onPressed: () {
+                  _showDisplaySettings(context);
+                },
+                onNavigateUp: _focusAbove,
+                onNavigateLeft: canFavorite
+                    ? () {
+                        _favoriteFocusNode.requestFocus();
+                      }
+                    : NavigationLayout.focusNavbar,
+                onNavigateRight: () {},
+                onNavigateDown: widget.onNavigateDown,
+              ),
           ],
         ),
         PersonLinksRow(
@@ -612,6 +629,19 @@ class _PersonHeroActionState extends State<_PersonHeroAction> {
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformDetection.isTV) {
+      return Tv26Button(
+        label: widget.label,
+        icon: widget.icon,
+        focusNode: widget.focusNode,
+        selected: widget.isActive,
+        onPressed: widget.onPressed,
+        onUp: widget.onNavigateUp,
+        onDown: widget.onNavigateDown,
+        onLeft: widget.onNavigateLeft,
+        onRight: widget.onNavigateRight,
+      );
+    }
     final theme = Theme.of(context);
 
     final foreground = AppColorScheme.onSurface;
@@ -718,8 +748,7 @@ class _NouveauPersonOverview extends StatefulWidget {
   });
 
   @override
-  State<_NouveauPersonOverview> createState() =>
-      _NouveauPersonOverviewState();
+  State<_NouveauPersonOverview> createState() => _NouveauPersonOverviewState();
 }
 
 class _NouveauPersonOverviewState extends State<_NouveauPersonOverview> {
@@ -781,7 +810,15 @@ class _NouveauPersonOverviewState extends State<_NouveauPersonOverview> {
   }
 
   Future<void> _showFullOverview() async {
-    await showDialog<void>(
+    if (PlatformDetection.isTV) {
+      await showTvTextDialog(
+        context,
+        title: AppLocalizations.of(context).biography,
+        text: widget.text,
+      );
+      return;
+    }
+    await showFocusRestoringDialog<void>(
       context: context,
       builder: (dialogContext) {
         final theme = Theme.of(dialogContext);

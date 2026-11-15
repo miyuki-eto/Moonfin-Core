@@ -192,7 +192,7 @@ class _AdminDevicesScreenState extends ConsumerState<AdminDevicesScreen> {
         (d.reportedDeviceId ?? d.id) == currentDeviceId;
 
     return devicesAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: LoadingThrobber()),
       error: (e, _) => Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

@@ -802,7 +802,7 @@ class _FriendChatScreenState extends State<FriendChatScreen> {
   }
 
   Widget _buildMessages(AppLocalizations l10n) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Center(child: LoadingThrobber());
     final messages = _messages;
     if (messages == null) {
       return _RetryPanel(
@@ -905,7 +905,7 @@ class _FriendChatScreenState extends State<FriendChatScreen> {
                   icon: _sending
                       ? const SizedBox.square(
                           dimension: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: LoadingThrobber(),
                         )
                       : Icon(_editing == null ? Icons.send : Icons.check),
                   onPressed: _sending ? null : _send,
@@ -1167,7 +1167,7 @@ class _ChatImage extends StatelessWidget {
           return const SizedBox(
             width: 200,
             height: 140,
-            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            child: Center(child: LoadingThrobber()),
           );
         }
         final data = snapshot.data;
@@ -1374,7 +1374,7 @@ class _GroupInfoScreenState extends State<_GroupInfoScreen>
     return _AchievementsScaffold(
       title: l10n.chatGroupInfo,
       builder: (context) {
-        if (loading) return const Center(child: CircularProgressIndicator());
+        if (loading) return const Center(child: LoadingThrobber());
         final conversation = _conversation;
         if (conversation == null) {
           return _RetryPanel(

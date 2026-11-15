@@ -1,9 +1,15 @@
+import '../../config/app_features.dart';
+
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
+import 'package:moonfin_design/moonfin_design.dart';
 import 'package:playback_core/playback_core.dart';
-import 'package:server_core/server_core.dart' show ServerType;
+import 'package:server_core/server_core.dart'
+    show MediaServerClient, ServerType;
 
+import '../settings_visibility.dart';
+import '../tv/tv_reveal_transition.dart';
 import '../../auth/repositories/server_repository.dart';
 import '../../auth/repositories/session_repository.dart';
 import '../../auth/repositories/user_repository.dart';
@@ -100,7 +106,9 @@ const _authRoutes = {
 bool _shouldRunSetupWizard() {
   try {
     final client = SetupWizardGate.activeClient();
-    if (client == null) return false;
+    if (client == null) {
+      return false;
+    }
     return GetIt.instance<SetupWizardGate>().shouldRun(client);
   } catch (_) {
     return false;
@@ -148,10 +156,22 @@ CustomTransitionPage<T> _opaqueFullScreenPage<T>({
     // black ModalBarrier under the page, which would paint out the video
     // behind the transparent player screen native HDR output relies on.
     barrierColor: PlatformDetection.isWindows ? null : Colors.black,
-    transitionDuration: Duration.zero,
-    reverseTransitionDuration: Duration.zero,
+    transitionDuration: PlatformDetection.isTV && !PlatformDetection.isWindows
+        ? AppMotion.screen
+        : Duration.zero,
+    reverseTransitionDuration:
+        PlatformDetection.isTV && !PlatformDetection.isWindows
+        ? AppMotion.screen
+        : Duration.zero,
     transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-        child,
+        PlatformDetection.isTV && !PlatformDetection.isWindows
+        ? TvRevealTransition(
+            animation: animation.drive(
+              CurveTween(curve: TvRevealTransition.curve),
+            ),
+            child: child,
+          )
+        : child,
     child: child,
   );
 }
@@ -167,9 +187,27 @@ final appRouter = GoRouter(
   ],
   redirect: (context, state) {
     final path = state.uri.path;
-    if (_authRoutes.contains(path)) return null;
+    if (_authRoutes.contains(path)) {
+      return null;
+    }
+    if (!AppFeatures.allowsRoute(path)) {
+      return Destinations.home;
+    }
+    if (RegExp(r'^/collection/[^/]+$').hasMatch(path)) {
+      return state.uri
+          .replace(path: path.replaceFirst('/collection/', '/item/'))
+          .toString();
+    }
+    if (RegExp(r'^/library/[^/]+/(letters|suggestions)$').hasMatch(path) ||
+        RegExp(r'^/item/[^/]+/list$').hasMatch(path)) {
+      return state.uri
+          .replace(path: path.substring(0, path.lastIndexOf('/')))
+          .toString();
+    }
     // The old Folders screen, for a bookmark or a link from an older app.
-    if (path == '/folders') return Destinations.home;
+    if (path == '/folders') {
+      return Destinations.home;
+    }
 
     final session = GetIt.instance<SessionRepository>();
     if (session.activeUserId == null) {
@@ -180,7 +218,9 @@ final appRouter = GoRouter(
     // wizard needs a user to set up, and nothing else is worth showing until
     // it has had its turn. Exempting its own path is what stops it redirecting
     // to itself forever.
-    if (path != Destinations.setup && _shouldRunSetupWizard()) {
+    if (AppFeatures.has(AppFeature.settings) &&
+        path != Destinations.setup &&
+        _shouldRunSetupWizard()) {
       return Destinations.setup;
     }
 
@@ -203,6 +243,16 @@ final appRouter = GoRouter(
     final connectivity = GetIt.instance<ConnectivityService>();
     if (!connectivity.canReachServer && _isOfflineBlocked(path)) {
       return Destinations.home;
+    }
+
+    if (path == Destinations.videoPlayer &&
+        state.uri.queryParameters['retroTv'] == '1') {
+      return PlatformDetection.isTV &&
+              !getIt<UserPreferences>().get(UserPreferences.kidsModeEnabled) &&
+              getIt.isRegistered<MediaServerClient>() &&
+              getIt<MediaServerClient>().serverType == ServerType.jellyfin
+          ? null
+          : Destinations.home;
     }
 
     if (_shouldRedirectVideoToExternalPlayer(path)) {
@@ -310,6 +360,8 @@ final appRouter = GoRouter(
             .map(Uri.decodeComponent)
             .toList();
         return LibraryBrowseScreen(
+          key: ValueKey(state.uri),
+          resetFilters: state.extra == LibraryBrowseIntent.resetFilters,
           libraryId: libraryId,
           serverId: state.uri.queryParameters['serverId'],
           includeItemTypes: includeItemTypes,
@@ -608,7 +660,9 @@ final appRouter = GoRouter(
       path: Destinations.videoPlayer,
       pageBuilder: (context, state) => _opaqueFullScreenPage<void>(
         state: state,
-        child: useNativeApplePlayerForRoute(state.pageKey)
+        child: state.uri.queryParameters['retroTv'] == '1'
+            ? const VideoPlayerScreen(retroTv: true)
+            : useNativeApplePlayerForRoute(state.pageKey)
             ? const AppleTvPlayerHostScreen()
             : const VideoPlayerScreen(),
       ),
@@ -674,6 +728,7 @@ final appRouter = GoRouter(
     // Settings
     GoRoute(
       path: Destinations.settings,
+      redirect: (_, _) => showAppSettings ? null : Destinations.home,
       builder: (context, state) => const SettingsSidePanel(),
     ),
 
@@ -812,8 +867,12 @@ class RetroArtworkRouteObserver extends NavigatorObserver {
   final List<Route<dynamic>> _routes = <Route<dynamic>>[];
 
   RetroArtworkActivityGate? get _gate {
-    if (_activityGate != null) return _activityGate;
-    if (!GetIt.instance.isRegistered<RetroArtworkActivityGate>()) return null;
+    if (_activityGate != null) {
+      return _activityGate;
+    }
+    if (!GetIt.instance.isRegistered<RetroArtworkActivityGate>()) {
+      return null;
+    }
     return GetIt.instance<RetroArtworkActivityGate>();
   }
 

@@ -65,13 +65,19 @@ class _FakeItemsApi implements ItemsApi {
     bool? is3D,
   }) async {
     requestedStartIndexes.add(startIndex ?? 0);
-    final page = _pageCursor < pages.length ? pages[_pageCursor] : const <int>[];
+    final page = _pageCursor < pages.length
+        ? pages[_pageCursor]
+        : const <int>[];
     _pageCursor++;
     return <String, dynamic>{
       'TotalRecordCount': totalRecordCount,
       'Items': [
         for (final id in page)
-          <String, dynamic>{'Id': 'item-$id', 'Name': 'Item $id'},
+          <String, dynamic>{
+            'Id': 'item-$id',
+            'Name': 'Item $id',
+            'Type': 'Movie',
+          },
       ],
     };
   }
@@ -134,13 +140,10 @@ void main() {
   test('an item the server repeats across pages is only shown once', () async {
     // The second page overlaps the first, which is what a random sort does:
     // the server reshuffles per request, so windows come from different orders.
-    final api = _FakeItemsApi(
-      [
-        [1, 2, 3, 4],
-        [3, 4, 5, 6],
-      ],
-      totalRecordCount: 8,
-    );
+    final api = _FakeItemsApi([
+      [1, 2, 3, 4],
+      [3, 4, 5, 6],
+    ], totalRecordCount: 8);
     final vm = await _viewModel(api);
     addTearDown(vm.dispose);
 
@@ -159,14 +162,11 @@ void main() {
 
   test('the next page starts where the server left off, not where the '
       'surviving items end', () async {
-    final api = _FakeItemsApi(
-      [
-        [1, 2, 3, 4],
-        [3, 4, 5, 6],
-        [7, 8],
-      ],
-      totalRecordCount: 10,
-    );
+    final api = _FakeItemsApi([
+      [1, 2, 3, 4],
+      [3, 4, 5, 6],
+      [7, 8],
+    ], totalRecordCount: 10);
     final vm = await _viewModel(api);
     addTearDown(vm.dispose);
 
@@ -179,43 +179,40 @@ void main() {
     expect(api.requestedStartIndexes, <int>[0, 4, 8]);
   });
 
-  test('a page that repeats everything already shown keeps browsing open', () async {
-    final api = _FakeItemsApi(
-      [
+  test(
+    'a page that repeats everything already shown keeps browsing open',
+    () async {
+      final api = _FakeItemsApi([
         [1, 2, 3, 4],
         [1, 2, 3, 4],
         [5, 6],
-      ],
-      totalRecordCount: 6,
-    );
-    final vm = await _viewModel(api);
-    addTearDown(vm.dispose);
+      ], totalRecordCount: 6);
+      final vm = await _viewModel(api);
+      addTearDown(vm.dispose);
 
-    await vm.load();
-    await vm.loadMore();
+      await vm.load();
+      await vm.loadMore();
 
-    expect(vm.hasMore, isTrue, reason: 'the server still has rows left');
+      expect(vm.hasMore, isTrue, reason: 'the server still has rows left');
 
-    await vm.loadMore();
+      await vm.loadMore();
 
-    expect(_ids(vm), <String>[
-      'item-1',
-      'item-2',
-      'item-3',
-      'item-4',
-      'item-5',
-      'item-6',
-    ]);
-  });
+      expect(_ids(vm), <String>[
+        'item-1',
+        'item-2',
+        'item-3',
+        'item-4',
+        'item-5',
+        'item-6',
+      ]);
+    },
+  );
 
   test('browsing ends once the server runs out of rows', () async {
-    final api = _FakeItemsApi(
-      [
-        [1, 2],
-        <int>[],
-      ],
-      totalRecordCount: 4,
-    );
+    final api = _FakeItemsApi([
+      [1, 2],
+      <int>[],
+    ], totalRecordCount: 4);
     final vm = await _viewModel(api);
     addTearDown(vm.dispose);
 

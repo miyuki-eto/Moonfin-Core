@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:get_it/get_it.dart';
 import 'package:server_core/server_core.dart';
@@ -98,7 +99,7 @@ class _AdminPremiereScreenState extends ConsumerState<AdminPremiereScreen> {
           icon: Icons.workspace_premium_outlined,
         ),
         status.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const Center(child: LoadingThrobber()),
           error: (e, _) => adminSection(
             context,
             title: l10n.adminPremiereLoadFailed,

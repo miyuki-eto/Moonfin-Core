@@ -172,7 +172,7 @@ class _DiagnosticsSettingsScreenState extends State<DiagnosticsSettingsScreen> {
                     ? const SizedBox(
                         width: 20,
                         height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: LoadingThrobber(),
                       )
                     : null,
                 onTap: _sendReport,

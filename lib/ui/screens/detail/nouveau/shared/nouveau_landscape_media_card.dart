@@ -2,16 +2,31 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:moonfin_design/moonfin_design.dart';
 
 import '../../../../../data/models/aggregated_item.dart';
 import '../../../../../l10n/app_localizations.dart';
 import '../../../../../util/focus/dpad_keys.dart';
+import '../../../../../util/platform_detection.dart';
+import '../../../../../util/focus/input_mode_tracker.dart';
+import '../../../../widgets/media_card.dart';
 import '../../../../widgets/focus/focusable_wrapper.dart';
 import '../../../../widgets/media_badge.dart';
 import '../../../../widgets/offline_aware_image.dart';
 
 class NouveauLandscapeMediaCard extends StatefulWidget {
+  /// Room for episode number, title, two synopsis lines, and release date.
+  /// Rails share this measurement so metadata cannot overlap the next section.
+  static double tvCaptionHeight(TextScaler scaler) =>
+      Tv26Style.gap * 2 +
+      scaler.scale(12) * 1.2 * 2 +
+      scaler.scale(18) * 1.2 +
+      scaler.scale(14) * 1.35 * 2 +
+      4 +
+      7 +
+      8;
+
   final AggregatedItem item;
   final String? imageUrl;
 
@@ -62,8 +77,7 @@ class NouveauLandscapeMediaCard extends StatefulWidget {
       NouveauLandscapeMediaCardState();
 }
 
-class NouveauLandscapeMediaCardState
-    extends State<NouveauLandscapeMediaCard> {
+class NouveauLandscapeMediaCardState extends State<NouveauLandscapeMediaCard> {
   static const Duration _focusMotionDuration = Duration(milliseconds: 160);
   static const Duration _secondaryMotionDuration = Duration(milliseconds: 210);
   static const Duration _secondaryEffectDelay = Duration(milliseconds: 120);
@@ -88,7 +102,10 @@ class NouveauLandscapeMediaCardState
 
   bool get _artworkActive => _artworkFocused || _artworkHovered;
 
-  bool get _detailsActive => _detailsFocused || _detailsHovered;
+  bool get _detailsActive =>
+      _detailsFocused ||
+      (_detailsHovered &&
+          (!PlatformDetection.isTV || InputModeTracker.pointerIsLive(context)));
 
   double get _progress {
     final percentage = item.playedPercentage ?? 0;
@@ -230,6 +247,9 @@ class NouveauLandscapeMediaCardState
   }
 
   bool requestDetailsFocus() {
+    // TV cards have one focus target, owned by their rail.
+    if (PlatformDetection.isTV) return false;
+
     if (!_detailsFocusNode.canRequestFocus ||
         _detailsFocusNode.context == null) {
       return false;
@@ -276,6 +296,8 @@ class NouveauLandscapeMediaCardState
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformDetection.isTV) return _buildTvCard(context);
+
     return SizedBox(
       width: widget.width,
       child: Column(
@@ -286,6 +308,163 @@ class NouveauLandscapeMediaCardState
           SizedBox(height: widget.compactLayout ? 10 : 8),
           _buildDetailsCard(context),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTvCard(BuildContext context) {
+    final overview = (item.overview ?? '').trim();
+    final episodeLabel = _showEpisodeLabel
+        ? AppLocalizations.of(context)
+              .episodeLabel(item.indexNumber!)
+              .toUpperCase()
+        : null;
+    final minutes = item.runtime?.inMinutes;
+    final runtimeLabel = minutes != null && minutes > 0 ? '${minutes}m' : null;
+    final premiere = item.premiereDate;
+    final releaseDate = premiere == null
+        ? null
+        : DateFormat.yMMMd(Localizations.localeOf(context).toString())
+              .format(premiere);
+    final select = widget.onDetailsSelect ?? widget.onArtworkSelect;
+    final active =
+        widget.isFocused ||
+        (_artworkHovered && InputModeTracker.pointerIsLive(context));
+
+    return Semantics(
+      button: true,
+      label: [
+        episodeLabel,
+        item.name,
+        runtimeLabel,
+        releaseDate,
+      ].whereType<String>().join(', '),
+      onTap: select,
+      child: ExcludeSemantics(
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onEnter: (_) => _setArtworkHovered(true),
+          onExit: (_) => _setArtworkHovered(false),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: select,
+            onLongPress: widget.onContextAction,
+            onSecondaryTap: widget.onContextAction,
+            child: SizedBox(
+              width: widget.width,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  IgnorePointer(
+                    child: MediaCard(
+                      title: item.name,
+                      imageUrl: widget.imageUrl,
+                      width: widget.width,
+                      aspectRatio: widget.width / widget.imageHeight,
+                      externalIsFocused: active,
+                      cardFocusExpansion: false,
+                      showLabel: false,
+                      isFavorite: item.isFavorite,
+                      isPlayed: item.isPlayed,
+                      itemType: item.type,
+                      playedPercentage: item.playedPercentage,
+                      imageUnderlays: [
+                        if (runtimeLabel != null)
+                          const Positioned.fill(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [Colors.transparent, Colors.black54],
+                                  stops: [.55, 1],
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                      imageOverlays: [
+                        if (runtimeLabel != null)
+                          Positioned(
+                            left: Tv26Style.gap,
+                            bottom: Tv26Style.gap,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.play_arrow_rounded,
+                                  size: 14,
+                                  color: Tv26Style.foreground,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(runtimeLabel, style: Tv26Style.text(12)),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(Tv26Style.gap),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (episodeLabel != null) ...[
+                          Text(
+                            episodeLabel,
+                            style: Tv26Style.text(
+                              12,
+                              color: Tv26Style.secondary,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                        ],
+                        Text(
+                          item.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Tv26Style.text(18, weight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 7),
+                        SizedBox(
+                          height:
+                              MediaQuery.textScalerOf(context).scale(14) *
+                              1.35 *
+                              2,
+                          child: overview.isEmpty
+                              ? null
+                              : Text(
+                                  overview,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Tv26Style.text(
+                                    14,
+                                    color: Tv26Style.secondary,
+                                    height: 1.35,
+                                  ),
+                                ),
+                        ),
+                        if (releaseDate != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            releaseDate,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Tv26Style.text(
+                              12,
+                              color: Tv26Style.secondary,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -630,7 +809,9 @@ class NouveauLandscapeMediaCardState
   Widget _buildDetailsCard(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
-    final foreground = AppColorScheme.onSurface;
+    final foreground = PlatformDetection.isTV
+        ? (_detailsActive ? Colors.black : Tv26Style.foreground)
+        : AppColorScheme.onSurface;
 
     final overview = (item.overview ?? '').trim();
 
@@ -795,7 +976,9 @@ class NouveauLandscapeMediaCardState
           onNavigateLeft: widget.onDetailsNavigateLeft,
           onNavigateRight: widget.onDetailsNavigateRight,
           child: AnimatedScale(
-            scale: _detailsActive ? 1.012 : 1.0,
+            scale: PlatformDetection.isTV
+                ? 1.0
+                : (_detailsActive ? 1.012 : 1.0),
             duration: _focusMotionDuration,
             curve: Curves.easeOutCubic,
             alignment: Alignment.center,
@@ -805,17 +988,25 @@ class NouveauLandscapeMediaCardState
               width: widget.width,
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
               decoration: BoxDecoration(
-                color: _detailsActive
+                color: PlatformDetection.isTV
+                    ? (_detailsActive ? Tv26Style.foreground : Tv26Style.scrim)
+                    : _detailsActive
                     ? theme.scaffoldBackgroundColor.withValues(alpha: 0.96)
                     : theme.scaffoldBackgroundColor.withValues(alpha: 0.88),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(
+                  PlatformDetection.isTV ? Tv26Style.rowRadius : 16,
+                ),
                 border: Border.all(
-                  color: _detailsFocused
+                  color: PlatformDetection.isTV
+                      ? Colors.transparent
+                      : _detailsFocused
                       ? foreground.withValues(alpha: 0.20)
                       : foreground.withValues(alpha: 0.11),
                   width: 1,
                 ),
-                boxShadow: _detailsActive
+                boxShadow: PlatformDetection.isTV
+                    ? null
+                    : _detailsActive
                     ? [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.26),
@@ -900,10 +1091,7 @@ class _NouveauFavoriteIndicator extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColorScheme.recordingActive,
         shape: BoxShape.circle,
-        border: Border.all(
-          color: Colors.white,
-          width: 1.5,
-        ),
+        border: Border.all(color: Colors.white, width: 1.5),
         boxShadow: kMediaBadgeShadow,
       ),
       alignment: Alignment.center,

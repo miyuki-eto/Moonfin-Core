@@ -76,7 +76,7 @@ class _AchievementsScreenState extends State<AchievementsScreen>
 
   Widget _buildBody(BuildContext context, AppLocalizations l10n) {
     if (loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: LoadingThrobber());
     }
 
     final overview = _overview;
@@ -1217,7 +1217,7 @@ class _BadgeChaseScreenState extends State<_BadgeChaseScreen>
     return _AchievementsScaffold(
       title: badge.isSecret ? l10n.achievementsHiddenBadge : badge.title,
       builder: (context) => loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: LoadingThrobber())
           : _buildBody(context, l10n),
     );
   }
@@ -1340,7 +1340,7 @@ class _LoadoutScreenState extends State<_LoadoutScreen>
     return _AchievementsScaffold(
       title: l10n.achievementsLoadout,
       builder: (context) => loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: LoadingThrobber())
           : _buildBody(context, l10n),
     );
   }
@@ -1475,7 +1475,7 @@ class _AppearanceScreenState extends State<_AppearanceScreen>
     return _AchievementsScaffold(
       title: l10n.achievementsAppearance,
       builder: (context) => loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: LoadingThrobber())
           : _buildBody(context, l10n),
     );
   }
@@ -1716,7 +1716,7 @@ class _StatsScreenState extends State<_StatsScreen>
       title: l10n.achievementsStats,
       builder: (context) {
         if (loading) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: LoadingThrobber());
         }
         if (_stats.isEmpty) {
           return Padding(
@@ -1917,7 +1917,7 @@ class _ActivityScreenState extends State<_ActivityScreen>
       title: l10n.achievementsActivity,
       builder: (context) {
         if (loading) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: LoadingThrobber());
         }
         if (_entries.isEmpty) {
           return Padding(
@@ -2039,7 +2039,7 @@ class _ShopScreenState extends State<_ShopScreen>
     return _AchievementsScaffold(
       title: l10n.achievementsShop,
       builder: (context) => loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: LoadingThrobber())
           : _buildBody(context, l10n),
     );
   }
@@ -2419,7 +2419,7 @@ class _LeaderboardScreenState extends State<_LeaderboardScreen> {
           if (_loading)
             const Padding(
               padding: EdgeInsets.all(32),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: LoadingThrobber()),
             )
           else if (_entries.isEmpty)
             Padding(
@@ -2555,7 +2555,7 @@ class _RecapScreenState extends State<_RecapScreen> {
           if (_loading)
             const Padding(
               padding: EdgeInsets.all(32),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: LoadingThrobber()),
             )
           else if (recap == null)
             Padding(

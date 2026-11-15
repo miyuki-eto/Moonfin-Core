@@ -439,11 +439,8 @@ class _SeekSliver extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (durationTicks <= 0) {
-      return LinearProgressIndicator(
-        value: null,
-        backgroundColor: AppColorScheme.onSurface.withValues(alpha: 0.12),
+      return LoadingThrobber(
         color: AppColorScheme.accent,
-        minHeight: 2,
       );
     }
 

@@ -47,6 +47,7 @@ bool _legacyStereoAacFallbackDefaultForPlatform() {
 }
 
 String _clientName() {
+  if (PlatformDetection.isTizen) return 'Media for Samsung TV';
   if (PlatformDetection.isAppleTV) return 'Moonfin for tvOS';
   if (PlatformDetection.isAndroid && PlatformDetection.isTV) {
     return 'Moonfin for Android TV';
@@ -106,6 +107,7 @@ String _resolveAndroidDeviceName(AndroidDeviceInfo info) {
 }
 
 Future<String> _resolveDeviceName() async {
+  if (PlatformDetection.isTizen) return 'Samsung TV';
   if (PlatformDetection.isAppleTV) return 'Apple TV';
   final deviceInfo = DeviceInfoPlugin();
 

@@ -1,10 +1,15 @@
+import '../../../../tv/tv_modal.dart';
+import '../../../../../l10n/app_localizations.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:moonfin_design/moonfin_design.dart';
 
 import '../../../../../util/platform_detection.dart';
 import '../../../../widgets/marquee_text.dart';
+import '../../../../tv/tv26_button.dart';
 import '../../../../widgets/overlay_sheet.dart';
 import '../../detail_layout_metrics.dart';
 
@@ -115,9 +120,13 @@ class _NouveauActionButtonsState extends State<NouveauActionButtons> {
   }
 
   void _updateScrollMetrics() {
-    if (!mounted || !_scrollController.hasClients) return;
+    if (!mounted || !_scrollController.hasClients) {
+      return;
+    }
     final position = _scrollController.position;
-    if (!position.hasContentDimensions) return;
+    if (!position.hasContentDimensions) {
+      return;
+    }
     final maxScroll = position.maxScrollExtent;
     final hasOverflow = maxScroll > 0;
     final canLeft = position.pixels > 0;
@@ -134,7 +143,9 @@ class _NouveauActionButtonsState extends State<NouveauActionButtons> {
   }
 
   void _scrollBy(double delta) {
-    if (!_scrollController.hasClients) return;
+    if (!_scrollController.hasClients) {
+      return;
+    }
     final target = (_scrollController.offset + delta).clamp(
       0.0,
       _scrollController.position.maxScrollExtent,
@@ -142,7 +153,7 @@ class _NouveauActionButtonsState extends State<NouveauActionButtons> {
     _scrollController.animateTo(
       target,
       duration: const Duration(milliseconds: 240),
-      curve: Curves.easeOutCubic,
+      curve: AppMotion.ease,
     );
   }
 
@@ -161,6 +172,9 @@ class _NouveauActionButtonsState extends State<NouveauActionButtons> {
   }
 
   List<NouveauAction> get _visibleSecondaryActions {
+    if (PlatformDetection.isTV) {
+      return widget.secondaryActions.take(2).toList(growable: false);
+    }
     if (!_usesOverflow) {
       return widget.secondaryActions;
     }
@@ -183,6 +197,9 @@ class _NouveauActionButtonsState extends State<NouveauActionButtons> {
       widget.secondaryActions.isEmpty ? null : widget.secondaryActions.last;
 
   List<NouveauAction> get _overflowActions {
+    if (PlatformDetection.isTV) {
+      return widget.secondaryActions.skip(2).toList(growable: false);
+    }
     if (!_usesOverflow) {
       return const <NouveauAction>[];
     }
@@ -208,21 +225,30 @@ class _NouveauActionButtonsState extends State<NouveauActionButtons> {
   }
 
   void _scrollToStart() {
-    if (!mounted || !_scrollController.hasClients) return;
+    if (!mounted || !_scrollController.hasClients) {
+      return;
+    }
     if (_scrollController.offset > 0) {
       _scrollController.animateTo(
         0.0,
         duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
+        curve: AppMotion.ease,
       );
     }
   }
 
   void _scrollToItem(BuildContext itemContext) {
-    if (!mounted || !_scrollController.hasClients) return;
+    if (!mounted || !_scrollController.hasClients) {
+      return;
+    }
     final itemBox = itemContext.findRenderObject() as RenderBox?;
     final viewportBox = context.findRenderObject() as RenderBox?;
-    if (itemBox == null || !itemBox.hasSize || viewportBox == null || !viewportBox.hasSize) return;
+    if (itemBox == null ||
+        !itemBox.hasSize ||
+        viewportBox == null ||
+        !viewportBox.hasSize) {
+      return;
+    }
 
     final itemGlobalX = itemBox.localToGlobal(Offset.zero).dx;
     final viewportGlobalX = viewportBox.localToGlobal(Offset.zero).dx;
@@ -239,7 +265,7 @@ class _NouveauActionButtonsState extends State<NouveauActionButtons> {
       _scrollController.animateTo(
         targetOffset,
         duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
+        curve: AppMotion.ease,
       );
     }
   }
@@ -307,6 +333,97 @@ class _NouveauActionButtonsState extends State<NouveauActionButtons> {
       return const SizedBox.shrink();
     }
 
+    if (PlatformDetection.isTV) {
+      final visible = visibleSecondaryActions.take(2).toList();
+      final overflow = [...visibleSecondaryActions.skip(2), ...overflowActions];
+      final label = TextPainter(
+        text: TextSpan(
+          text: visible.firstOrNull?.label ?? '',
+          style: Tv26Style.text(18, weight: FontWeight.w600),
+        ),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout();
+      // Include the pill's border inset and round up so a near-exact label
+      // width cannot lose its last letters during layout.
+      final secondaryWidth = (label.width.ceilToDouble() + 32).clamp(
+        122.0,
+        200.0,
+      );
+      label.dispose();
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (primaryAction != null)
+            Tv26Button(
+              label: primaryAction.label,
+              primary: true,
+              width: 143,
+              focusNode: primaryAction.focusNode,
+              autofocus: primaryAction.autofocus,
+              onPressed: primaryAction.onPressed,
+              onFocusChange: (focused) {
+                if (focused) {
+                  primaryAction.onFocused?.call();
+                }
+              },
+              onUp: primaryAction.onArrowUp,
+              onDown: primaryAction.onArrowDown,
+              onLeft: primaryAction.onArrowLeft,
+              onRight: visible.isNotEmpty
+                  ? () => _focusSecondary(0)
+                  : overflow.isNotEmpty
+                  ? _focusOverflow
+                  : primaryAction.onArrowRight,
+            ),
+          for (var index = 0; index < visible.length; index++) ...[
+            const SizedBox(width: 12),
+            Tv26Button(
+              label: visible[index].label,
+              icon: index == 0 ? null : visible[index].icon,
+              primary: false,
+              iconOnly: index > 0,
+              width: index == 0 ? secondaryWidth : 40,
+              focusNode: visible[index].focusNode,
+              onPressed: visible[index].onPressed,
+              onFocusChange: (focused) {
+                if (focused) {
+                  visible[index].onFocused?.call();
+                }
+              },
+              onUp: visible[index].onArrowUp,
+              onDown: visible[index].onArrowDown,
+              onLeft: index == 0
+                  ? _focusPrimary
+                  : () => _focusSecondary(index - 1),
+              onRight: index + 1 < visible.length
+                  ? () => _focusSecondary(index + 1)
+                  : overflow.isNotEmpty
+                  ? _focusOverflow
+                  : visible[index].onArrowRight,
+            ),
+          ],
+          if (overflow.isNotEmpty) ...[
+            const SizedBox(width: 12),
+            Tv26Button(
+              label: AppLocalizations.of(context).more,
+              icon: Icons.more_horiz,
+              iconOnly: true,
+              width: 40,
+              focusNode: _overflowFocusNode,
+              onPressed: () => _showOverflowActions(context),
+              onUp: primaryAction?.onArrowUp,
+              onDown: primaryAction?.onArrowDown,
+              onLeft: visible.isEmpty
+                  ? _focusPrimary
+                  : () => _focusSecondary(visible.length - 1),
+              onRight: _lastSecondaryAction?.onArrowRight,
+            ),
+          ],
+        ],
+      );
+    }
+
     if (_nouveauActionsUsePhoneLayout(context)) {
       return _buildPhoneLayout(
         context,
@@ -369,7 +486,7 @@ class _NouveauActionButtonsState extends State<NouveauActionButtons> {
                   ) ...[
                     if (index > 0) const SizedBox(width: 14),
 
-                    _NouveauCircleActionButton(
+                    _NouveauSecondaryActionButton(
                       action: visibleSecondaryActions[index],
                       compact: true,
                       onArrowLeft: index == 0
@@ -425,8 +542,8 @@ class _NouveauActionButtonsState extends State<NouveauActionButtons> {
   ) {
     final scale = _nouveauButtonScale(context);
 
-    final primaryGap = 18.0 * scale;
-    final secondaryGap = 12.0 * scale;
+    final primaryGap = 12.0 * scale;
+    final secondaryGap = 8.0 * scale;
     final scrolls = widget.maxVisibleButtons == -1;
 
     final rowChildren = <Widget>[
@@ -448,7 +565,7 @@ class _NouveauActionButtonsState extends State<NouveauActionButtons> {
       for (var index = 0; index < visibleSecondaryActions.length; index++) ...[
         if (index > 0) SizedBox(width: secondaryGap),
 
-        _NouveauCircleActionButton(
+        _NouveauSecondaryActionButton(
           action: visibleSecondaryActions[index],
           onFocused: scrolls ? _scrollToItem : null,
           onArrowLeft: index == 0
@@ -471,7 +588,8 @@ class _NouveauActionButtonsState extends State<NouveauActionButtons> {
           focusNode: _overflowFocusNode,
           onPressed: () => _showOverflowActions(context),
           onFocused: scrolls ? _scrollToItem : null,
-          onArrowUp: _lastSecondaryAction?.onArrowUp ?? primaryAction?.onArrowUp,
+          onArrowUp:
+              _lastSecondaryAction?.onArrowUp ?? primaryAction?.onArrowUp,
           onArrowDown:
               _lastSecondaryAction?.onArrowDown ?? primaryAction?.onArrowDown,
           onArrowLeft: visibleSecondaryActions.isNotEmpty
@@ -610,8 +728,7 @@ class _NouveauPrimaryButton extends StatefulWidget {
   });
 
   @override
-  State<_NouveauPrimaryButton> createState() =>
-      _NouveauPrimaryButtonState();
+  State<_NouveauPrimaryButton> createState() => _NouveauPrimaryButtonState();
 }
 
 class _NouveauPrimaryButtonState extends State<_NouveauPrimaryButton> {
@@ -632,12 +749,12 @@ class _NouveauPrimaryButtonState extends State<_NouveauPrimaryButton> {
 
     final showProgress = progress != null && progress > 0 && progress < 1;
 
-    final height = phone ? 54.0 : 62.0 * scale;
+    final height = phone ? 48.0 : 46.0 * scale;
 
     final labelStyle = TextStyle(
-      color: _highlighted ? Colors.black : Colors.white,
+      color: AppColorScheme.background,
       fontSize: phone ? 15.5 : 16.5 * textScale,
-      fontWeight: FontWeight.w700,
+      fontWeight: FontWeight.w600,
       height: 1,
       letterSpacing: -0.1,
     );
@@ -747,146 +864,136 @@ class _NouveauPrimaryButtonState extends State<_NouveauPrimaryButton> {
           behavior: HitTestBehavior.opaque,
           onTap: action.onPressed,
           onLongPress: action.onLongPress,
-          child: AnimatedScale(
-            scale: _focused
-                ? phone
-                      ? 1.015
-                      : 1.06
-                : _hovered
-                ? phone
-                      ? 1.01
-                      : 1.025
-                : 1,
-            duration: const Duration(milliseconds: 170),
-            curve: Curves.easeOutCubic,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 170),
-              curve: Curves.easeOutCubic,
-              width: widget.fullWidth ? double.infinity : null,
-              height: height,
-              constraints: widget.fullWidth
-                  ? const BoxConstraints()
-                  : BoxConstraints(minWidth: 0, maxWidth: 270.0 * scale),
-              padding: EdgeInsets.symmetric(
-                horizontal: phone ? 20 : 23.0 * scale,
-              ),
-              decoration: BoxDecoration(
-                color: _highlighted
-                    ? Colors.white
-                    : Colors.black.withValues(alpha: phone ? 0.40 : 0.34),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: _highlighted
-                      ? Colors.white
-                      : Colors.white.withValues(alpha: phone ? 0.24 : 0.20),
-                  width: 1,
-                ),
-                boxShadow: _focused
-                    ? [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.42),
-                          blurRadius: phone ? 18 : 26.0 * scale,
-                          offset: Offset(0, phone ? 5 : 8.0 * scale),
-                        ),
-                      ]
-                    : null,
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Stack(
-                children: [
-                  Align(
-                    alignment: Alignment.center,
-                    child: Row(
-                      mainAxisSize: widget.fullWidth
-                          ? MainAxisSize.max
-                          : MainAxisSize.min,
-                      mainAxisAlignment: widget.fullWidth
-                          ? MainAxisAlignment.center
-                          : MainAxisAlignment.start,
-                      children: [
-                        _ActionIcon(
-                          action: action,
-                          size: phone ? 20 : 21.0 * scale,
-                          color: _highlighted ? Colors.black : Colors.white,
-                        ),
-                        SizedBox(width: phone ? 10 : 12.0 * scale),
-                        // The pill is width capped, so a long label scrolls
-                        // while focused instead of losing its end. The phone
-                        // button is full width and never needs it.
-                        Flexible(
-                          child: _highlighted && !phone
-                              ? MarqueeText(
-                                  text: action.label,
-                                  style: labelStyle,
-                                )
-                              : Text(
-                                  action.label,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: labelStyle,
-                                ),
-                        ),
-                        // The label yields its width to this, so the time
-                        // left stays readable on a narrow button.
-                        if (action.trailingLabel case final trailing?) ...[
-                          SizedBox(width: phone ? 8 : 9.0 * scale),
-                          Text(
-                            trailing,
-                            maxLines: 1,
-                            style: TextStyle(
-                              color: (_highlighted ? Colors.black : Colors.white)
-                                  .withValues(alpha: 0.62),
-                              fontSize: phone ? 13 : 13.5 * textScale,
-                              fontWeight: FontWeight.w600,
-                              height: 1,
-                              letterSpacing: -0.1,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
+          child: AnimatedContainer(
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : AppMotion.fast,
+            curve: AppMotion.ease,
+            width: widget.fullWidth ? double.infinity : null,
+            height: height,
+            constraints: widget.fullWidth
+                ? const BoxConstraints()
+                : BoxConstraints(
+                    minWidth: 0,
+                    maxWidth:
+                        (action.trailingLabel == null ? 200.0 : 270.0) * scale,
                   ),
-
-                  if (showProgress)
-                    Positioned(
-                      left: phone ? 18 : 20.0 * scale,
-                      right: phone ? 18 : 20.0 * scale,
-                      bottom: phone ? 7 : 8.0 * scale,
-                      height: phone ? 2 : (2.0 * scale).clamp(2.0, 3.0),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(999),
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final progressWidth =
-                                constraints.maxWidth * progress;
-
-                            final backgroundColor = _highlighted
-                                ? Colors.black.withValues(alpha: 0.10)
-                                : Colors.white.withValues(alpha: 0.18);
-
-                            final progressColor = _highlighted
-                                ? Colors.black.withValues(alpha: 0.68)
-                                : Colors.white.withValues(alpha: 0.72);
-
-                            return Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                ColoredBox(color: backgroundColor),
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: SizedBox(
-                                    width: progressWidth,
-                                    child: ColoredBox(color: progressColor),
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
+            padding: EdgeInsets.symmetric(
+              horizontal: phone ? 20 : 23.0 * scale,
+            ),
+            decoration: BoxDecoration(
+              color: _hovered
+                  ? AppColorScheme.onSurface.withValues(alpha: 0.9)
+                  : AppColorScheme.onSurface,
+              borderRadius: AppRadius.circular(12),
+              boxShadow: _focused
+                  ? [
+                      BoxShadow(
+                        color: AppColorScheme.onSurface,
+                        spreadRadius: 5,
+                      ),
+                      BoxShadow(
+                        color: AppColorScheme.background,
+                        spreadRadius: 3,
+                      ),
+                    ]
+                  : null,
+              border: Border.all(
+                color: _focused
+                    ? AppColorScheme.inputBorderFocused
+                    : Colors.transparent,
+                width: 2,
+              ),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              children: [
+                Align(
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisSize: widget.fullWidth
+                        ? MainAxisSize.max
+                        : MainAxisSize.min,
+                    mainAxisAlignment: widget.fullWidth
+                        ? MainAxisAlignment.center
+                        : MainAxisAlignment.start,
+                    children: [
+                      _ActionIcon(
+                        action: action,
+                        size: phone ? 20 : 21.0 * scale,
+                        color: AppColorScheme.background,
+                      ),
+                      SizedBox(width: phone ? 10 : 12.0 * scale),
+                      // The pill is width capped, so a long label scrolls
+                      // while focused instead of losing its end. The phone
+                      // button is full width and never needs it.
+                      Flexible(
+                        child: _highlighted && !phone
+                            ? MarqueeText(text: action.label, style: labelStyle)
+                            : Text(
+                                action.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: labelStyle,
+                              ),
+                      ),
+                      // The label yields its width to this, so the time
+                      // left stays readable on a narrow button.
+                      if (action.trailingLabel case final trailing?) ...[
+                        SizedBox(width: phone ? 8 : 9.0 * scale),
+                        Text(
+                          trailing,
+                          maxLines: 1,
+                          style: TextStyle(
+                            color: AppColorScheme.background.withValues(
+                              alpha: 0.62,
+                            ),
+                            fontSize: phone ? 13 : 13.5 * textScale,
+                            fontWeight: FontWeight.w600,
+                            height: 1,
+                            letterSpacing: -0.1,
+                          ),
                         ),
+                      ],
+                    ],
+                  ),
+                ),
+
+                if (showProgress)
+                  Positioned(
+                    left: phone ? 18 : 20.0 * scale,
+                    right: phone ? 18 : 20.0 * scale,
+                    bottom: phone ? 7 : 8.0 * scale,
+                    height: phone ? 2 : (2.0 * scale).clamp(2.0, 3.0),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final progressWidth = constraints.maxWidth * progress;
+
+                          final backgroundColor = AppColorScheme.background
+                              .withValues(alpha: 0.10);
+                          final progressColor = AppColorScheme.background
+                              .withValues(alpha: 0.68);
+
+                          return Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              ColoredBox(color: backgroundColor),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: SizedBox(
+                                  width: progressWidth,
+                                  child: ColoredBox(color: progressColor),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
         ),
@@ -895,14 +1002,14 @@ class _NouveauPrimaryButtonState extends State<_NouveauPrimaryButton> {
   }
 }
 
-class _NouveauCircleActionButton extends StatefulWidget {
+class _NouveauSecondaryActionButton extends StatefulWidget {
   final NouveauAction action;
   final VoidCallback? onArrowLeft;
   final VoidCallback? onArrowRight;
   final void Function(BuildContext context)? onFocused;
   final bool compact;
 
-  const _NouveauCircleActionButton({
+  const _NouveauSecondaryActionButton({
     required this.action,
     this.onArrowLeft,
     this.onArrowRight,
@@ -911,12 +1018,12 @@ class _NouveauCircleActionButton extends StatefulWidget {
   });
 
   @override
-  State<_NouveauCircleActionButton> createState() =>
-      _NouveauCircleActionButtonState();
+  State<_NouveauSecondaryActionButton> createState() =>
+      _NouveauSecondaryActionButtonState();
 }
 
-class _NouveauCircleActionButtonState
-    extends State<_NouveauCircleActionButton> {
+class _NouveauSecondaryActionButtonState
+    extends State<_NouveauSecondaryActionButton> {
   Timer? _tooltipTimer;
 
   bool _focused = false;
@@ -971,7 +1078,9 @@ class _NouveauCircleActionButtonState
       _scheduleTooltip(delay: const Duration(milliseconds: 80));
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_focused) return;
+        if (!mounted || !_focused) {
+          return;
+        }
         widget.onFocused?.call(context);
       });
 
@@ -1018,11 +1127,11 @@ class _NouveauCircleActionButtonState
   Widget build(BuildContext context) {
     final action = widget.action;
 
-    final activeColor = action.activeColor ?? Colors.white;
+    final activeColor = action.activeColor ?? AppColorScheme.accent;
 
     final scale = _nouveauButtonScale(context);
 
-    final size = widget.compact ? 52.0 : 64.0 * scale;
+    final size = widget.compact ? 48.0 : 46.0 * scale;
 
     return SizedBox(
       width: size,
@@ -1107,55 +1216,34 @@ class _NouveauCircleActionButtonState
                 behavior: HitTestBehavior.opaque,
                 onTap: action.onPressed,
                 onLongPress: action.onLongPress,
-                child: AnimatedScale(
-                  scale: _highlighted
-                      ? widget.compact
-                            ? 1.035
-                            : 1.075
-                      : 1,
-                  duration: const Duration(milliseconds: 160),
-                  curve: Curves.easeOutCubic,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    curve: Curves.easeOutCubic,
-                    width: size,
-                    height: size,
-                    decoration: BoxDecoration(
+                child: AnimatedContainer(
+                  duration: MediaQuery.disableAnimationsOf(context)
+                      ? Duration.zero
+                      : AppMotion.fast,
+                  curve: AppMotion.ease,
+                  width: size,
+                  height: size,
+                  decoration: BoxDecoration(
+                    color: _highlighted
+                        ? AppColorScheme.buttonFocused
+                        : AppColorScheme.buttonActive,
+                    borderRadius: AppRadius.circular(12),
+                    border: Border.all(
                       color: _highlighted
-                          ? Colors.white
-                          : Colors.black.withValues(
-                              alpha: widget.compact ? 0.34 : 0.28,
-                            ),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: _highlighted
-                            ? Colors.white
-                            : Colors.white.withValues(alpha: 0.18),
-                        width: 1,
-                      ),
-                      boxShadow: _highlighted
-                          ? [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.34),
-                                blurRadius: widget.compact ? 16 : 22.0 * scale,
-                                offset: Offset(
-                                  0,
-                                  widget.compact ? 5 : 7.0 * scale,
-                                ),
-                              ),
-                            ]
-                          : null,
+                          ? AppColorScheme.inputBorderFocused
+                          : Colors.transparent,
+                      width: 2,
                     ),
-                    child: Center(
-                      child: _ActionIcon(
-                        action: action,
-                        size: widget.compact ? 20 : 22.0 * scale,
-                        color: _highlighted
-                            ? Colors.black
-                            : action.isActive
-                            ? activeColor
-                            : Colors.white,
-                      ),
+                  ),
+                  child: Center(
+                    child: _ActionIcon(
+                      action: action,
+                      size: widget.compact ? 20 : 22.0 * scale,
+                      color: _highlighted
+                          ? AppColorScheme.onButtonFocused
+                          : action.isActive
+                          ? activeColor
+                          : AppColorScheme.onSurface,
                     ),
                   ),
                 ),
@@ -1252,7 +1340,9 @@ class _NouveauMoreButtonState extends State<_NouveauMoreButton> {
       _scheduleTooltip(delay: const Duration(milliseconds: 80));
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_focused) return;
+        if (!mounted || !_focused) {
+          return;
+        }
         widget.onFocused?.call(context);
       });
 
@@ -1299,7 +1389,7 @@ class _NouveauMoreButtonState extends State<_NouveauMoreButton> {
   Widget build(BuildContext context) {
     final scale = _nouveauButtonScale(context);
 
-    final size = widget.compact ? 52.0 : 64.0 * scale;
+    final size = widget.compact ? 48.0 : 46.0 * scale;
 
     final moreLabel = MaterialLocalizations.of(context).moreButtonTooltip;
 
@@ -1352,50 +1442,31 @@ class _NouveauMoreButtonState extends State<_NouveauMoreButton> {
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: widget.onPressed,
-                child: AnimatedScale(
-                  scale: _highlighted
-                      ? widget.compact
-                            ? 1.035
-                            : 1.075
-                      : 1,
-                  duration: const Duration(milliseconds: 160),
-                  curve: Curves.easeOutCubic,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    curve: Curves.easeOutCubic,
-                    width: size,
-                    height: size,
-                    decoration: BoxDecoration(
+                child: AnimatedContainer(
+                  duration: MediaQuery.disableAnimationsOf(context)
+                      ? Duration.zero
+                      : AppMotion.fast,
+                  curve: AppMotion.ease,
+                  width: size,
+                  height: size,
+                  decoration: BoxDecoration(
+                    color: _highlighted
+                        ? AppColorScheme.buttonFocused
+                        : AppColorScheme.buttonActive,
+                    borderRadius: AppRadius.circular(12),
+                    border: Border.all(
                       color: _highlighted
-                          ? Colors.white
-                          : Colors.black.withValues(
-                              alpha: widget.compact ? 0.34 : 0.28,
-                            ),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: _highlighted
-                            ? Colors.white
-                            : Colors.white.withValues(alpha: 0.18),
-                        width: 1,
-                      ),
-                      boxShadow: _highlighted
-                          ? [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.34),
-                                blurRadius: widget.compact ? 16 : 22.0 * scale,
-                                offset: Offset(
-                                  0,
-                                  widget.compact ? 5 : 7.0 * scale,
-                                ),
-                              ),
-                            ]
-                          : null,
+                          ? AppColorScheme.inputBorderFocused
+                          : Colors.transparent,
+                      width: 2,
                     ),
-                    child: Icon(
-                      Icons.more_horiz_rounded,
-                      size: widget.compact ? 22 : 25.0 * scale,
-                      color: _highlighted ? Colors.black : Colors.white,
-                    ),
+                  ),
+                  child: Icon(
+                    Icons.more_horiz_rounded,
+                    size: widget.compact ? 22 : 25.0 * scale,
+                    color: _highlighted
+                        ? AppColorScheme.onButtonFocused
+                        : AppColorScheme.onSurface,
                   ),
                 ),
               ),
@@ -1426,7 +1497,7 @@ class _NouveauActionTooltip extends StatelessWidget {
       child: TweenAnimationBuilder<double>(
         tween: Tween<double>(begin: 0, end: 1),
         duration: const Duration(milliseconds: 100),
-        curve: Curves.easeOutCubic,
+        curve: AppMotion.ease,
         builder: (context, value, child) {
           return Opacity(
             opacity: value,
@@ -1447,7 +1518,9 @@ class _NouveauActionTooltip extends StatelessWidget {
             decoration: BoxDecoration(
               color: const Color(0xFF1C1C1E).withValues(alpha: 0.96),
               borderRadius: BorderRadius.circular(8.0 * scale),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+              border: Border.all(
+                color: AppColorScheme.onSurface.withValues(alpha: 0.12),
+              ),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.30),
@@ -1462,7 +1535,7 @@ class _NouveauActionTooltip extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.white,
+                color: AppColorScheme.onSurface,
                 fontSize: 13.0 * _nouveauActionScale(context),
                 fontWeight: FontWeight.w600,
                 height: 1.1,
@@ -1482,6 +1555,31 @@ class _NouveauOverflowDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformDetection.isTV) {
+      return Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: TvModalPanel.menu(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < actions.length; i++)
+                  TvMenuRow(
+                    label: actions[i].label,
+                    icon: actions[i].icon,
+                    selected: actions[i].isActive,
+                    autofocus: i == 0,
+                    onPressed: () => Navigator.of(context).pop(actions[i]),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final scale = _nouveauActionScale(context);
 
     final phone = _nouveauActionsUsePhoneLayout(context);
@@ -1495,7 +1593,9 @@ class _NouveauOverflowDialog extends StatelessWidget {
       ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(phone ? 20 : 22.0 * scale),
-        side: BorderSide(color: Colors.white.withValues(alpha: 0.10)),
+        side: BorderSide(
+          color: AppColorScheme.onSurface.withValues(alpha: 0.10),
+        ),
       ),
       child: ConstrainedBox(
         constraints: BoxConstraints(
@@ -1545,7 +1645,7 @@ class _NouveauOverflowActionTileState
   Widget build(BuildContext context) {
     final action = widget.action;
 
-    final activeColor = action.activeColor ?? Colors.white;
+    final activeColor = action.activeColor ?? AppColorScheme.accent;
 
     final scale = _nouveauActionScale(context);
 
@@ -1584,7 +1684,8 @@ class _NouveauOverflowActionTileState
         }
 
         if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-          return FocusScope.of(context).focusInDirection(TraversalDirection.down)
+          return FocusScope.of(context)
+                  .focusInDirection(TraversalDirection.down)
               ? KeyEventResult.handled
               : KeyEventResult.ignored;
         }
@@ -1623,7 +1724,7 @@ class _NouveauOverflowActionTileState
           },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 120),
-            curve: Curves.easeOutCubic,
+            curve: AppMotion.ease,
             width: double.infinity,
             constraints: BoxConstraints(minHeight: phone ? 56 : 58.0 * scale),
             margin: EdgeInsets.symmetric(vertical: phone ? 2 : 2.0 * scale),
@@ -1633,7 +1734,7 @@ class _NouveauOverflowActionTileState
             ),
             decoration: BoxDecoration(
               color: _highlighted
-                  ? Colors.white.withValues(alpha: 0.12)
+                  ? AppColorScheme.onSurface.withValues(alpha: 0.12)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(phone ? 12 : 12.0 * scale),
             ),
@@ -1642,7 +1743,9 @@ class _NouveauOverflowActionTileState
                 _ActionIcon(
                   action: action,
                   size: phone ? 21 : 23.0 * scale,
-                  color: action.isActive ? activeColor : Colors.white,
+                  color: action.isActive
+                      ? activeColor
+                      : AppColorScheme.onSurface,
                 ),
                 SizedBox(width: phone ? 13 : 14.0 * scale),
                 Expanded(
@@ -1651,7 +1754,9 @@ class _NouveauOverflowActionTileState
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: action.isActive ? activeColor : Colors.white,
+                      color: action.isActive
+                          ? activeColor
+                          : AppColorScheme.onSurface,
                       fontSize: phone ? 15 : 15.0 * scale,
                       fontWeight: FontWeight.w600,
                     ),

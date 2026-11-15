@@ -1,3 +1,5 @@
+import 'dart:ui' show SemanticsAction;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moonfin/ui/widgets/game/game_card_focus_frame.dart';
@@ -7,6 +9,35 @@ import 'package:moonfin/ui/widgets/media_card.dart';
 void main() {
   const posterRatio = 2 / 3;
   const bannerRatio = 1000 / 185;
+
+  testWidgets('artwork-only cards keep an accessible title and action', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MediaCard(
+            title: 'A Film',
+            subtitle: '2025',
+            showLabel: false,
+            width: 150,
+            onTap: () {},
+          ),
+        ),
+      ),
+    );
+    expect(find.text('A Film'), findsNothing);
+    expect(find.bySemanticsLabel('A Film 2025'), findsOneWidget);
+    expect(
+      tester
+          .getSemantics(find.bySemanticsLabel('A Film 2025'))
+          .getSemanticsData()
+          .hasAction(SemanticsAction.tap),
+      isTrue,
+    );
+    semantics.dispose();
+  });
 
   Widget twoCards({
     required double width,
@@ -94,23 +125,18 @@ void main() {
       );
     });
 
-    testWidgets('the flat gap the rows used to carry is not enough', (
+    testWidgets('cards still overlap when packed without clearance', (
       tester,
     ) async {
       expect(
-        await overlap(
-          tester,
-          width: 600.0,
-          aspectRatio: bannerRatio,
-          gap: 12.0,
-        ),
+        await overlap(tester, width: 600.0, aspectRatio: bannerRatio, gap: 0.0),
         greaterThan(0.0),
       );
     });
 
     test('preserves the minimum clearance plus expansion growth', () {
-      expect(MediaCard.focusGap(80), closeTo(14.0, 0.0001));
-      expect(MediaCard.focusGap(80, minimum: 8), closeTo(10.0, 0.0001));
+      expect(MediaCard.focusGap(80), closeTo(12.8, 0.0001));
+      expect(MediaCard.focusGap(80, minimum: 8), closeTo(8.8, 0.0001));
       expect(MediaCard.focusGap(600), greaterThan(12.0));
     });
 

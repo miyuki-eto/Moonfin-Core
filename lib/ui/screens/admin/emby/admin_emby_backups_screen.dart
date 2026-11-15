@@ -201,7 +201,7 @@ class _AdminEmbyBackupsScreenState extends State<AdminEmbyBackupsScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Center(child: LoadingThrobber());
     if (_restoring) return _buildRestoring(l10n);
     if (_error != null) {
       return Center(
@@ -303,7 +303,7 @@ class _AdminEmbyBackupsScreenState extends State<AdminEmbyBackupsScreen> {
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: LoadingThrobber(),
                     )
                   : const Icon(Icons.backup_outlined),
               label: Text(l10n.adminEmbyBackupNow),
@@ -398,7 +398,7 @@ class _AdminEmbyBackupsScreenState extends State<AdminEmbyBackupsScreen> {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: AppSpacing.spaceLg),
-              const LinearProgressIndicator(),
+              const LoadingThrobber(),
             ],
           ),
         ),

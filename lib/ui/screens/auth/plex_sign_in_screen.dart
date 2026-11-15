@@ -180,10 +180,15 @@ class _PlexSignInScreenState extends State<PlexSignInScreen> {
     return RequestInitialFocus(
       child: LoginScaffold(
         maxWidth: qrPin == null ? 700 : 900,
-        header: Padding(
-          padding: const EdgeInsets.only(bottom: 24),
-          child: Image.asset('assets/images/logo_and_text.png', height: 80),
-        ),
+        header: PlatformDetection.isTV
+            ? null
+            : Padding(
+                padding: const EdgeInsets.only(bottom: 24),
+                child: Image.asset(
+                  'assets/images/logo_and_text.png',
+                  height: 80,
+                ),
+              ),
         footer: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           height: PlatformDetection.isTV && _tvKeyboardVisible ? 280 : 0,
@@ -275,7 +280,8 @@ class _PlexSignInScreenState extends State<PlexSignInScreen> {
     if (_errorMessage != null) {
       return Text(
         _errorMessage!,
-        style: TextStyle(color: AppColorScheme.statusRequested),
+        style: TextStyle(color: PlatformDetection.isTV
+                ? Tv26Style.secondary : AppColorScheme.statusRequested),
         textAlign: TextAlign.center,
       );
     }
@@ -352,7 +358,7 @@ class _PlexSignInScreenState extends State<PlexSignInScreen> {
             const SizedBox(
               height: 16,
               width: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: LoadingThrobber(),
             ),
             const SizedBox(width: 10),
             Text(
@@ -378,7 +384,7 @@ class _PlexSignInScreenState extends State<PlexSignInScreen> {
         const SizedBox(
           height: 28,
           width: 28,
-          child: CircularProgressIndicator(strokeWidth: 2),
+          child: LoadingThrobber(),
         ),
         if (message != null) ...[
           const SizedBox(height: 12),
@@ -450,6 +456,7 @@ class _PlexSignInScreenState extends State<PlexSignInScreen> {
 }
 
 ButtonStyle _focusableButtonStyle() {
+  if (PlatformDetection.isTV) return const ButtonStyle();
   return ButtonStyle(
     side: WidgetStateProperty.resolveWith((states) {
       if (states.contains(WidgetState.focused) ||
@@ -491,6 +498,7 @@ class _PasswordFormState extends State<_PasswordForm> {
   final _loginFocus = FocusNode();
   final _passwordFocus = FocusNode();
   final _codeFocus = FocusNode();
+  final _signInFocus = FocusNode();
   bool _busy = false;
   bool _needsCode = false;
   String? _error;
@@ -511,12 +519,20 @@ class _PasswordFormState extends State<_PasswordForm> {
     _loginFocus.dispose();
     _passwordFocus.dispose();
     _codeFocus.dispose();
+    _signInFocus.dispose();
     super.dispose();
   }
 
   Future<void> _signIn() async {
     final login = _login.text.trim();
-    if (login.isEmpty || _busy) return;
+    if (_busy) return;
+    if (login.isEmpty) {
+      setState(
+        () => _error = AppLocalizations.of(context).adminUsernameRequired,
+      );
+      _loginFocus.requestFocus();
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -566,7 +582,7 @@ class _PasswordFormState extends State<_PasswordForm> {
           enabled: !_busy,
           isPassword: true,
           up: _loginFocus,
-          down: _needsCode ? _codeFocus : null,
+          down: _needsCode ? _codeFocus : _signInFocus,
           onSubmitted: _needsCode ? null : _signIn,
           onKeyboardVisibilityChanged: widget.onKeyboardVisibilityChanged,
         ),
@@ -578,6 +594,7 @@ class _PasswordFormState extends State<_PasswordForm> {
             label: l10n.plexVerificationCode,
             enabled: !_busy,
             up: _passwordFocus,
+            down: _signInFocus,
             onSubmitted: _signIn,
             onKeyboardVisibilityChanged: widget.onKeyboardVisibilityChanged,
           ),
@@ -586,18 +603,20 @@ class _PasswordFormState extends State<_PasswordForm> {
           const SizedBox(height: 12),
           Text(
             _error!,
-            style: TextStyle(color: AppColorScheme.statusRequested),
+            style: TextStyle(color: PlatformDetection.isTV
+                ? Tv26Style.secondary : AppColorScheme.statusRequested),
             textAlign: TextAlign.center,
           ),
         ],
         const SizedBox(height: 16),
         OutlinedButton.icon(
+          focusNode: _signInFocus,
           onPressed: _busy ? null : _signIn,
           icon: _busy
               ? const SizedBox(
                   height: 16,
                   width: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: LoadingThrobber(),
                 )
               : const Icon(Icons.login, size: 18),
           label: Text(l10n.signIn),

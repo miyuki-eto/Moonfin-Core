@@ -101,7 +101,7 @@ class TimesUpGate extends StatelessWidget {
 /// Asking once can't win that, so everything underneath is taken out of the
 /// focus tree for as long as the screen shows. Without it the remote's select
 /// key goes to the screen under the overlay and the button does nothing.
-class TimesUpFocusGuard extends StatelessWidget {
+class TimesUpFocusGuard extends StatefulWidget {
   const TimesUpFocusGuard({
     super.key,
     required this.child,
@@ -118,23 +118,65 @@ class TimesUpFocusGuard extends StatelessWidget {
   final Listenable? routeChanges;
 
   @override
-  Widget build(BuildContext context) {
-    final watched = service ?? GetIt.instance<AccessScheduleService>();
-    return ListenableBuilder(
-      listenable: Listenable.merge([
-        watched,
-        routeChanges ?? appRouter.routerDelegate,
-      ]),
-      builder: (context, child) => ExcludeFocus(
-        excluding: TimesUpGate.isShowing(
-          service: watched,
-          currentPath: currentPath,
-        ),
-        child: child!,
-      ),
-      child: child,
-    );
+  State<TimesUpFocusGuard> createState() => _TimesUpFocusGuardState();
+}
+
+class _TimesUpFocusGuardState extends State<TimesUpFocusGuard> {
+  late Listenable _changes;
+  bool _updateQueued = false;
+
+  AccessScheduleService get _service =>
+      widget.service ?? GetIt.instance<AccessScheduleService>();
+
+  void _listen() {
+    _changes = Listenable.merge([
+      _service,
+      widget.routeChanges ?? appRouter.routerDelegate,
+    ])..addListener(_onChanged);
   }
+
+  @override
+  void initState() {
+    super.initState();
+    _listen();
+  }
+
+  @override
+  void didUpdateWidget(TimesUpFocusGuard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.service != widget.service ||
+        oldWidget.routeChanges != widget.routeChanges) {
+      _changes.removeListener(_onChanged);
+      _listen();
+    }
+  }
+
+  void _onChanged() {
+    // Router initialization can publish while mounting its descendants, even
+    // before the scheduler's first frame. Rebuild after that synchronous build
+    // finishes rather than relying on schedulerPhase to identify it.
+    if (_updateQueued) return;
+    _updateQueued = true;
+    scheduleMicrotask(() {
+      _updateQueued = false;
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _changes.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ExcludeFocus(
+    excluding: TimesUpGate.isShowing(
+      service: _service,
+      currentPath: widget.currentPath,
+    ),
+    child: widget.child,
+  );
 }
 
 class _TimesUp extends StatefulWidget {

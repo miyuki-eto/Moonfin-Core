@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:get_it/get_it.dart';
 import 'package:server_core/server_core.dart';
 
@@ -128,7 +129,7 @@ class _AdminLiveTvChannelsScreenState extends State<AdminLiveTvChannelsScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Center(child: LoadingThrobber());
     if (_error != null) {
       return Center(
         child: Column(
@@ -189,7 +190,7 @@ class _AdminLiveTvChannelsScreenState extends State<AdminLiveTvChannelsScreen> {
                   itemBuilder: (context, index) => index == _channels.length
                       ? Center(
                           child: _loadingMore
-                              ? const CircularProgressIndicator()
+                              ? const LoadingThrobber()
                               : OutlinedButton(
                                   onPressed: _loadMore,
                                   child: Text(l10n.showMore),
@@ -229,7 +230,7 @@ class _AdminLiveTvChannelsScreenState extends State<AdminLiveTvChannelsScreen> {
               ? const SizedBox(
                   width: 24,
                   height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: LoadingThrobber(),
                 )
               : Row(
                   mainAxisSize: MainAxisSize.min,

@@ -414,7 +414,7 @@ class _BookDiscoverScreenState extends BookCategoryState<BookDiscoverScreen> {
       body = Padding(
         padding: EdgeInsets.fromLTRB(inset, 16, endInset, 16),
         child: feed.loading.contains(subject)
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(child: LoadingThrobber())
             : Text(l10n.noItemsFound, style: muted),
       );
     }

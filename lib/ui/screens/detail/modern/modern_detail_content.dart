@@ -59,6 +59,7 @@ import '../../../../data/services/plugin_sync_service.dart';
 import '../../../../data/services/book_reader_service.dart';
 import '../collection_sort_dialog.dart';
 import '../detail_layout_metrics.dart';
+import '../detail_directors.dart';
 import '../playlist_sort_filter_bar.dart';
 import '../item_detail_screen.dart'
     show
@@ -272,6 +273,7 @@ class _ModernDetailContentState extends State<ModernDetailContent> {
   final FocusNode _episodesFirstFocusNode = FocusNode(debugLabel: 'episodesFirst');
   final FocusNode _episodesCurrentFocusNode = FocusNode(debugLabel: 'episodesCurrent');
   final FocusNode _overviewFocusNode = FocusNode(debugLabel: 'overview');
+  final _directorFocusNode = FocusNode(debugLabel: 'modernDirector');
   final FocusNode _personMoviesFirstFocusNode = FocusNode(debugLabel: 'personMoviesFirst');
   final FocusNode _personSeriesFirstFocusNode = FocusNode(debugLabel: 'personSeriesFirst');
   final FocusNode _personSeerrAppearancesFirstFocusNode = FocusNode(debugLabel: 'personSeerrAppearancesFirst');
@@ -708,6 +710,7 @@ class _ModernDetailContentState extends State<ModernDetailContent> {
     _episodesFirstFocusNode.dispose();
     _episodesCurrentFocusNode.dispose();
     _overviewFocusNode.dispose();
+    _directorFocusNode.dispose();
     _personMoviesFirstFocusNode.dispose();
     _personSeriesFirstFocusNode.dispose();
     _personSeerrAppearancesFirstFocusNode.dispose();
@@ -1175,7 +1178,7 @@ class _ModernDetailContentState extends State<ModernDetailContent> {
                 final hasPlaylistItems = _vm.playlistItems.isNotEmpty;
                 if (_vm.playlistSortRefreshing ||
                     (_vm.playlistIndexBuilding && !hasPlaylistItems)) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(child: LoadingThrobber());
                 }
 
                 final listWidget = DetailTrackList(
@@ -1250,7 +1253,7 @@ class _ModernDetailContentState extends State<ModernDetailContent> {
                           if (_vm.playlistLoadingMore)
                             const Padding(
                               padding: EdgeInsets.symmetric(vertical: 16),
-                              child: Center(child: CircularProgressIndicator()),
+                              child: Center(child: LoadingThrobber()),
                             ),
                         ],
                       ),
@@ -3284,7 +3287,7 @@ class _ModernDetailContentState extends State<ModernDetailContent> {
           const SizedBox(
             width: 14,
             height: 14,
-            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
+            child: LoadingThrobber(color: Colors.white70),
           ),
           const SizedBox(width: 8),
           Text(
@@ -4600,6 +4603,14 @@ class _ModernDetailContentState extends State<ModernDetailContent> {
           ],
           const SizedBox(height: 6),
           _metadataRow(context, item, selectedSource),
+          if (item.type == 'Movie' && _sections.shows(DetailSection.crew))
+            DetailDirectors(
+              directors: _vm.directors,
+              serverId: item.serverId,
+              firstFocusNode: _directorFocusNode,
+              onNavigateUp: () => NavigationLayout.focusNavbarNotifier.value?.call(),
+              onNavigateDown: () => widget.initialFocusNode?.requestFocus(),
+            ),
           IncompleteRecordingDetailLine(itemId: item.id),
           if (techRow != null) ...[
             const SizedBox(height: 6),
@@ -4676,7 +4687,11 @@ class _ModernDetailContentState extends State<ModernDetailContent> {
             onSelectedMediaSourceChanged: widget.onSelectedMediaSourceChanged,
             tvPlayFocusNode: widget.initialFocusNode,
             downTarget: _tabBarDownTarget(tabs),
-            upTarget: _overviewFocusNode,
+            upTarget: item.type == 'Movie' && _sections.shows(DetailSection.crew) &&
+                _vm.directors.any((person) =>
+                    (person['Name']?.toString().trim() ?? '').isNotEmpty &&
+                    (person['Id']?.toString().trim() ?? '').isNotEmpty)
+                ? _directorFocusNode : _overviewFocusNode,
             autoPlay: widget.autoPlay,
             modernStyle: true,
             fullWidthPrimary: !_landscape,

@@ -104,6 +104,7 @@ class _FocusableWrapperState extends State<FocusableWrapper>
   bool _hovered = false;
   Timer? _longPressTimer;
   bool _longPressFired = false;
+  bool _selectDownSeen = false;
   late final GlobalKey _contentKey = GlobalKey();
 
   FocusNode get _node => widget.focusNode ?? (_ownedNode ??= FocusNode());
@@ -115,9 +116,10 @@ class _FocusableWrapperState extends State<FocusableWrapper>
       vsync: this,
       duration: FocusTheme.animationDuration,
     );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: FocusTheme.scale).animate(
-      CurvedAnimation(parent: _scaleController, curve: Curves.easeOut),
-    );
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: FocusTheme.scale,
+    ).animate(CurvedAnimation(parent: _scaleController, curve: Curves.easeOut));
   }
 
   @override
@@ -129,8 +131,15 @@ class _FocusableWrapperState extends State<FocusableWrapper>
   }
 
   void _handleFocusChange(bool hasFocus) {
-    if (_focused == hasFocus) return;
+    if (_focused == hasFocus) {
+      return;
+    }
     setState(() => _focused = hasFocus);
+    if (!hasFocus) {
+      _selectDownSeen = false;
+      _longPressTimer?.cancel();
+      _longPressTimer = null;
+    }
     if (hasFocus && !widget.disableScale) {
       _scaleController.forward();
     } else {
@@ -143,12 +152,18 @@ class _FocusableWrapperState extends State<FocusableWrapper>
   }
 
   void _scrollIntoView() {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     final ctx = context;
     final renderObject = ctx.findRenderObject();
-    if (renderObject == null) return;
+    if (renderObject == null) {
+      return;
+    }
     final scrollable = Scrollable.maybeOf(ctx);
-    if (scrollable == null) return;
+    if (scrollable == null) {
+      return;
+    }
 
     if (widget.useComfortableZone) {
       final viewport = scrollable.context.findRenderObject();
@@ -169,7 +184,9 @@ class _FocusableWrapperState extends State<FocusableWrapper>
       final itemBottom = itemTop + renderObject.size.height;
       final lower = viewportSize * 0.2;
       final upper = viewportSize * 0.8;
-      if (itemTop >= lower && itemBottom <= upper) return;
+      if (itemTop >= lower && itemBottom <= upper) {
+        return;
+      }
     }
 
     Scrollable.ensureVisible(
@@ -183,10 +200,13 @@ class _FocusableWrapperState extends State<FocusableWrapper>
 
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
     final override = widget.onKeyEvent?.call(node, event);
-    if (override != null && override != KeyEventResult.ignored) return override;
+    if (override != null && override != KeyEventResult.ignored) {
+      return override;
+    }
 
     if (widget.enableLongPress && widget.onSelect != null) {
       if (event is KeyDownEvent && event.logicalKey.isSelectKey) {
+        _selectDownSeen = true;
         _longPressFired = false;
         _longPressTimer?.cancel();
         _longPressTimer = Timer(widget.longPressDuration, () {
@@ -196,6 +216,12 @@ class _FocusableWrapperState extends State<FocusableWrapper>
         return KeyEventResult.handled;
       }
       if (event is KeyUpEvent && event.logicalKey.isSelectKey) {
+        // A route can return focus here between Back's key-down and key-up.
+        // Only release a Select press that actually began on this control.
+        if (!_selectDownSeen) {
+          return KeyEventResult.ignored;
+        }
+        _selectDownSeen = false;
         _longPressTimer?.cancel();
         _longPressTimer = null;
         if (!_longPressFired) {
@@ -208,7 +234,9 @@ class _FocusableWrapperState extends State<FocusableWrapper>
 
     if (widget.onBack != null) {
       final r = handleBackKeyAction(event, widget.onBack!);
-      if (r != KeyEventResult.ignored) return r;
+      if (r != KeyEventResult.ignored) {
+        return r;
+      }
     }
 
     final dpad = dpadKeyHandler(
@@ -222,12 +250,16 @@ class _FocusableWrapperState extends State<FocusableWrapper>
   }
 
   void _handleTap() {
-    if (widget.onSelect == null) return;
+    if (widget.onSelect == null) {
+      return;
+    }
     widget.onSelect!();
   }
 
   void _handleLongPress() {
-    if (widget.onLongPress == null) return;
+    if (widget.onLongPress == null) {
+      return;
+    }
     widget.onLongPress!();
   }
 

@@ -6,6 +6,11 @@ import 'package:get_it/get_it.dart';
 import '../../preference/preference_constants.dart';
 import '../../preference/user_preferences.dart';
 import '../../util/artwork_timing.dart';
+import '../../util/platform_detection.dart';
+
+import 'package:moonfin_design/moonfin_design.dart';
+
+import '../tv/tv_reveal_transition.dart';
 import '../../util/clock_format.dart';
 import '../widgets/offline_aware_image.dart';
 import '../widgets/playback/loading_animation_widget.dart';
@@ -36,8 +41,9 @@ class _ScreensaverViewState extends State<ScreensaverView> {
   void initState() {
     super.initState();
     _service = ScreensaverContentService(_prefs);
-    if (_prefs.get(UserPreferences.screensaverBackdrop) ==
-        ScreensaverBackdrop.library) {
+    if (PlatformDetection.isTV ||
+        _prefs.get(UserPreferences.screensaverBackdrop) ==
+            ScreensaverBackdrop.library) {
       _startSlideshow();
     }
   }
@@ -100,11 +106,19 @@ class _ScreensaverViewState extends State<ScreensaverView> {
 
   @override
   Widget build(BuildContext context) {
-    final backdrop = _prefs.get(UserPreferences.screensaverBackdrop);
+    final backdrop = PlatformDetection.isTV
+        ? ScreensaverBackdrop.library
+        : _prefs.get(UserPreferences.screensaverBackdrop);
     final dim = _prefs.get(UserPreferences.screensaverDimming).clamp(0, 90);
-    final component = _prefs.get(UserPreferences.screensaverComponent);
-    final movement = _prefs.get(UserPreferences.screensaverMovement);
-    final position = _prefs.get(UserPreferences.screensaverPosition);
+    final component = PlatformDetection.isTV
+        ? ScreensaverComponent.clock
+        : _prefs.get(UserPreferences.screensaverComponent);
+    final movement = PlatformDetection.isTV
+        ? ScreensaverMovement.staticCorner
+        : _prefs.get(UserPreferences.screensaverMovement);
+    final position = PlatformDetection.isTV
+        ? ScreensaverPosition.bottomRight
+        : _prefs.get(UserPreferences.screensaverPosition);
     final size = _prefs.get(UserPreferences.screensaverSize);
 
     final showSlides =
@@ -120,7 +134,11 @@ class _ScreensaverViewState extends State<ScreensaverView> {
           // Backdrop layer
           if (showSlides)
             AnimatedSwitcher(
-              duration: const Duration(seconds: 1),
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : AppMotion.slow,
+              transitionBuilder: (child, animation) =>
+                  TvRevealTransition(animation: animation, child: child),
               child: ScreensaverSlide(
                 key: ValueKey(_index),
                 item: _items[_index],
@@ -222,27 +240,26 @@ class _ScreensaverViewState extends State<ScreensaverView> {
 
 extension ScreensaverPositionX on ScreensaverPosition {
   Alignment get alignment => switch (this) {
-        ScreensaverPosition.topLeft => Alignment.topLeft,
-        ScreensaverPosition.topCenter => Alignment.topCenter,
-        ScreensaverPosition.topRight => Alignment.topRight,
-        ScreensaverPosition.middleLeft => Alignment.centerLeft,
-        ScreensaverPosition.middle => Alignment.center,
-        ScreensaverPosition.middleRight => Alignment.centerRight,
-        ScreensaverPosition.bottomLeft => Alignment.bottomLeft,
-        ScreensaverPosition.bottomCenter => Alignment.bottomCenter,
-        ScreensaverPosition.bottomRight => Alignment.bottomRight,
-      };
+    ScreensaverPosition.topLeft => Alignment.topLeft,
+    ScreensaverPosition.topCenter => Alignment.topCenter,
+    ScreensaverPosition.topRight => Alignment.topRight,
+    ScreensaverPosition.middleLeft => Alignment.centerLeft,
+    ScreensaverPosition.middle => Alignment.center,
+    ScreensaverPosition.middleRight => Alignment.centerRight,
+    ScreensaverPosition.bottomLeft => Alignment.bottomLeft,
+    ScreensaverPosition.bottomCenter => Alignment.bottomCenter,
+    ScreensaverPosition.bottomRight => Alignment.bottomRight,
+  };
 }
 
 extension ScreensaverSizeX on ScreensaverSize {
   double get scaleFactor => switch (this) {
-        ScreensaverSize.thumbnail => 0.45,
-        ScreensaverSize.small => 0.70,
-        ScreensaverSize.medium => 1.0,
-        ScreensaverSize.large => 1.5,
-      };
+    ScreensaverSize.thumbnail => 0.45,
+    ScreensaverSize.small => 0.70,
+    ScreensaverSize.medium => 1.0,
+    ScreensaverSize.large => 1.5,
+  };
 }
-
 
 /// One slide of the library screensaver. Public only so a test can drive
 /// its failure path.
@@ -297,10 +314,12 @@ class _ScreensaverSlideState extends State<ScreensaverSlide>
       fit: StackFit.expand,
       children: [
         ScaleTransition(
-          scale: Tween<double>(
-            begin: 1.0,
-            end: ScreensaverSlide.kenBurnsScale,
-          ).animate(_kenBurns),
+          scale: MediaQuery.disableAnimationsOf(context)
+              ? const AlwaysStoppedAnimation(1.0)
+              : Tween<double>(
+                  begin: 1.0,
+                  end: ScreensaverSlide.kenBurnsScale,
+                ).animate(_kenBurns),
           child: OfflineAwareImage(
             imageUrl: widget.item.backdropUrl,
             fit: BoxFit.cover,

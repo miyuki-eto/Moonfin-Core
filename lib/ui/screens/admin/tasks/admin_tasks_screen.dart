@@ -54,7 +54,7 @@ class _AdminTasksScreenState extends ConsumerState<AdminTasksScreen> {
     final tasksAsync = ref.watch(adminTasksProvider);
 
     return tasksAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: LoadingThrobber()),
       error: (error, _) => Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -241,10 +241,10 @@ class _TaskRow extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: LinearProgressIndicator(
-                    value: task.currentProgressPercentage != null
-                        ? task.currentProgressPercentage! / 100
-                        : null,
+                  child: task.currentProgressPercentage == null
+                      ? const Center(child: LoadingThrobber())
+                      : LinearProgressIndicator(
+                    value: task.currentProgressPercentage! / 100,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -312,7 +312,7 @@ class _TaskRow extends StatelessWidget {
       return const SizedBox(
         width: 20,
         height: 20,
-        child: CircularProgressIndicator(strokeWidth: 2),
+        child: LoadingThrobber(),
       );
     }
     if (task.state == 'Cancelling') {

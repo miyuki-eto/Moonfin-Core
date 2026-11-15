@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive_io.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -2684,7 +2685,7 @@ class _NativeGamePlayerScreenState extends State<NativeGamePlayerScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const CircularProgressIndicator(),
+                  const LoadingThrobber(),
                   const SizedBox(height: 20),
                   Text(_status, style: const TextStyle(color: Colors.white70)),
                   if (_progress != null) ...[
@@ -2904,7 +2905,7 @@ class _NativeGamePlayerScreenState extends State<NativeGamePlayerScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const CircularProgressIndicator(),
+                const LoadingThrobber(),
                 const SizedBox(height: 20),
                 Text(
                   AppLocalizations.of(context).gameSavingBeforeExit,

@@ -65,7 +65,7 @@ internal class HdmvDtsReader(
         packetSize += length
     }
 
-    override fun packetFinished(isEndOfInput: Boolean) {
+    override fun packetFinished() {
         var pos = 0
         while (pos + CORE_HEADER_BYTES <= packetSize) {
             val core = coreHeaderAt(pos)

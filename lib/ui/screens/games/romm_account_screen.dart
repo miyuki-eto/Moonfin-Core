@@ -119,7 +119,7 @@ class _RommAccountScreenState extends State<RommAccountScreen> {
   Widget _buildBody(AppLocalizations l10n) {
     final account = _account;
     if (account == null) {
-      if (!_loadFailed) return const CircularProgressIndicator();
+      if (!_loadFailed) return const LoadingThrobber();
       return _column([
         _message(l10n.rommAccountLoadFailed),
         _button(
@@ -204,7 +204,7 @@ class _RommAccountScreenState extends State<RommAccountScreen> {
           const SizedBox(
             height: 16,
             width: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
+            child: LoadingThrobber(),
           ),
           const SizedBox(width: 10),
           Flexible(child: _message(l10n.rommWaitingForApproval)),

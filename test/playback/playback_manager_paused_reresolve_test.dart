@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:playback_core/playback_core.dart';
 
@@ -8,6 +10,7 @@ class _TestBackend extends Fake implements PlayerBackend {
   int resumeCalls = 0;
   bool playing = false;
   Duration currentPosition = Duration.zero;
+  final positions = StreamController<Duration>.broadcast(sync: true);
 
   @override
   Duration get position => currentPosition;
@@ -29,7 +32,7 @@ class _TestBackend extends Fake implements PlayerBackend {
   bool get isBuffering => false;
 
   @override
-  Stream<Duration> get positionStream => const Stream<Duration>.empty();
+  Stream<Duration> get positionStream => positions.stream;
 
   @override
   Stream<Duration> get durationStream => const Stream<Duration>.empty();
@@ -99,6 +102,8 @@ class _TestBackend extends Fake implements PlayerBackend {
   @override
   Future<void> stop() async {
     playing = false;
+    currentPosition = Duration.zero;
+    positions.add(Duration.zero);
   }
 
   @override
@@ -111,11 +116,12 @@ class _TestBackend extends Fake implements PlayerBackend {
   Future<void> waitForTracksReady() async {}
 
   @override
-  void dispose() {}
+  void dispose() => unawaited(positions.close());
 }
 
 class _TestResolver extends MediaStreamResolver {
   int calls = 0;
+  Completer<void>? nextResolution;
 
   @override
   Future<StreamResolutionResult> resolve(
@@ -131,6 +137,9 @@ class _TestResolver extends MediaStreamResolver {
     bool enableTranscoding = true,
   }) async {
     calls++;
+    final pending = nextResolution;
+    nextResolution = null;
+    await pending?.future;
     return StreamResolutionResult(
       streamUrl: 'https://example.test/session-$calls',
       mediaSourceId: 'source-$calls',
@@ -216,6 +225,32 @@ void main() {
     expect(backend.isPlaying, isFalse);
   });
 
+  test(
+    'source teardown does not reset the visible playhead during reload',
+    () async {
+      await startPlayback();
+      backend.positions.add(backend.currentPosition);
+      await manager.pause();
+      final pending = Completer<void>();
+      resolver.nextResolution = pending;
+
+      final change = manager.changeAudioTrack(3);
+      await Future<void>.delayed(Duration.zero);
+      expect(backend.position, Duration.zero);
+      expect(manager.state.position, const Duration(seconds: 90));
+
+      pending.complete();
+      await change;
+      expect(manager.state.position, const Duration(seconds: 90));
+      expect(backend.position, const Duration(seconds: 90));
+      expect(backend.isPlaying, isFalse);
+
+      // A genuine subsequent seek to the beginning must still reach the UI.
+      backend.positions.add(Duration.zero);
+      expect(manager.state.position, Duration.zero);
+    },
+  );
+
   test('a playing session keeps playing across a re-resolve', () async {
     await startPlayback();
     expect(backend.isPlaying, isTrue);
@@ -227,29 +262,32 @@ void main() {
     expect(backend.isPlaying, isTrue);
   });
 
-  test('subtitle session survives track, quality and background reloads', () async {
-    await startPlayback();
-    await manager.setSecondarySubtitleDelay(0.75);
-    final first = backend.subtitleSessions.last;
-    await manager.changeAudioTrack(3);
-    await manager.changeBitrate(8);
-    await manager.stopForBackground(manager.queueService.currentItem);
-    await manager.startQueuedPlayback(freshResolution: true);
-    expect(backend.subtitleSessions, everyElement(first));
-    expect(manager.secondarySubtitleDelaySeconds, 0.75);
+  test(
+    'subtitle session survives track, quality and background reloads',
+    () async {
+      await startPlayback();
+      await manager.setSecondarySubtitleDelay(0.75);
+      final first = backend.subtitleSessions.last;
+      await manager.changeAudioTrack(3);
+      await manager.changeBitrate(8);
+      await manager.stopForBackground(manager.queueService.currentItem);
+      await manager.startQueuedPlayback(freshResolution: true);
+      expect(backend.subtitleSessions, everyElement(first));
+      expect(manager.secondarySubtitleDelaySeconds, 0.75);
 
-    // Explicitly starting the same item again is a new session too.
-    await manager.playFromQueue(0);
-    expect(backend.subtitleSessions.last, isNot(first));
-    expect(manager.secondarySubtitleDelaySeconds, 0);
+      // Explicitly starting the same item again is a new session too.
+      await manager.playFromQueue(0);
+      expect(backend.subtitleSessions.last, isNot(first));
+      expect(manager.secondarySubtitleDelaySeconds, 0);
 
-    await manager.playItems([
-      {'Id': 'episode-1', 'Type': 'Episode'},
-      {'Id': 'episode-2', 'Type': 'Episode'},
-    ]);
-    final next = backend.subtitleSessions.last;
-    expect(next, isNot(first));
-    await manager.nextInQueue();
-    expect(backend.subtitleSessions.last, isNot(next));
-  });
+      await manager.playItems([
+        {'Id': 'episode-1', 'Type': 'Episode'},
+        {'Id': 'episode-2', 'Type': 'Episode'},
+      ]);
+      final next = backend.subtitleSessions.last;
+      expect(next, isNot(first));
+      await manager.nextInQueue();
+      expect(backend.subtitleSessions.last, isNot(next));
+    },
+  );
 }

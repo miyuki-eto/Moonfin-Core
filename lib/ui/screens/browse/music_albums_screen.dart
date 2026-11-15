@@ -386,7 +386,7 @@ class _MusicAlbumsScreenState extends MusicCategoryState<MusicAlbumsScreen> {
     if (_tracksLoading) {
       tracks = const Padding(
         padding: EdgeInsets.all(24),
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: LoadingThrobber()),
       );
     } else {
       tracks = MusicGrid(

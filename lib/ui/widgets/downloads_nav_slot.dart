@@ -1,3 +1,5 @@
+import '../../config/app_features.dart';
+
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 
@@ -20,6 +22,7 @@ class DownloadsNavSlot extends StatelessWidget {
   /// part of this: a slot given up when the last download goes would recolour
   /// every entry below it.
   static bool isOffered() =>
+      AppFeatures.has(AppFeature.downloads) &&
       GetIt.instance<UserPreferences>().get(
         UserPreferences.showDownloadsButton,
       ) &&
@@ -28,7 +31,9 @@ class DownloadsNavSlot extends StatelessWidget {
 
   /// Whether there is anything saved to show right now.
   static bool hasSavedMedia() {
-    if (!GetIt.instance.isRegistered<SavedMediaPresence>()) return false;
+    if (!GetIt.instance.isRegistered<SavedMediaPresence>()) {
+      return false;
+    }
     return GetIt.instance<SavedMediaPresence>().hasSavedMedia;
   }
 

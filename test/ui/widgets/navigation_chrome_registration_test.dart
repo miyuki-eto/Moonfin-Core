@@ -307,7 +307,12 @@ void main() {
         await tester.pumpAndSettle();
       }
       expect(sidebar.hasFocus, isTrue);
-      expect(_focusedLabel(), 'LeftSidebarSettings');
+      expect(find.byKey(const ValueKey('sidebar-settings')), findsNothing);
+      final lastItem = FocusManager.instance.primaryFocus;
+      expect(lastItem, isNot(same(sidebar)));
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+      expect(FocusManager.instance.primaryFocus, same(lastItem));
 
       for (var i = 0; i < 12; i++) {
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);

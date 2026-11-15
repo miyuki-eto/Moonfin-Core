@@ -2142,7 +2142,7 @@ class _LiveTvPlayerScreenState extends State<LiveTvPlayerScreen>
           if (_liveRecoveryStatus != null) return const SizedBox.shrink();
           if (snap.data != true) return const SizedBox.shrink();
           return Center(
-            child: CircularProgressIndicator(color: AppColorScheme.accent),
+            child: LoadingThrobber(color: AppColorScheme.accent),
           );
         },
       ),
@@ -2161,7 +2161,7 @@ class _LiveTvPlayerScreenState extends State<LiveTvPlayerScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(color: AppColorScheme.accent),
+            LoadingThrobber(color: AppColorScheme.accent),
             const SizedBox(height: AppSpacing.spaceMd),
             Text(
               l10n.liveReconnecting(status.attempt, status.maxAttempts),

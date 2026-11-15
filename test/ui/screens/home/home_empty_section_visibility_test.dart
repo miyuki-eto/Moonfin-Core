@@ -49,7 +49,11 @@ HomeRow populated(String id, HomeRowType type, {int totalCount = 0}) => HomeRow(
   rowType: type,
   totalCount: totalCount,
   items: [
-    AggregatedItem(id: '$id-item', serverId: 'server', rawData: {'Name': id}),
+    AggregatedItem(
+      id: '$id-item',
+      serverId: 'server',
+      rawData: {'Name': id, 'Type': 'Movie'},
+    ),
   ],
 );
 

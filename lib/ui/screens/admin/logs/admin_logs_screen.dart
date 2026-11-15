@@ -83,7 +83,7 @@ class _AdminLogsScreenState extends State<AdminLogsScreen> {
     final logs = _sortedLogs;
 
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: LoadingThrobber());
     }
 
     if (_error != null) {

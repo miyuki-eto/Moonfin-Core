@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:moonfin/config/app_features.dart';
 import 'package:jellyfin_preference/jellyfin_preference.dart';
 import 'package:moonfin/data/repositories/mdblist_repository.dart';
 import 'package:moonfin/data/viewmodels/library_browse_view_model.dart';
@@ -312,28 +313,27 @@ void main() {
     expect(vm.facetValues.years, <int>[1999]);
   });
 
-  test('Emby hides the two options its items query has no answer for', () async {
-    final jellyfin = await _viewModel(_RecordingItemsApi());
-    addTearDown(jellyfin.dispose);
-    expect(jellyfin.supportsUhdFilter, isTrue);
-    expect(jellyfin.supportsUnreleasedSeriesFilter, isTrue);
+  test(
+    'Emby hides the two options its items query has no answer for',
+    () async {
+      final jellyfin = await _viewModel(_RecordingItemsApi());
+      addTearDown(jellyfin.dispose);
+      expect(jellyfin.supportsUhdFilter, isTrue);
+      expect(jellyfin.supportsUnreleasedSeriesFilter, isTrue);
 
-    final emby = await _viewModel(
-      _RecordingItemsApi(),
-      serverType: ServerType.emby,
-    );
-    addTearDown(emby.dispose);
-    expect(emby.supportsUhdFilter, isFalse);
-    expect(emby.supportsUnreleasedSeriesFilter, isFalse);
-  });
+      final emby = await _viewModel(
+        _RecordingItemsApi(),
+        serverType: ServerType.emby,
+      );
+      addTearDown(emby.dispose);
+      expect(emby.supportsUhdFilter, isFalse);
+      expect(emby.supportsUnreleasedSeriesFilter, isFalse);
+    },
+  );
 
   test('global genre browse includes only movies and series and excludes non-root types', () async {
     final api = _RecordingItemsApi();
-    final vm = await _viewModel(
-      api,
-      libraryId: '',
-      genreId: 'anime-genre-id',
-    );
+    final vm = await _viewModel(api, libraryId: '', genreId: 'anime-genre-id');
     addTearDown(vm.dispose);
 
     await vm.load();
@@ -362,7 +362,7 @@ void main() {
     expect(api.collapseBoxSetItems, isTrue);
   });
 
-  test('genre browse in music library asks for MusicAlbum', () async {
+  test('a music library cannot restore music query types', () async {
     final api = _RecordingItemsApi()..collectionType = 'music';
     final vm = await _viewModel(
       api,
@@ -374,13 +374,13 @@ void main() {
     await vm.load();
 
     expect(api.genreIds, ['rock-genre-id']);
-    expect(api.includeItemTypes, ['MusicAlbum']);
+    expect(api.includeItemTypes, AppFeatures.videoTypes);
     expect(api.excludeItemTypes, ['Playlist', 'Episode', 'Season', 'Folder']);
   });
 
   // A book library already picked its own types, so narrowing a genre to
   // movies and series there leaves the page with nothing to show.
-  test('genre browse in a book library keeps the book types', () async {
+  test('a book library cannot restore non-video query types', () async {
     final api = _RecordingItemsApi()..collectionType = 'books';
     final vm = await _viewModel(
       api,
@@ -391,10 +391,10 @@ void main() {
 
     await vm.load();
 
-    expect(api.includeItemTypes, ['Book', 'Audio', 'AudioBook']);
+    expect(api.includeItemTypes, AppFeatures.videoTypes);
   });
 
-  test('genre browse outside the video libraries is left unscoped', () async {
+  test('other library kinds still use video-only query types', () async {
     for (final collectionType in ['audiobooks', 'musicvideos', 'homevideos']) {
       final api = _RecordingItemsApi()..collectionType = collectionType;
       final vm = await _viewModel(
@@ -405,7 +405,11 @@ void main() {
 
       await vm.load();
 
-      expect(api.includeItemTypes, isNull, reason: collectionType);
+      expect(
+        api.includeItemTypes,
+        AppFeatures.browseTypes,
+        reason: collectionType,
+      );
       vm.dispose();
     }
   });

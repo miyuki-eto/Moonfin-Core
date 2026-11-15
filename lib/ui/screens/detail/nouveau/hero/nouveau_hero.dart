@@ -1,3 +1,5 @@
+import '../../../../widgets/overlay_sheet.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:moonfin_design/moonfin_design.dart';
@@ -10,6 +12,8 @@ import '../../../../../preference/detail_metadata_layout.dart';
 import '../../../../../preference/detail_section_layout.dart';
 import '../../../../../preference/user_preferences.dart';
 import '../../../../../util/overview_text.dart';
+import '../../../../../util/platform_detection.dart';
+import 'tv_detail_hero.dart';
 import '../../../../../util/playback_time_label.dart';
 import '../../../../widgets/logo_view.dart';
 import '../../../../widgets/navigation_layout.dart';
@@ -20,6 +24,7 @@ import '../../../../widgets/live_tv/incomplete_recording.dart';
 import '../../../../widgets/seerr/seerr_status_dot.dart';
 import '../../../../widgets/seerr/seerr_status_pill.dart';
 import '../../detail_layout_metrics.dart';
+import '../../detail_directors.dart';
 import '../../item_detail_screen.dart';
 
 class NouveauHero extends StatefulWidget {
@@ -64,7 +69,36 @@ class NouveauHeroState extends State<NouveauHero> {
 
   final FocusNode _overviewFocusNode = FocusNode(
     debugLabel: 'nouveauHeroOverview',
+    skipTraversal: PlatformDetection.isTV,
   );
+
+  final _directorFocusNode = FocusNode(
+    debugLabel: 'nouveauDirector',
+    skipTraversal: PlatformDetection.isTV,
+  );
+
+  bool get _hasDirectors =>
+      widget.item.type == 'Movie' &&
+      widget.visibility.shows(DetailSection.crew) &&
+      widget.viewModel.directors.any(
+        (person) => (person['Name']?.toString().trim() ?? '').isNotEmpty,
+      );
+
+  Widget _directors() => _hasDirectors
+      ? DetailDirectors(
+          directors: widget.viewModel.directors,
+          serverId: widget.item.serverId,
+          firstFocusNode: _directorFocusNode,
+          onNavigateUp: () {
+            if (_overviewFocusable) {
+              _overviewFocusNode.requestFocus();
+            } else {
+              NavigationLayout.focusNavbarNotifier.value?.call();
+            }
+          },
+          onNavigateDown: focusBottom,
+        )
+      : const SizedBox.shrink();
 
   bool _overviewFocusable = false;
 
@@ -211,6 +245,7 @@ class NouveauHeroState extends State<NouveauHero> {
   void dispose() {
     FocusManager.instance.removeListener(_rememberFocusedAction);
     _overviewFocusNode.dispose();
+    _directorFocusNode.dispose();
 
     super.dispose();
   }
@@ -258,11 +293,11 @@ class NouveauHeroState extends State<NouveauHero> {
     final showGenres = !hiddenMetadata.contains(DetailMetadataItem.genres.id);
     final genres = showGenres
         ? item.genres
-            .take(3)
-            .map((genre) => genre.trim())
-            .where((genre) => genre.isNotEmpty)
-            .join('  •  ')
-            .toUpperCase()
+              .take(3)
+              .map((genre) => genre.trim())
+              .where((genre) => genre.isNotEmpty)
+              .join('  •  ')
+              .toUpperCase()
         : '';
 
     final genreRowHeight = isPhonePortrait
@@ -291,7 +326,9 @@ class NouveauHeroState extends State<NouveauHero> {
     final showStatus = !hiddenMetadata.contains(DetailMetadataItem.status.id);
     final status = showStatus ? _normalizedSeriesStatus(item) : null;
 
-    final showSeerr = !hiddenMetadata.contains(DetailMetadataItem.seerrAvailability.id);
+    final showSeerr = !hiddenMetadata.contains(
+      DetailMetadataItem.seerrAvailability.id,
+    );
     final seerrStatus = showSeerr ? seerrItemStatus(viewModel) : null;
 
     final l10n = AppLocalizations.of(context);
@@ -307,25 +344,33 @@ class NouveauHeroState extends State<NouveauHero> {
         ? _nouveauSeerrPills(context, seerrStatus, scale)
         : const <Widget>[];
 
-    final showUpcoming = !hiddenMetadata.contains(DetailMetadataItem.upcomingEpisodeDate.id);
-    final upcomingText = showUpcoming &&
+    final showUpcoming = !hiddenMetadata.contains(
+      DetailMetadataItem.upcomingEpisodeDate.id,
+    );
+    final upcomingText =
+        showUpcoming &&
             item.type == 'Series' &&
             viewModel.upcomingEpisode != null
         ? viewModel.upcomingEpisode!.format(context)
         : null;
 
-    final hasBadges = status != null || seerrPills.isNotEmpty || upcomingText != null;
+    final hasBadges =
+        status != null || seerrPills.isNotEmpty || upcomingText != null;
 
     final heroMaxWidth = isPhonePortrait
         ? size.width
         : isCompact
         ? size.width * 0.90
+        : PlatformDetection.isTV
+        ? 440.0
         : (size.width * 0.36).clamp(540.0, 680.0);
 
     final descriptionMaxWidth = isPhonePortrait
         ? size.width
         : isCompact
         ? heroMaxWidth
+        : PlatformDetection.isTV
+        ? 420.0
         : (heroMaxWidth * 0.90).clamp(490.0, 590.0);
 
     // Badges are not prose, so they run past the reading measure. The
@@ -342,10 +387,14 @@ class NouveauHeroState extends State<NouveauHero> {
         ? (size.width - 40) * 0.72
         : isCompact
         ? heroMaxWidth * 0.73
+        : PlatformDetection.isTV
+        ? (isSeason ? 410.0 : 200.0)
         : (480.0 * scale).clamp(432.0, 520.0);
 
     final logoMaxHeight = isPhonePortrait
         ? 82.0
+        : PlatformDetection.isTV
+        ? 76.0
         : (106.0 * scale).clamp(92.0, 114.0);
 
     final titleStyle = textTheme.displaySmall?.copyWith(
@@ -358,7 +407,9 @@ class NouveauHeroState extends State<NouveauHero> {
 
     final overviewStyle = TextStyle(
       color: foreground.withValues(alpha: 0.87),
-      fontSize: isPhonePortrait ? 15.5 : (18.0 * scale).clamp(16.0, 19.0),
+      fontSize: isPhonePortrait
+          ? 15.5
+          : (PlatformDetection.isTV ? 14.0 : (18.0 * scale).clamp(16.0, 19.0)),
       fontWeight: FontWeight.w400,
       height: isPhonePortrait ? 1.42 : 1.36,
       letterSpacing: -0.10,
@@ -382,9 +433,7 @@ class NouveauHeroState extends State<NouveauHero> {
       titleStyle: titleStyle,
       maxWidth: logoMaxWidth,
       maxHeight: logoMaxHeight,
-      alignment: isPhonePortrait
-          ? Alignment.bottomLeft
-          : Alignment.centerLeft,
+      alignment: isPhonePortrait ? Alignment.bottomLeft : Alignment.centerLeft,
     );
 
     final actions = DetailActionButtons(
@@ -400,7 +449,30 @@ class NouveauHeroState extends State<NouveauHero> {
       fullWidthPrimary: isPhonePortrait,
       actionsExpanded: widget.actionsExpanded,
       onActionsExpandedChanged: widget.onActionsExpandedChanged,
-      upTarget: _overviewFocusable && !hideOverview ? _overviewFocusNode : null,
+      upTarget: PlatformDetection.isTV && !hideOverview && overview.isNotEmpty
+          ? _overviewFocusNode
+          : !PlatformDetection.isTV &&
+                _hasDirectors &&
+                widget.viewModel.directors.any(
+                  (person) =>
+                      (person['Name']?.toString().trim() ?? '').isNotEmpty &&
+                      (person['Id']?.toString().trim() ?? '').isNotEmpty,
+                )
+          ? _directorFocusNode
+          : (!PlatformDetection.isTV && _overviewFocusable && !hideOverview
+                ? _overviewFocusNode
+                : null),
+      onArrowRightAtEnd:
+          PlatformDetection.isTV &&
+              widget.viewModel.directors.any(
+                (person) =>
+                    (person['Name']?.toString().trim() ?? '').isNotEmpty &&
+                    (person['Id']?.toString().trim() ?? '').isNotEmpty,
+              )
+          ? _directorFocusNode.requestFocus
+          : PlatformDetection.isTV && overview.isNotEmpty
+          ? _overviewFocusNode.requestFocus
+          : null,
     );
 
     return Focus(
@@ -574,12 +646,10 @@ class NouveauHeroState extends State<NouveauHero> {
             children: metadata,
           ),
 
+        _directors(),
         _incompleteLine(),
 
-        if (ratingsRow != null) ...[
-          const SizedBox(height: 12),
-          ratingsRow,
-        ],
+        if (ratingsRow != null) ...[const SizedBox(height: 12), ratingsRow],
 
         if (technicalDetails.isNotEmpty) ...[
           const SizedBox(height: 14),
@@ -635,6 +705,24 @@ class NouveauHeroState extends State<NouveauHero> {
     required Widget actions,
     required double scale,
   }) {
+    if (PlatformDetection.isTV) {
+      return TvDetailHero(
+        item: widget.item,
+        streams: mediaStreamsForItem(
+          widget.item,
+          selectedMediaSourceForItem(widget.item, widget.selectedMediaSourceId),
+        ),
+        branding: branding,
+        overview: overview,
+        actors: widget.viewModel.actors,
+        directors: widget.viewModel.directors,
+        directorFocusNode: _directorFocusNode,
+        overviewFocusNode: _overviewFocusNode,
+        onDirectorDown: focusBottom,
+        actions: actions,
+      );
+    }
+
     final foreground = AppColorScheme.onSurface;
 
     final textContent = ConstrainedBox(
@@ -664,7 +752,7 @@ class NouveauHeroState extends State<NouveauHero> {
 
           branding,
 
-          SizedBox(height: (28.0 * scale).clamp(24.0, 30.0)),
+          SizedBox(height: (16.0 * scale).clamp(14.0, 18.0)),
 
           if (hasBadges) ...[
             _badgeRow(
@@ -685,6 +773,7 @@ class NouveauHeroState extends State<NouveauHero> {
               children: metadata,
             ),
 
+          _directors(),
           _incompleteLine(),
         ],
       ),
@@ -736,7 +825,7 @@ class NouveauHeroState extends State<NouveauHero> {
           ),
         ],
         belowRatings,
-        SizedBox(height: (36.0 * scale).clamp(30.0, 38.0)),
+        SizedBox(height: (24.0 * scale).clamp(20.0, 26.0)),
         actions,
       ],
     );
@@ -923,7 +1012,9 @@ class NouveauHeroState extends State<NouveauHero> {
     );
 
     for (final entry in ordered) {
-      if (hidden.contains(entry.id)) continue;
+      if (hidden.contains(entry.id)) {
+        continue;
+      }
       switch (entry) {
         case DetailMetadataItem.year:
           addText(item.productionYear?.toString());
@@ -1008,12 +1099,18 @@ class NouveauHeroState extends State<NouveauHero> {
     );
   }
 
-  Widget _upcomingEpisodeBadge(BuildContext context, String text, double scale) {
+  Widget _upcomingEpisodeBadge(
+    BuildContext context,
+    String text,
+    double scale,
+  ) {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: AppColorScheme.accent.withValues(alpha: 0.15),
         borderRadius: AppRadius.circular((6.0 * scale).clamp(5.0, 7.0)),
-        border: Border.all(color: AppColorScheme.accent.withValues(alpha: 0.40)),
+        border: Border.all(
+          color: AppColorScheme.accent.withValues(alpha: 0.40),
+        ),
       ),
       child: Padding(
         padding: EdgeInsets.symmetric(
@@ -1146,7 +1243,6 @@ class NouveauHeroState extends State<NouveauHero> {
       ),
     );
   }
-
 }
 
 class _NouveauBadgeEntrance extends StatefulWidget {
@@ -1155,8 +1251,7 @@ class _NouveauBadgeEntrance extends StatefulWidget {
   const _NouveauBadgeEntrance({super.key, required this.child});
 
   @override
-  State<_NouveauBadgeEntrance> createState() =>
-      _NouveauBadgeEntranceState();
+  State<_NouveauBadgeEntrance> createState() => _NouveauBadgeEntranceState();
 }
 
 class _NouveauBadgeEntranceState extends State<_NouveauBadgeEntrance>
@@ -1281,7 +1376,7 @@ class _NouveauOverviewState extends State<_NouveauOverview> {
   }
 
   Future<void> _showFullOverview() async {
-    await showDialog<void>(
+    await showFocusRestoringDialog<void>(
       context: context,
       builder: (dialogContext) {
         final theme = Theme.of(dialogContext);
@@ -1501,9 +1596,8 @@ class _NouveauBrandingState extends State<_NouveauBranding> {
     _mode = _NouveauBrandingMode.pending;
     _animateLogo = false;
 
-    final stream = offlineAwareImageProvider(
-      url,
-    ).resolve(createLocalImageConfiguration(context));
+    final stream = offlineAwareImageProvider(url)
+        .resolve(createLocalImageConfiguration(context));
 
     var resolvingSynchronously = true;
 

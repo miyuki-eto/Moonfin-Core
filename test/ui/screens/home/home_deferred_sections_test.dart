@@ -64,7 +64,11 @@ HomeRow populated(String id) => HomeRow(
   title: id,
   rowType: HomeRowType.pluginDynamic,
   items: [
-    AggregatedItem(id: '$id-item', serverId: 'server', rawData: {'Name': id}),
+    AggregatedItem(
+      id: '$id-item',
+      serverId: 'server',
+      rawData: {'Name': id, 'Type': 'Movie'},
+    ),
   ],
 );
 

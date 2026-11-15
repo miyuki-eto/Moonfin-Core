@@ -266,7 +266,7 @@ class _AdminPluginDetailScreenState
         ref.watch(_configurationPagesProvider).valueOrNull ?? const [];
 
     return pluginsAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: LoadingThrobber()),
       error: (error, _) => Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

@@ -1026,7 +1026,7 @@ class _StudioSelectionDialogState extends State<StudioSelectionDialog> {
           width: 740,
           height: 480,
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: LoadingThrobber())
               : _error != null
                   ? Center(child: Text('Error loading studios: $_error'))
                   : _allStudios.isEmpty

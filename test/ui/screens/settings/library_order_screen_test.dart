@@ -16,7 +16,7 @@ class _MockUsersApi extends Mock implements UsersApi {}
 
 class _MockViewsApi extends Mock implements UserViewsApi {}
 
-const _names = ['Movies', 'Shows', 'Books'];
+const _names = ['Movies', 'Shows', 'Collections'];
 
 /// Longer than the screen waits before it writes a run of moves.
 const _pastSaveDelay = Duration(milliseconds: 700);
@@ -42,14 +42,18 @@ void main() {
         'Items': [
           {'Id': 'movies', 'Name': 'Movies', 'CollectionType': 'movies'},
           {'Id': 'shows', 'Name': 'Shows', 'CollectionType': 'tvshows'},
-          {'Id': 'books', 'Name': 'Books', 'CollectionType': 'books'},
+          {
+            'Id': 'collections',
+            'Name': 'Collections',
+            'CollectionType': 'boxsets',
+          },
         ],
       },
     );
     when(() => users.getUserConfiguration()).thenAnswer(
       (_) async => UserConfiguration.fromJson({
-        'OrderedViews': ['movies', 'shows', 'books'],
-        'MyMediaExcludes': ['books'],
+        'OrderedViews': ['movies', 'shows', 'collections'],
+        'MyMediaExcludes': ['collections'],
       }),
     );
     when(() => users.updateUserConfiguration(any())).thenAnswer((_) async {});
@@ -103,7 +107,9 @@ void main() {
       tester.getCenter(handle),
       kind: kind,
     );
-    if (hold) await tester.pump(kLongPressTimeout + kPressTimeout);
+    if (hold) {
+      await tester.pump(kLongPressTimeout + kPressTimeout);
+    }
     for (var step = 0; step < 10; step++) {
       await gesture.moveBy(Offset(0, distance / 10));
       await tester.pump(const Duration(milliseconds: 16));
@@ -124,9 +130,9 @@ void main() {
   ) async {
     await pump(tester);
 
-    expect(shownOrder(tester), ['Movies', 'Shows', 'Books']);
+    expect(shownOrder(tester), ['Movies', 'Shows', 'Collections']);
     expect(
-      find.descendant(of: tileOf('Books'), matching: find.text('Hidden')),
+      find.descendant(of: tileOf('Collections'), matching: find.text('Hidden')),
       findsOneWidget,
     );
     expect(find.text('Hidden'), findsOneWidget);
@@ -138,12 +144,12 @@ void main() {
     await pump(tester);
 
     await dragDownOneRow(tester, 'Movies', hold: true);
-    expect(shownOrder(tester), ['Shows', 'Movies', 'Books']);
+    expect(shownOrder(tester), ['Shows', 'Movies', 'Collections']);
 
     await tester.pump(_pastSaveDelay);
     await tester.pumpAndSettle();
     expect(savedOrders(), [
-      ['shows', 'movies', 'books'],
+      ['shows', 'movies', 'collections'],
     ]);
     // Once to load and once more to start the write from what the server has.
     verify(() => users.getUserConfiguration()).called(2);
@@ -157,7 +163,7 @@ void main() {
     await dragDownOneRow(tester, 'Movies', hold: false);
     await tester.pump(_pastSaveDelay);
 
-    expect(shownOrder(tester), ['Movies', 'Shows', 'Books']);
+    expect(shownOrder(tester), ['Movies', 'Shows', 'Collections']);
     verifyNever(() => users.updateUserConfiguration(any()));
   });
 
@@ -173,12 +179,12 @@ void main() {
       hold: false,
       kind: PointerDeviceKind.mouse,
     );
-    expect(shownOrder(tester), ['Movies', 'Books', 'Shows']);
+    expect(shownOrder(tester), ['Movies', 'Collections', 'Shows']);
 
     await tester.pump(_pastSaveDelay);
     await tester.pumpAndSettle();
     expect(savedOrders(), [
-      ['movies', 'books', 'shows'],
+      ['movies', 'collections', 'shows'],
     ]);
   });
 
@@ -194,17 +200,17 @@ void main() {
 
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
       await tester.pumpAndSettle();
-      expect(shownOrder(tester), ['Shows', 'Movies', 'Books']);
+      expect(shownOrder(tester), ['Shows', 'Movies', 'Collections']);
       expect(hasFocus('movies'), isTrue);
 
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
       await tester.pumpAndSettle();
-      expect(shownOrder(tester), ['Shows', 'Books', 'Movies']);
+      expect(shownOrder(tester), ['Shows', 'Collections', 'Movies']);
       expect(hasFocus('movies'), isTrue);
 
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
       await tester.pumpAndSettle();
-      expect(shownOrder(tester), ['Shows', 'Movies', 'Books']);
+      expect(shownOrder(tester), ['Shows', 'Movies', 'Collections']);
     });
 
     testWidgets('a run of presses goes out as one write', (tester) async {
@@ -219,7 +225,7 @@ void main() {
       await tester.pump(_pastSaveDelay);
       await tester.pumpAndSettle();
       expect(savedOrders(), [
-        ['shows', 'books', 'movies'],
+        ['shows', 'collections', 'movies'],
       ]);
     });
 
@@ -229,7 +235,7 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pumpAndSettle();
       expect(hasFocus('shows'), isTrue);
-      expect(shownOrder(tester), ['Movies', 'Shows', 'Books']);
+      expect(shownOrder(tester), ['Movies', 'Shows', 'Collections']);
     });
 
     testWidgets('a move made just before leaving is still saved', (
@@ -243,7 +249,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(savedOrders(), [
-        ['shows', 'movies', 'books'],
+        ['shows', 'movies', 'collections'],
       ]);
     });
 
@@ -256,12 +262,12 @@ void main() {
 
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
       await tester.pumpAndSettle();
-      expect(shownOrder(tester), ['Shows', 'Movies', 'Books']);
+      expect(shownOrder(tester), ['Shows', 'Movies', 'Collections']);
 
       await tester.pump(_pastSaveDelay);
       await tester.pumpAndSettle();
 
-      expect(shownOrder(tester), ['Movies', 'Shows', 'Books']);
+      expect(shownOrder(tester), ['Movies', 'Shows', 'Collections']);
       expect(find.text("Couldn't save the library order"), findsOneWidget);
     });
   });

@@ -163,7 +163,7 @@ class _EpisodeBrowserPanelState extends State<EpisodeBrowserPanel> {
     if (_browser.failed) {
       content = Text(l10n.errorLoadingEpisodes, style: style);
     } else if (episodes == null) {
-      content = const CircularProgressIndicator();
+      content = const LoadingThrobber();
     } else {
       content = Text(l10n.noEpisodesLoaded, style: style);
     }

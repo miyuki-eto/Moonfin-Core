@@ -1,3 +1,4 @@
+import '../config/app_features.dart';
 import 'user_preferences.dart';
 
 /// Destinations that can be pinned between Home and You on the mobile bottom
@@ -27,9 +28,13 @@ List<BottomNavTab> parsePinnedBottomNavTabs(String raw) {
   final pins = <BottomNavTab>[];
   for (final part in raw.split(',')) {
     final tab = _byName[part.trim().toLowerCase()];
-    if (tab == null || pins.contains(tab)) continue;
+    if (tab == null || pins.contains(tab)) {
+      continue;
+    }
     pins.add(tab);
-    if (pins.length == kMaxPinnedBottomNavTabs) break;
+    if (pins.length == kMaxPinnedBottomNavTabs) {
+      break;
+    }
   }
   return pins;
 }
@@ -83,13 +88,18 @@ class BottomNavTabGates {
   // Kids Mode drops Libraries (the My Media row stands in), Live TV (its route
   // bounces home) and Seerr.
   bool offers(BottomNavTab tab) => switch (tab) {
-        BottomNavTab.search => true,
-        BottomNavTab.libraries => !kidsMode && showLibraries,
-        BottomNavTab.favorites => showFavorites,
-        BottomNavTab.genres => showGenres,
-        BottomNavTab.liveTv => !kidsMode && showLiveTv,
-        BottomNavTab.discover => !kidsMode && showSeerr && seerrAvailable,
-      };
+    BottomNavTab.search => true,
+    BottomNavTab.libraries => !kidsMode && showLibraries,
+    BottomNavTab.favorites => showFavorites,
+    BottomNavTab.genres => showGenres,
+    BottomNavTab.liveTv =>
+      AppFeatures.has(AppFeature.liveTv) && !kidsMode && showLiveTv,
+    BottomNavTab.discover =>
+      AppFeatures.has(AppFeature.seerr) &&
+          !kidsMode &&
+          showSeerr &&
+          seerrAvailable,
+  };
 
   /// The tabs the bar shows between Home and You. Automatic pins follow the
   /// nav button switches without anything being stored. Explicit pins are
@@ -97,7 +107,9 @@ class BottomNavTabGates {
   /// unchosen tab onto the bar.
   List<BottomNavTab> resolvePins(String raw) {
     final explicit = parsePinnedBottomNavTabs(raw);
-    if (explicit.isNotEmpty) return explicit.where(offers).toList();
+    if (explicit.isNotEmpty) {
+      return explicit.where(offers).toList();
+    }
     return _autoOrder.where(offers).take(kMaxPinnedBottomNavTabs).toList();
   }
 }

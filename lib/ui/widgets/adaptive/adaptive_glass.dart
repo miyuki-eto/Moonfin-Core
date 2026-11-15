@@ -1,4 +1,8 @@
 import 'package:flutter/widgets.dart';
+
+import '../../../util/platform_detection.dart';
+import '../../tv/tv_modal.dart';
+
 import 'package:moonfin_design/moonfin_design.dart';
 
 import '../../../util/idiom/glass_capability.dart';
@@ -18,8 +22,17 @@ Widget adaptiveGlass({
   Color? tint,
   BuildContext? context,
 }) {
+  if (PlatformDetection.isTV) {
+    return TvModalPanel(
+      padding: EdgeInsets.zero,
+      cornerRadius: cornerRadius,
+      child: child,
+    );
+  }
   return glassPane(
-    tier: GlassCapability.glassLookActive ? GlassSettings.tier : GlassTier.solid,
+    tier: GlassCapability.glassLookActive
+        ? GlassSettings.tier
+        : GlassTier.solid,
     fallbackColor: fallbackColor,
     cornerRadius: cornerRadius,
     sigma: blur,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../widgets/bottom_nav/bottom_navbar.dart';
+import '../../../widgets/scroll_edge_fade.dart';
 import '../detail_layout_metrics.dart';
 
 /// Arranges the Modern detail pieces for portrait phones and tablets: a
@@ -36,35 +37,37 @@ class ModernPortraitLayout extends StatelessWidget {
         backdrop,
         SafeArea(
           bottom: false,
-          child: SingleChildScrollView(
-            controller: scrollController,
-            padding: EdgeInsets.only(bottom: bottomContentInset(context)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(height: detailPortraitBackdropGap(size, topInset)),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: hero,
-                ),
-                if (upNext != null)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                    child: upNext!,
-                  ),
-                const SizedBox(height: 24),
-                if (tabBar != null) ...[
+          child: ScrollEdgeFade(
+            child: SingleChildScrollView(
+              controller: scrollController,
+              padding: EdgeInsets.only(bottom: bottomContentInset(context)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(height: detailPortraitBackdropGap(size, topInset)),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: tabBar,
+                    child: hero,
                   ),
-                  const SizedBox(height: 12),
+                  if (upNext != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                      child: upNext!,
+                    ),
+                  const SizedBox(height: 24),
+                  if (tabBar != null) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: tabBar,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                    child: tabContent,
+                  ),
                 ],
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                  child: tabContent,
-                ),
-              ],
+              ),
             ),
           ),
         ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:get_it/get_it.dart';
 import 'package:server_core/server_core.dart';
@@ -341,7 +342,7 @@ class _AdminLiveTvScreenState extends State<AdminLiveTvScreen>
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: LoadingThrobber());
     }
     final l10n = AppLocalizations.of(context);
     if (_error != null || _config == null) {
@@ -492,10 +493,12 @@ class _AdminLiveTvScreenState extends State<AdminLiveTvScreen>
                 final pct = task!.currentProgressPercentage;
                 return Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                  child: LinearProgressIndicator(
+                  child: pct == null
+                      ? const Center(child: LoadingThrobber())
+                      : LinearProgressIndicator(
                     minHeight: 6,
                     borderRadius: BorderRadius.circular(4),
-                    value: pct == null ? null : pct / 100,
+                    value: pct / 100,
                   ),
                 );
               },

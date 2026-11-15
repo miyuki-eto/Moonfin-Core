@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import '../tv/tv_modal.dart';
+
 import 'package:custom_tv_text_field/custom_tv_text_field.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -41,7 +43,8 @@ Future<T?> showStyledPlayerDialog<T>(
             mediaQuery.viewInsets.bottom,
             keyboardSpace,
           );
-          final maxDialogHeight = mediaQuery.size.height -
+          final maxDialogHeight =
+              mediaQuery.size.height -
               mediaQuery.padding.vertical -
               effectiveBottomInset -
               24;
@@ -49,7 +52,7 @@ Future<T?> showStyledPlayerDialog<T>(
           final titleText = Text(
             title,
             style: const TextStyle(
-              fontSize: 20,
+              fontSize: 22,
               fontWeight: FontWeight.w600,
               color: Colors.white,
             ),
@@ -69,12 +72,18 @@ Future<T?> showStyledPlayerDialog<T>(
                     maxWidth: maxWidth,
                     maxHeight: maxDialogHeight,
                   ),
-            padding: const EdgeInsets.symmetric(vertical: 20),
+            padding: isTv
+                ? Tv26Style.modalMenuPadding
+                : const EdgeInsets.symmetric(vertical: 20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Padding(
-                  padding: EdgeInsets.fromLTRB(24, 0, 24, subtitle != null ? 4 : 12),
+                  padding: isTv
+                      ? Tv26Style.modalMenuHeaderPadding.copyWith(
+                          bottom: subtitle != null ? 4 : null,
+                        )
+                      : EdgeInsets.fromLTRB(24, 0, 24, subtitle != null ? 4 : 12),
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: titleImage == null
@@ -90,7 +99,12 @@ Future<T?> showStyledPlayerDialog<T>(
                 ),
                 if (subtitle != null)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                    padding: EdgeInsets.fromLTRB(
+                      isTv ? Tv26Style.menuRowHorizontalInset : 24,
+                      0,
+                      isTv ? Tv26Style.menuRowHorizontalInset : 24,
+                      12,
+                    ),
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
@@ -102,15 +116,25 @@ Future<T?> showStyledPlayerDialog<T>(
                       ),
                     ),
                   ),
-                Container(height: 1, color: Colors.white.withValues(alpha: 0.08)),
-                const SizedBox(height: 8),
+                if (!isTv)
+                  Container(
+                    height: 1,
+                    color: Colors.white.withValues(alpha: 0.08),
+                  ),
+                const SizedBox(height: Tv26Style.panelInset),
                 Flexible(child: builder(dialogContext)),
                 if (showCancel) ...[
-                  const SizedBox(height: 4),
-                  Container(height: 1, color: Colors.white.withValues(alpha: 0.08)),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 8),
+                  if (!isTv)
+                    Container(
+                      height: 1,
+                      color: Colors.white.withValues(alpha: 0.08),
+                    ),
+                  if (!isTv) const SizedBox(height: 4),
                   _TrackRow(
-                    option: TrackOption(label: AppLocalizations.of(dialogContext).cancel),
+                    option: TrackOption(
+                      label: AppLocalizations.of(dialogContext).cancel,
+                    ),
                     isSelected: false,
                     onTap: () => Navigator.pop(dialogContext),
                     dimmed: true,
@@ -148,6 +172,13 @@ Widget playerDialogPanel({
   required EdgeInsets padding,
   required Widget child,
 }) {
+  if (PlatformDetection.isTV) {
+    return TvModalPanel(
+      padding: padding,
+      constraints: constraints,
+      child: child,
+    );
+  }
   final glass = AppColorScheme.isGlass;
   final panel = Container(
     constraints: constraints,
@@ -226,15 +257,15 @@ class TrackSelectorDialog {
       // The footer rides along as the last row rather than sitting under the
       // list, so a long track list keeps the full height and the footer is
       // something you scroll down to instead of something in the way.
-      builder: (dialogCtx) => ListView.builder(
-        shrinkWrap: true,
-        itemCount: options.length + (footer == null ? 0 : 1),
-        itemBuilder: (_, i) => i == options.length
-            ? footer!
-            : Column(
+      builder: (dialogCtx) => SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < options.length; i++)
+              Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (i == dividerBefore)
+                  if (i == dividerBefore && !PlatformDetection.isTV)
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: Divider(
@@ -251,6 +282,9 @@ class TrackSelectorDialog {
                   ),
                 ],
               ),
+            ?footer,
+          ],
+        ),
       ),
     );
   }
@@ -283,12 +317,16 @@ class _TrackRowState extends State<_TrackRow> {
   @override
   void initState() {
     super.initState();
-    _focusNode.addListener(() => setState(() => _isFocused = _focusNode.hasFocus));
+    _focusNode.addListener(
+      () => setState(() => _isFocused = _focusNode.hasFocus),
+    );
     if (widget.autofocus) {
       // On TV a navigator observer focuses a new route's first focusable
       // after autofocus resolves, so the selected row takes it back here.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _focusNode.requestFocus();
+        if (mounted) {
+          _focusNode.requestFocus();
+        }
       });
     }
   }
@@ -301,13 +339,28 @@ class _TrackRowState extends State<_TrackRow> {
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformDetection.isTV) {
+      return TvMenuRow(
+        label: widget.option.label,
+        subtitle: widget.option.subtitle,
+        icon: widget.option.icon,
+        selected: widget.isSelected,
+        autofocus: widget.autofocus,
+        focusNode: _focusNode,
+        dimmed: widget.dimmed,
+        labelMaxLines: widget.option.labelMaxLines,
+        subtitleMaxLines: widget.option.subtitleMaxLines,
+        badges: widget.option.badges,
+        onPressed: widget.onTap,
+      );
+    }
     final focusColor = Color(_prefs.get(UserPreferences.focusColor).colorValue);
     final labelColor = widget.dimmed
-      ? Colors.white.withValues(alpha: 0.5)
-      : Colors.white.withValues(alpha: _isFocused ? 0.95 : 0.8);
+        ? Colors.white.withValues(alpha: 0.5)
+        : Colors.white.withValues(alpha: _isFocused ? 0.95 : 0.8);
     final subtitleColor = widget.dimmed
-      ? Colors.white.withValues(alpha: 0.35)
-      : Colors.white.withValues(alpha: _isFocused ? 0.72 : 0.6);
+        ? Colors.white.withValues(alpha: 0.35)
+        : Colors.white.withValues(alpha: _isFocused ? 0.72 : 0.6);
 
     return Focus(
       focusNode: _focusNode,
@@ -325,7 +378,9 @@ class _TrackRowState extends State<_TrackRow> {
         onTap: widget.onTap,
         child: Container(
           width: double.infinity,
-          color: _isFocused ? focusColor.withValues(alpha: 0.2) : Colors.transparent,
+          color: _isFocused
+              ? focusColor.withValues(alpha: 0.2)
+              : Colors.transparent,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           child: Row(
             children: [
@@ -337,12 +392,20 @@ class _TrackRowState extends State<_TrackRow> {
               else if (widget.isSelected)
                 Padding(
                   padding: const EdgeInsets.only(right: 12),
-                  child: Icon(Icons.check_circle, color: AppColorScheme.accent, size: 20),
+                  child: Icon(
+                    Icons.check_circle,
+                    color: AppColorScheme.accent,
+                    size: 20,
+                  ),
                 )
               else
                 const Padding(
                   padding: EdgeInsets.only(right: 12),
-                  child: Icon(Icons.radio_button_unchecked, color: Colors.white38, size: 20),
+                  child: Icon(
+                    Icons.radio_button_unchecked,
+                    color: Colors.white38,
+                    size: 20,
+                  ),
                 ),
               Expanded(
                 child: Column(
@@ -358,10 +421,9 @@ class _TrackRowState extends State<_TrackRow> {
                         widget.option.label,
                         style: TextStyle(fontSize: 16, color: labelColor),
                         maxLines: widget.option.labelMaxLines,
-                        overflow:
-                            widget.option.labelMaxLines == 1
-                                ? TextOverflow.ellipsis
-                                : null,
+                        overflow: widget.option.labelMaxLines == 1
+                            ? TextOverflow.ellipsis
+                            : null,
                       ),
                     if (widget.option.subtitle != null)
                       (widget.option.scrollSubtitle
@@ -388,10 +450,12 @@ class _TrackRowState extends State<_TrackRow> {
                           spacing: 6,
                           runSpacing: 6,
                           children: widget.option.badges
-                              .map((badge) => _OptionBadge(
-                                    label: badge,
-                                    dimmed: widget.dimmed,
-                                  ))
+                              .map(
+                                (badge) => _OptionBadge(
+                                  label: badge,
+                                  dimmed: widget.dimmed,
+                                ),
+                              )
                               .toList(growable: false),
                         ),
                       ),

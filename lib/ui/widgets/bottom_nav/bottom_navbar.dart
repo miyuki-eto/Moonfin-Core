@@ -1,3 +1,5 @@
+import '../../../config/app_features.dart';
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -35,9 +37,8 @@ class BottomNavInsetScope extends InheritedWidget {
     required super.child,
   });
 
-  static double? maybeOf(BuildContext context) => context
-      .dependOnInheritedWidgetOfExactType<BottomNavInsetScope>()
-      ?.height;
+  static double? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<BottomNavInsetScope>()?.height;
 
   @override
   bool updateShouldNotify(BottomNavInsetScope oldWidget) =>
@@ -55,7 +56,9 @@ double bottomContentInset(BuildContext context) =>
 /// [fallback] where there is no bar, otherwise enough to clear it.
 double bottomNavContentPadding(BuildContext context, double fallback) {
   final inset = BottomNavInsetScope.maybeOf(context);
-  if (inset == null) return fallback;
+  if (inset == null) {
+    return fallback;
+  }
   final clear = inset + 16;
   return clear > fallback ? clear : fallback;
 }
@@ -117,7 +120,9 @@ class BottomNavbar extends StatefulWidget {
             UserPreferences.bottomNavbarStyle,
           ),
       bottomInset: MediaQuery.paddingOf(context).bottom,
-      miniPlayer: miniPlayer ?? bottomMiniPlayerHasTrack(),
+      miniPlayer:
+          miniPlayer ??
+          (AppFeatures.has(AppFeature.music) && bottomMiniPlayerHasTrack()),
     );
   }
 
@@ -140,7 +145,8 @@ class _BottomNavbarState extends State<BottomNavbar> {
   void initState() {
     super.initState();
     _controller.addListener(_onChanged);
-    _hasTrack = bottomMiniPlayerHasTrack();
+    _hasTrack =
+        (AppFeatures.has(AppFeature.music) && bottomMiniPlayerHasTrack());
     final playback = GetIt.instance<PlaybackManager>();
     _subs.addAll([
       playback.state.playingStream.listen((_) => _onPlaybackChanged()),
@@ -151,12 +157,17 @@ class _BottomNavbarState extends State<BottomNavbar> {
   }
 
   void _onChanged() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _onPlaybackChanged() {
-    final hasTrack = bottomMiniPlayerHasTrack();
-    if (hasTrack != _hasTrack && mounted) setState(() => _hasTrack = hasTrack);
+    final hasTrack =
+        (AppFeatures.has(AppFeature.music) && bottomMiniPlayerHasTrack());
+    if (hasTrack != _hasTrack && mounted) {
+      setState(() => _hasTrack = hasTrack);
+    }
   }
 
   @override
@@ -233,72 +244,77 @@ class _BottomNavbarState extends State<BottomNavbar> {
       if (current != null && from >= 0 && from != current) {
         active = from;
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) setState(() => _settled = true);
+          if (mounted) {
+            setState(() => _settled = true);
+          }
         });
       } else {
         _settled = true;
       }
     }
-    if (current != null) _lastActiveId = items[current].id;
+    if (current != null) {
+      _lastActiveId = items[current].id;
+    }
     final padding = MediaQuery.paddingOf(context);
-    final horizontalInset =
-        padding.left > padding.right ? padding.left : padding.right;
+    final horizontalInset = padding.left > padding.right
+        ? padding.left
+        : padding.right;
     final style = _style;
 
-    Widget? player(BottomMiniPlayerVariant variant) => _hasTrack
-        ? BottomMiniPlayer(variant: variant, theme: theme)
-        : null;
+    Widget? player(BottomMiniPlayerVariant variant) =>
+        _hasTrack ? BottomMiniPlayer(variant: variant, theme: theme) : null;
 
     Widget split(bool minimized) => SplitBarView(
-          items: views,
-          activeIndex: active,
-          theme: theme,
-          bottomInset: padding.bottom,
-          horizontalInset: horizontalInset,
-          tabsVisible: widget.chromeVisible,
-          minimized: minimized,
-          onExpand: widget.onExpand,
-          onTap: (i) => _onTap(items[i], theme),
-          searchLabel: l10n.search,
-          searchActive: !_controller.hubOpen &&
-              widget.activeRoute == Destinations.search,
-          onSearch: () {
-            HapticFeedback.selectionClick();
-            if (widget.activeRoute != Destinations.search) {
-              openBottomNavTab(context, BottomNavTab.search);
-            }
-          },
-          miniPlayer: player(BottomMiniPlayerVariant.capsule),
-          inlinePlayer: player(BottomMiniPlayerVariant.inline),
-        );
+      items: views,
+      activeIndex: active,
+      theme: theme,
+      bottomInset: padding.bottom,
+      horizontalInset: horizontalInset,
+      tabsVisible: widget.chromeVisible,
+      minimized: minimized,
+      onExpand: widget.onExpand,
+      onTap: (i) => _onTap(items[i], theme),
+      searchLabel: l10n.search,
+      searchActive:
+          !_controller.hubOpen && widget.activeRoute == Destinations.search,
+      onSearch: () {
+        HapticFeedback.selectionClick();
+        if (widget.activeRoute != Destinations.search) {
+          openBottomNavTab(context, BottomNavTab.search);
+        }
+      },
+      miniPlayer: player(BottomMiniPlayerVariant.capsule),
+      inlinePlayer: player(BottomMiniPlayerVariant.inline),
+    );
 
     final Widget bar = switch (style) {
       BottomNavbarStyle.dock => DockBarView(
-          items: views,
-          activeIndex: active,
-          theme: theme,
-          bottomInset: padding.bottom,
-          horizontalInset: horizontalInset,
-          tabsVisible: widget.chromeVisible,
-          onTap: (i) => _onTap(items[i], theme),
-          miniPlayer: player(BottomMiniPlayerVariant.capsule),
-        ),
+        items: views,
+        activeIndex: active,
+        theme: theme,
+        bottomInset: padding.bottom,
+        horizontalInset: horizontalInset,
+        tabsVisible: widget.chromeVisible,
+        onTap: (i) => _onTap(items[i], theme),
+        miniPlayer: player(BottomMiniPlayerVariant.capsule),
+      ),
       BottomNavbarStyle.strip => StripBarView(
-          items: views,
-          activeIndex: active,
-          theme: theme,
-          bottomInset: padding.bottom,
-          horizontalInset: horizontalInset,
-          tabsVisible: widget.chromeVisible,
-          onTap: (i) => _onTap(items[i], theme),
-          miniPlayer: player(BottomMiniPlayerVariant.row),
-        ),
-      BottomNavbarStyle.split => widget.minimized == null
-          ? split(false)
-          : ValueListenableBuilder<bool>(
-              valueListenable: widget.minimized!,
-              builder: (_, minimized, _) => split(minimized),
-            ),
+        items: views,
+        activeIndex: active,
+        theme: theme,
+        bottomInset: padding.bottom,
+        horizontalInset: horizontalInset,
+        tabsVisible: widget.chromeVisible,
+        onTap: (i) => _onTap(items[i], theme),
+        miniPlayer: player(BottomMiniPlayerVariant.row),
+      ),
+      BottomNavbarStyle.split =>
+        widget.minimized == null
+            ? split(false)
+            : ValueListenableBuilder<bool>(
+                valueListenable: widget.minimized!,
+                builder: (_, minimized, _) => split(minimized),
+              ),
     };
 
     return Column(

@@ -779,7 +779,7 @@ Future<RecordAiringOutcome> recordAiring({
       barrierDismissible: false,
       builder: (_) => const PopScope(
         canPop: false,
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: LoadingThrobber()),
       ),
     );
     navigator.push(loading);

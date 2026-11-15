@@ -11,6 +11,8 @@ import 'adaptive/sf_symbol.dart';
 import 'bounded_network_image.dart';
 import 'focus/focusable_wrapper.dart';
 import 'overlay_sheet.dart';
+import 'track_selector_dialog.dart';
+import '../tv/tv_modal.dart';
 
 /// One trailer the picker offers, either a file on the server or a link.
 class TrailerChoice {
@@ -121,14 +123,37 @@ List<TrailerChoice> seerrTrailerChoices(List<SeerrVideo> videos) {
   ];
 }
 
-/// Lets the viewer pick one of an item's trailers, from a panel at the side
-/// on TV and desktop, or a bottom sheet on a phone.
+/// Offers TV trailers through the shared modal, a desktop side panel or a
+/// phone bottom sheet.
 abstract final class TrailerPicker {
   static Future<TrailerChoice?> show(
     BuildContext context, {
     required String itemName,
     required List<TrailerChoice> choices,
   }) {
+    if (PlatformDetection.isTV) {
+      return showStyledPlayerDialog<TrailerChoice>(
+        context,
+        title: AppLocalizations.of(context).trailers,
+        subtitle: itemName,
+        maxWidth: 640,
+        builder: (dialogContext) => SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < choices.length; i++)
+                _TrailerRow(
+                  choice: choices[i],
+                  number: i + 1,
+                  compact: false,
+                  autofocus: i == 0,
+                  onPick: () => Navigator.pop(dialogContext, choices[i]),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
     final compact =
         PlatformDetection.useMobileUi || MediaQuery.sizeOf(context).width < 600;
     if (compact) {
@@ -257,7 +282,8 @@ class _TrailerPickerPanel extends StatelessWidget {
               ],
             ),
           ),
-          Container(height: 1, color: Colors.white.withValues(alpha: 0.08)),
+          if (!PlatformDetection.isTV)
+            Container(height: 1, color: Colors.white.withValues(alpha: 0.08)),
           Flexible(
             child: ListView.separated(
               shrinkWrap: true,
@@ -327,6 +353,28 @@ class _TrailerRowState extends State<_TrailerRow> {
     final thumbWidth = widget.compact ? 128.0 : 136.0;
     final highlighted = _focused && !widget.compact;
 
+    if (PlatformDetection.isTV) {
+      return TvMenuRow(
+        label: title,
+        subtitle: [
+          ?channel,
+          if (length != null) formatPlaybackDuration(length),
+        ].join(' · '),
+        icon: Icons.play_arrow_rounded,
+        autofocus: widget.autofocus,
+        onPressed: widget.onPick,
+        badges: [if (choice.subtitled) l10n.subtitled],
+        tintTrailing: false,
+        trailing: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: SizedBox(
+            width: 112,
+            height: 63,
+            child: _thumbnail(choice.thumbnailUrl),
+          ),
+        ),
+      );
+    }
     return FocusableWrapper(
       autofocus: widget.autofocus,
       onSelect: widget.onPick,

@@ -57,7 +57,7 @@ class AdminAnalyticsItemsScreen extends ConsumerWidget {
           header,
           const Padding(
             padding: EdgeInsets.all(32),
-            child: Center(child: CircularProgressIndicator()),
+            child: Center(child: LoadingThrobber()),
           ),
         ],
       ),

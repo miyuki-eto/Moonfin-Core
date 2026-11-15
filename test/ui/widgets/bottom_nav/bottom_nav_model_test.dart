@@ -68,10 +68,14 @@ void main() {
     });
 
     test('a route that only starts with a tab name doesn\'t match it', () {
-      expect(bottomNavTabMatchesRoute(BottomNavTab.libraries, '/library-x'),
-          isFalse);
-      expect(bottomNavTabMatchesRoute(BottomNavTab.discover, '/seerr/requests'),
-          isTrue);
+      expect(
+        bottomNavTabMatchesRoute(BottomNavTab.libraries, '/library-x'),
+        isFalse,
+      );
+      expect(
+        bottomNavTabMatchesRoute(BottomNavTab.discover, '/seerr/requests'),
+        isTrue,
+      );
     });
   });
 
@@ -84,26 +88,20 @@ void main() {
       bool syncPlay = false,
       bool quickConnect = false,
       Set<BottomNavTab> alsoOnBar = const {},
-    }) =>
-        resolveHubTiles(
-          gates: gates,
-          barItems: resolveBarItems(gates, pins),
-          isAvailable: (_) => true,
-          savedAvailable: saved,
-          shuffle: shuffle,
-          syncPlay: syncPlay,
-          quickConnect: quickConnect,
-          alsoOnBar: alsoOnBar,
-        );
+    }) => resolveHubTiles(
+      gates: gates,
+      barItems: resolveBarItems(gates, pins),
+      isAvailable: (_) => true,
+      savedAvailable: saved,
+      shuffle: shuffle,
+      syncPlay: syncPlay,
+      quickConnect: quickConnect,
+      alsoOnBar: alsoOnBar,
+    );
 
     test('holds everything offered that isn\'t on the bar', () {
       expect(tiles(saved: true, syncPlay: true, quickConnect: true), const [
-        BottomNavHubTile.action(BottomNavHubAction.saved),
         BottomNavHubTile.tab(BottomNavTab.genres),
-        BottomNavHubTile.action(BottomNavHubAction.shuffle),
-        BottomNavHubTile.action(BottomNavHubAction.syncPlay),
-        BottomNavHubTile.action(BottomNavHubAction.quickConnect),
-        BottomNavHubTile.action(BottomNavHubAction.remoteControl),
       ]);
     });
 
@@ -119,8 +117,12 @@ void main() {
       expect(kids.map((t) => t.tab), isNot(contains(BottomNavTab.libraries)));
       expect(kids.map((t) => t.tab), isNot(contains(BottomNavTab.liveTv)));
       expect(kids.map((t) => t.tab), isNot(contains(BottomNavTab.discover)));
-      expect(kids,
-          contains(const BottomNavHubTile.action(BottomNavHubAction.saved)));
+      expect(
+        kids,
+        isNot(
+          contains(const BottomNavHubTile.action(BottomNavHubAction.saved)),
+        ),
+      );
     });
 
     test('Split doesn\'t repeat Search in the hub', () {

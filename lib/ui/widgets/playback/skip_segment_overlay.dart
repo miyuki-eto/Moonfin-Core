@@ -144,6 +144,9 @@ class _SkipSegmentOverlayState extends State<SkipSegmentOverlay> {
 
     final effectiveRadius = AppColorScheme.isPixel ? 0.0 : _capsuleRadius;
     final borders = ThemeRegistry.active.borders;
+    final accent = PlatformDetection.isTV
+        ? Tv26Style.foreground
+        : AppColorScheme.accent;
 
     return Positioned(
       right: widget.rightInset,
@@ -203,7 +206,7 @@ class _SkipSegmentOverlayState extends State<SkipSegmentOverlay> {
                             children: [
                               Icon(
                                 Icons.skip_next_rounded,
-                                color: AppColorScheme.accent,
+                                color: accent,
                                 size: 20,
                               ),
                               const SizedBox(width: 9),
@@ -259,7 +262,7 @@ class _SkipSegmentOverlayState extends State<SkipSegmentOverlay> {
                                         )
                                       : Icon(
                                           Icons.skip_next_rounded,
-                                          color: AppColorScheme.accent,
+                                          color: accent,
                                           size: 15,
                                         ),
                                 ),
@@ -275,7 +278,7 @@ class _SkipSegmentOverlayState extends State<SkipSegmentOverlay> {
                               borderRadius: AppRadius.circular(effectiveRadius),
                               border: Border.fromBorderSide(
                                 borders.focusBorder.copyWith(
-                                  color: AppColorScheme.accent,
+                                  color: accent,
                                 ),
                               ),
                             ),
@@ -313,7 +316,11 @@ class _CountdownRing extends StatelessWidget {
               value: progress.clamp(0.0, 1.0),
               strokeWidth: 3,
               backgroundColor: AppColorScheme.onSurface.withValues(alpha: 0.16),
-              valueColor: AlwaysStoppedAnimation<Color>(AppColorScheme.accent),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                PlatformDetection.isTV
+                    ? Tv26Style.foreground
+                    : AppColorScheme.accent,
+              ),
             ),
           ),
           ?center,

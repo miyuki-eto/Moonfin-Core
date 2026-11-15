@@ -161,8 +161,10 @@ class _EmulatorCoresScreenState extends State<EmulatorCoresScreen> {
                   ? SizedBox(
                       width: 24,
                       height: 24,
-                      child: CircularProgressIndicator(
-                        value: progress > 0 ? progress : null,
+                      child: progress <= 0
+                          ? const LoadingThrobber()
+                          : CircularProgressIndicator(
+                        value: progress,
                         strokeWidth: 2,
                       ),
                     )

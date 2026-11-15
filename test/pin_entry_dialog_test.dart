@@ -6,66 +6,128 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:moonfin/data/services/pin_guard.dart';
 import 'package:moonfin/l10n/app_localizations.dart';
 import 'package:moonfin/ui/widgets/pin_entry_dialog.dart';
+import 'package:moonfin/util/platform_detection.dart';
 
 void main() {
-  testWidgets('PinEntryDialog allows numeric input through keyboard/remote keys', (
-    WidgetTester tester,
+  testWidgets('TV PIN fits the canvas and accepts on-screen remote digits', (
+    tester,
   ) async {
-    String? enteredPin;
-    bool onVerifyCalled = false;
-
+    PlatformDetection.setInterfaceLayout(InterfaceLayout.tv);
+    addTearDown(
+      () => PlatformDetection.setInterfaceLayout(InterfaceLayout.automatic),
+    );
+    tester.view.physicalSize = const Size(1145, 644);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    String? entered;
     await tester.pumpWidget(
       MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
+        supportedLocales: const [Locale('en')],
         home: Scaffold(
           body: Builder(
-            builder: (context) => ElevatedButton(
-              onPressed: () {
-                PinEntryDialog.show(
-                  context,
-                  mode: PinEntryMode.verify,
-                  onVerify: (pin) {
-                    enteredPin = pin;
-                    onVerifyCalled = true;
-                    return true;
-                  },
-                );
-              },
-              child: const Text('Show Dialog'),
+            builder: (context) => TextButton(
+              child: const Text('Open'),
+              onPressed: () => PinEntryDialog.show(
+                context,
+                mode: PinEntryMode.verify,
+                onVerify: (pin) {
+                  entered = pin;
+                  return true;
+                },
+              ),
             ),
           ),
         ),
       ),
     );
-
-    // Open the dialog
-    await tester.tap(find.text('Show Dialog'));
+    await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
-
-    // Verify dialog is open
-    expect(find.byType(PinEntryDialog), findsOneWidget);
-
-    // Press '1'
-    await tester.sendKeyEvent(LogicalKeyboardKey.digit1);
-    await tester.pump();
-
-    // Press '2' (numpad)
-    await tester.sendKeyEvent(LogicalKeyboardKey.numpad2);
-    await tester.pump();
-
-    // Press '3'
-    await tester.sendKeyEvent(LogicalKeyboardKey.digit3);
-    await tester.pump();
-
-    // Press '4'
-    await tester.sendKeyEvent(LogicalKeyboardKey.digit4);
+    expect(tester.getSize(find.descendant(of: find.byType(Dialog),
+      matching: find.byType(Material)).first).width, lessThanOrEqualTo(420));
+    expect(tester.takeException(), isNull);
+    for (final key in [
+      LogicalKeyboardKey.enter,
+      LogicalKeyboardKey.arrowRight,
+      LogicalKeyboardKey.enter,
+      LogicalKeyboardKey.arrowRight,
+      LogicalKeyboardKey.enter,
+      LogicalKeyboardKey.arrowDown,
+      LogicalKeyboardKey.arrowLeft,
+      LogicalKeyboardKey.arrowLeft,
+      LogicalKeyboardKey.enter,
+    ]) {
+      if (key == LogicalKeyboardKey.enter) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 160)));
+      }
+      await tester.sendKeyEvent(key);
+      await tester.pump(const Duration(milliseconds: 120));
+    }
     await tester.pumpAndSettle();
-
-    // Check if onVerify was called with correct pin
-    expect(onVerifyCalled, true);
-    expect(enteredPin, '1234');
+    expect(entered, '1234');
+    expect(find.byType(PinEntryDialog), findsNothing);
+    expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'PinEntryDialog allows numeric input through keyboard/remote keys',
+    (WidgetTester tester) async {
+      String? enteredPin;
+      bool onVerifyCalled = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () {
+                  PinEntryDialog.show(
+                    context,
+                    mode: PinEntryMode.verify,
+                    onVerify: (pin) {
+                      enteredPin = pin;
+                      onVerifyCalled = true;
+                      return true;
+                    },
+                  );
+                },
+                child: const Text('Show Dialog'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Open the dialog
+      await tester.tap(find.text('Show Dialog'));
+      await tester.pumpAndSettle();
+
+      // Verify dialog is open
+      expect(find.byType(PinEntryDialog), findsOneWidget);
+
+      // Press '1'
+      await tester.sendKeyEvent(LogicalKeyboardKey.digit1);
+      await tester.pump();
+
+      // Press '2' (numpad)
+      await tester.sendKeyEvent(LogicalKeyboardKey.numpad2);
+      await tester.pump();
+
+      // Press '3'
+      await tester.sendKeyEvent(LogicalKeyboardKey.digit3);
+      await tester.pump();
+
+      // Press '4'
+      await tester.sendKeyEvent(LogicalKeyboardKey.digit4);
+      await tester.pumpAndSettle();
+
+      // Check if onVerify was called with correct pin
+      expect(onVerifyCalled, true);
+      expect(enteredPin, '1234');
+    },
+  );
 
   group('a PIN that may have to ask the server', () {
     Future<void> open(
@@ -132,13 +194,21 @@ void main() {
       expect(find.byType(PinEntryDialog), findsNothing);
     });
 
-    testWidgets('a wrong PIN says so and clears what was typed', (tester) async {
+    testWidgets('a wrong PIN says so and clears what was typed', (
+      tester,
+    ) async {
       await open(tester, (_) async => const PinRejected(), (_) {});
 
       await type(tester, '1234');
       await tester.pumpAndSettle();
 
-      expect(find.text(AppLocalizations.of(tester.element(find.byType(PinEntryDialog))).pinIncorrect), findsOneWidget);
+      expect(
+        find.text(
+          AppLocalizations.of(tester.element(find.byType(PinEntryDialog)))
+              .pinIncorrect,
+        ),
+        findsOneWidget,
+      );
       expect(find.byType(PinEntryDialog), findsOneWidget);
     });
 
@@ -153,7 +223,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text(AppLocalizations.of(tester.element(find.byType(PinEntryDialog))).pinTryAgainIn('45s')),
+        find.text(
+          AppLocalizations.of(tester.element(find.byType(PinEntryDialog)))
+              .pinTryAgainIn('45s'),
+        ),
         findsOneWidget,
       );
     });

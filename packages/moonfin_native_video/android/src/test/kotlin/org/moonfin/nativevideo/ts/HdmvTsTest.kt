@@ -18,8 +18,13 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import org.moonfin.nativevideo.iec.DtsFraming
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28], manifest = Config.NONE)
 class HdmvTsTest {
 
     @Test fun `a DTS-HD access unit goes out as one sample`() {
@@ -82,7 +87,7 @@ class HdmvTsTest {
         reader.createTracks(output, TsPayloadReader.TrackIdGenerator(0, 1))
         reader.packetStarted(1_000L, 0)
         reader.consume(ParsableByteArray(units.reduce(ByteArray::plus)))
-        reader.packetFinished(false)
+        reader.packetFinished()
         return track
     }
 
@@ -118,6 +123,8 @@ class HdmvTsTest {
         bits.write(23, 5)
         bits.write(12, 4)
         bits.write(7, 8)
+        bits.write(0, 1 + 3 + 2) // no speaker map, representation, DRC or dialog normalization
+        bits.write(1, 2) // DTS-HD lossless decoder navigation mode
         return bits.toBytes(EXTENSION_HEADER_BYTES) + ByteArray(payloadBytes) { 0x22 }
     }
 
@@ -199,6 +206,6 @@ class HdmvTsTest {
     }
 
     private companion object {
-        const val EXTENSION_HEADER_BYTES = 18
+        const val EXTENSION_HEADER_BYTES = 19
     }
 }
