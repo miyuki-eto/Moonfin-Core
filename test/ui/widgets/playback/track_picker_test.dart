@@ -404,7 +404,7 @@ void main() {
           mediaSourceId: 'source',
           playMethod: StreamPlayMethod.directPlay,
           mediaStreams: [
-            {'Type': 'Subtitle', 'Index': 2, 'Codec': 'PGSSUB'},
+            {'Type': 'Subtitle', 'Index': 2, 'Codec': 'PGSSUB', 'Language': 'eng'},
             {'Type': 'Subtitle', 'Index': 3, 'Codec': 'subrip', 'Language': 'kor'},
           ],
         ),
