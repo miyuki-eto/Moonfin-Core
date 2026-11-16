@@ -7,6 +7,7 @@ import 'package:moonfin/l10n/app_localizations.dart';
 import 'package:moonfin/playback/media_kit_player_backend.dart';
 import 'package:moonfin/preference/user_preferences.dart';
 import 'package:moonfin/ui/widgets/playback/track_picker.dart';
+import 'package:moonfin/ui/widgets/playback/delay_footer.dart';
 import 'package:playback_core/playback_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -56,6 +57,10 @@ class _Backend extends Fake implements MediaKitPlayerBackend {
 
   @override
   Future<void> setAudioDelay(double seconds) async => audioDelays.add(seconds);
+
+  @override
+  Future<void> setSubtitleDelay(double seconds) async =>
+      subtitleDelaySeconds = seconds;
 }
 
 class _PgsBackend extends _Backend implements AsyncPgsSubtitleBackend {
@@ -183,6 +188,30 @@ void main() {
     await tester.pumpAndSettle();
     expect(events, [true, false, true, false]);
   });
+
+  for (final secondary in [false, true]) {
+    testWidgets(
+      'subtitle timing leaves lower captions visible (secondary=$secondary)',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1280, 720));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final manager = _Manager(_Backend());
+        addTearDown(manager.dispose);
+        await openPicker(tester, manager, audio: false, secondary: secondary);
+        await tester.tap(find.text(l10n.subtitleDelay));
+        await tester.pumpAndSettle();
+
+        final panel = tester.getRect(find.byType(DelayFooter));
+        const lowerCaptionRegion = Rect.fromLTWH(160, 540, 960, 160);
+        expect(panel.overlaps(lowerCaptionRegion), isFalse);
+        expect(panel.bottom, lessThan(360));
+        expect(find.byType(AnimatedModalBarrier), findsNothing);
+        await tester.tap(find.text('Reset'));
+        await tester.pump();
+        expect(find.byType(DelayFooter), findsOneWidget);
+      },
+    );
+  }
 
   testWidgets('an open delay bar cannot change the next programme', (tester) async {
     final backend = _Backend();

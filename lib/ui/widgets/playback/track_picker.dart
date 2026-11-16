@@ -313,6 +313,7 @@ abstract final class TrackPicker {
         onDialogOpenChanged,
         () => _showDelayBar(
           context,
+          audio: audio,
           useRootNavigator: useRootNavigator,
           bar: DelayFooter(
             initialDelay: delay,
@@ -428,10 +429,11 @@ abstract final class TrackPicker {
     }
   }
 
-  /// The delay on its own, in a slim bar at the bottom with nothing dimming
-  /// the picture, so the effect of each step can be seen while it's made.
+  /// Keeps subtitle timing above the usual caption region so each adjustment
+  /// can be judged while watching. Audio timing retains its bottom placement.
   static Future<void> _showDelayBar(
     BuildContext context, {
+    required bool audio,
     required Widget bar,
     required bool useRootNavigator,
   }) => showFocusRestoringDialog<void>(
@@ -439,8 +441,8 @@ abstract final class TrackPicker {
     useRootNavigator: useRootNavigator,
     barrierColor: Colors.transparent,
     builder: (_) => Dialog(
-      alignment: Alignment.bottomCenter,
-      insetPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      alignment: audio ? Alignment.bottomCenter : Alignment.topCenter,
+      insetPadding: const EdgeInsets.all(24),
       backgroundColor: Colors.transparent,
       child: playerDialogPanel(
         constraints: const BoxConstraints(maxWidth: 480),
