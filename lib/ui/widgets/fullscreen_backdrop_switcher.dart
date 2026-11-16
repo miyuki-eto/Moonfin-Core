@@ -1,5 +1,8 @@
 import 'offline_aware_image.dart';
+
 import 'package:flutter/widgets.dart';
+
+import '../tv/tv_reveal_transition.dart';
 
 class FullscreenBackdropSwitcher extends StatefulWidget {
   final String? imageUrl;
@@ -7,6 +10,12 @@ class FullscreenBackdropSwitcher extends StatefulWidget {
   final Alignment alignment;
   final Duration fadeInDuration;
   final Widget Function(String imageUrl)? imageBuilder;
+  final bool animateInitialImage;
+  final bool softenTransition;
+
+  /// Reports a decoded frame or an image failure, so an owning page can reveal
+  /// its complete composition together rather than animating before artwork.
+  final ValueChanged<String>? onImageSettled;
 
   /// A full-screen backdrop is the one image the screen is about, so its
   /// fetch goes ahead of the cards built alongside it. Callers that supply
@@ -21,6 +30,9 @@ class FullscreenBackdropSwitcher extends StatefulWidget {
     // The load fade. The crossfade between two backdrops is [duration].
     this.fadeInDuration = Duration.zero,
     this.imageBuilder,
+    this.animateInitialImage = false,
+    this.softenTransition = false,
+    this.onImageSettled,
     this.priority = ImageFetchPriority.high,
   });
 
@@ -32,18 +44,29 @@ class FullscreenBackdropSwitcher extends StatefulWidget {
 class _FullscreenBackdropSwitcherState extends State<FullscreenBackdropSwitcher>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  late final CurvedAnimation _opacity;
 
   String? _currentUrl;
   String? _incomingUrl;
   String? _pendingUrl;
+  String? _settledUrl;
 
   @override
   void initState() {
     super.initState();
 
     _controller = AnimationController(vsync: this, duration: widget.duration);
-
-    _currentUrl = widget.imageUrl;
+    _opacity = CurvedAnimation(
+      parent: _controller,
+      curve: widget.softenTransition
+          ? TvRevealTransition.curve
+          : Curves.easeInOut,
+    );
+    if (widget.animateInitialImage) {
+      _incomingUrl = widget.imageUrl;
+    } else {
+      _currentUrl = widget.imageUrl;
+    }
 
     _controller.addStatusListener((status) {
       if (status != AnimationStatus.completed || !mounted) {
@@ -61,9 +84,54 @@ class _FullscreenBackdropSwitcherState extends State<FullscreenBackdropSwitcher>
       });
 
       if (shouldContinue) {
-        _controller.forward(from: 0);
+        _beginTransition();
       }
     });
+    if (widget.animateInitialImage && widget.imageBuilder != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _incomingUrl != null) _beginTransition();
+      });
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _updateDuration();
+  }
+
+  void _updateDuration() {
+    _controller.duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : widget.duration;
+  }
+
+  void _beginTransition() {
+    _controller.reset();
+    // Custom builders own their image lifecycle. The default path below waits
+    // for a decoded frame so a slow network cannot use up the fade offscreen.
+    if (widget.imageBuilder != null) _controller.forward();
+  }
+
+  void _startTransitionFor(String url) {
+    if (_incomingUrl != url || _controller.isAnimating) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _incomingUrl == url && !_controller.isAnimating) {
+        _controller.forward();
+      }
+    });
+  }
+
+  void _imageSettled(String url) {
+    if (url == widget.imageUrl && _settledUrl != url) {
+      _settledUrl = url;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && (url == _currentUrl || url == _incomingUrl)) {
+          widget.onImageSettled?.call(url);
+        }
+      });
+    }
+    _startTransitionFor(url);
   }
 
   @override
@@ -71,7 +139,12 @@ class _FullscreenBackdropSwitcherState extends State<FullscreenBackdropSwitcher>
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.duration != widget.duration) {
-      _controller.duration = widget.duration;
+      _updateDuration();
+    }
+    if (oldWidget.softenTransition != widget.softenTransition) {
+      _opacity.curve = widget.softenTransition
+          ? TvRevealTransition.curve
+          : Curves.easeInOut;
     }
 
     final next = widget.imageUrl;
@@ -82,7 +155,7 @@ class _FullscreenBackdropSwitcherState extends State<FullscreenBackdropSwitcher>
       return;
     }
 
-    if (next == _pendingUrl) {
+    if (next != null && next == _pendingUrl) {
       return;
     }
 
@@ -94,6 +167,7 @@ class _FullscreenBackdropSwitcherState extends State<FullscreenBackdropSwitcher>
         _currentUrl = null;
         _incomingUrl = null;
         _pendingUrl = null;
+        _settledUrl = null;
       });
 
       return;
@@ -108,11 +182,12 @@ class _FullscreenBackdropSwitcherState extends State<FullscreenBackdropSwitcher>
       _incomingUrl = next;
     });
 
-    _controller.forward(from: 0);
+    _beginTransition();
   }
 
   @override
   void dispose() {
+    _opacity.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -130,29 +205,56 @@ class _FullscreenBackdropSwitcherState extends State<FullscreenBackdropSwitcher>
           sourceAspectRatio: 16 / 9,
           maxDecodeWidth: ArtworkDecode.maxSourceWidth,
           priority: widget.priority,
-          errorWidget: (_, _, _) => const SizedBox.shrink(),
+          imageBuilder: (context, provider) => Image(
+            image: provider,
+            fit: BoxFit.cover,
+            alignment: widget.alignment,
+            frameBuilder: (context, child, frame, synchronous) {
+              if (frame != null || synchronous) _imageSettled(imageUrl);
+              return child;
+            },
+          ),
+          errorWidget: (_, _, _) {
+            // Finish to the empty layer instead of leaving a previous title's
+            // artwork pinned forever when the next image fails.
+            _imageSettled(imageUrl);
+            return const SizedBox.shrink();
+          },
         );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (_currentUrl != null)
-          KeyedSubtree(
-            key: ValueKey(_currentUrl),
-            child: _buildImage(_currentUrl!),
-          ),
-        if (_incomingUrl != null)
-          FadeTransition(
-            opacity: _controller,
-            child: KeyedSubtree(
-              key: ValueKey(_incomingUrl),
-              child: _buildImage(_incomingUrl!),
+    return ExcludeSemantics(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (_currentUrl != null)
+            KeyedSubtree(
+              key: ValueKey(_currentUrl),
+              child: _buildImage(_currentUrl!),
             ),
-          ),
-      ],
+          if (_incomingUrl != null)
+            if (widget.softenTransition)
+              ClipRect(
+                child: TvRevealTransition(
+                  animation: _opacity,
+                  child: KeyedSubtree(
+                    key: ValueKey(_incomingUrl),
+                    child: _buildImage(_incomingUrl!),
+                  ),
+                ),
+              )
+            else
+              FadeTransition(
+                opacity: _opacity,
+                child: KeyedSubtree(
+                  key: ValueKey(_incomingUrl),
+                  child: _buildImage(_incomingUrl!),
+                ),
+              ),
+        ],
+      ),
     );
   }
 }

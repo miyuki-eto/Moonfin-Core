@@ -1,3 +1,5 @@
+import '../../../config/app_features.dart';
+
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 
@@ -65,6 +67,24 @@ enum DetailButton {
   /// Whether this device can put the button on screen at all. A button that
   /// never gets drawn here isn't worth offering a switch for.
   bool get isOffered {
+    final feature = switch (this) {
+      DetailButton.cast => AppFeature.casting,
+      DetailButton.download || DetailButton.deleteFiles => AppFeature.downloads,
+      DetailButton.watchWithGroup => AppFeature.syncPlay,
+      DetailButton.seerrRequest ||
+      DetailButton.seerrRequest4k ||
+      DetailButton.seerrWatchlist ||
+      DetailButton.seerrReportIssue ||
+      DetailButton.seerrManage => AppFeature.seerr,
+      DetailButton.keepAsComplete => AppFeature.liveTv,
+      DetailButton.admin => AppFeature.administration,
+      DetailButton.playlist => AppFeature.playlists,
+      DetailButton.shuffle => AppFeature.surfing,
+      _ => null,
+    };
+    if (feature != null && !AppFeatures.has(feature)) {
+      return false;
+    }
     if (_kidsModeOn && !_kidsModeAllowed.contains(this)) {
       return false;
     }
@@ -107,7 +127,9 @@ enum DetailButton {
   /// preferences means no Kids Mode to be in.
   static bool get _kidsModeOn {
     try {
-      if (!GetIt.instance.isRegistered<UserPreferences>()) return false;
+      if (!GetIt.instance.isRegistered<UserPreferences>()) {
+        return false;
+      }
       return GetIt.instance<UserPreferences>().get(
         UserPreferences.kidsModeEnabled,
       );
@@ -131,7 +153,9 @@ enum DetailButton {
       if (GetIt.instance.isRegistered<SyncPlayManager>()) {
         return GetIt.instance<SyncPlayManager>().syncPlayEnabled;
       }
-      return GetIt.instance<UserPreferences>().get(UserPreferences.syncPlayEnabled);
+      return GetIt.instance<UserPreferences>().get(
+        UserPreferences.syncPlayEnabled,
+      );
     } catch (_) {
       return false;
     }

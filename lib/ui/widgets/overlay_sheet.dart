@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import '../tv/tv_modal.dart';
+import '../tv/tv_reveal_transition.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:moonfin_design/moonfin_design.dart';
@@ -46,7 +49,9 @@ class InlineBackInterceptor {
 
   static bool handleBack() {
     for (final handler in _handlers.reversed) {
-      if (handler()) return true;
+      if (handler()) {
+        return true;
+      }
     }
     return false;
   }
@@ -59,7 +64,9 @@ class InlineBackInterceptor {
 VoidCallback createDialogBackCloseHandler(BuildContext dialogContext) {
   var closed = false;
   return () {
-    if (closed) return;
+    if (closed) {
+      return;
+    }
     closed = true;
     DialogBackSuppressor.markDismissed();
     Navigator.pop(dialogContext);
@@ -91,46 +98,79 @@ Future<T?> showFocusRestoringDialog<T>({
   Color? barrierColor,
   bool useRootNavigator = true,
   bool useSafeArea = true,
+  // Timing controls must leave the picture and captions readable behind them.
+  bool blurBackground = true,
   RouteSettings? routeSettings,
   String? barrierLabel,
 }) {
   final previousFocus = FocusManager.instance.primaryFocus;
-  return showAdaptiveDialog<T>(
-    context: context,
-    builder: (dialogContext) => Focus(
-      canRequestFocus: false,
-      skipTraversal: true,
-      onKeyEvent: (node, event) {
-        if (!event.logicalKey.isBackKey) return KeyEventResult.ignored;
-        if (event is KeyDownEvent) {
-          // A focused text field owns backspace (it's editing, not "back");
-          // don't pop the dialog out from under it.
-          final focusContext = FocusManager.instance.primaryFocus?.context;
-          if (focusContext != null &&
-              focusContext.findAncestorWidgetOfExactType<EditableText>() !=
-                  null) {
-            return KeyEventResult.ignored;
-          }
-          DialogBackSuppressor.markDismissed();
-          Navigator.of(dialogContext).pop();
-          return KeyEventResult.handled;
-        }
-        if (event is KeyUpEvent) {
-          return KeyEventResult.handled;
-        }
+  Widget guardedBuilder(BuildContext dialogContext) => Focus(
+    canRequestFocus: false,
+    skipTraversal: true,
+    onKeyEvent: (node, event) {
+      if (!event.logicalKey.isBackKey) {
         return KeyEventResult.ignored;
+      }
+      if (event is KeyDownEvent) {
+        // A focused text field owns backspace (it's editing, not "back");
+        // don't pop the dialog out from under it.
+        final focusContext = FocusManager.instance.primaryFocus?.context;
+        if (focusContext != null &&
+            focusContext.findAncestorWidgetOfExactType<EditableText>() !=
+                null) {
+          return KeyEventResult.ignored;
+        }
+        DialogBackSuppressor.markDismissed();
+        Navigator.of(dialogContext).pop();
+        return KeyEventResult.handled;
+      }
+      if (event is KeyUpEvent) {
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    },
+    child: Builder(builder: builder),
+  );
+  final Future<T?> result;
+  if (PlatformDetection.isTV) {
+    result = showGeneralDialog<T>(
+      context: context,
+      useRootNavigator: useRootNavigator,
+      routeSettings: routeSettings,
+      barrierDismissible: barrierDismissible,
+      barrierLabel:
+          barrierLabel ??
+          MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: barrierColor ?? Tv26Style.scrim,
+      transitionDuration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : TvRevealTransition.duration,
+      transitionBuilder: (context, animation, secondaryAnimation, child) =>
+          tvModalTransition(
+            context,
+            animation,
+            secondaryAnimation,
+            child,
+            blurBackground: blurBackground,
+          ),
+      pageBuilder: (dialogContext, _, _) {
+        final child = guardedBuilder(dialogContext);
+        return useSafeArea ? SafeArea(child: child) : child;
       },
-      child: Builder(builder: builder),
-    ),
-    barrierDismissible: barrierDismissible,
-    barrierColor: barrierColor,
-    useRootNavigator: useRootNavigator,
-    useSafeArea: useSafeArea,
-    routeSettings: routeSettings,
-    barrierLabel: barrierLabel,
-  ).whenComplete(() {
-    _safeRestoreFocus(previousFocus);
-  });
+    );
+  } else {
+    result = showAdaptiveDialog<T>(
+      context: context,
+      builder: guardedBuilder,
+      barrierDismissible: barrierDismissible,
+      barrierColor: barrierColor,
+      useRootNavigator: useRootNavigator,
+      useSafeArea: useSafeArea,
+      routeSettings: routeSettings,
+      barrierLabel: barrierLabel,
+    );
+  }
+  return result.whenComplete(() => _safeRestoreFocus(previousFocus));
 }
 
 /// Drop-in replacement for [showModalBottomSheet] with focus restoration.
@@ -160,7 +200,9 @@ Future<T?> showFocusRestoringModalBottomSheet<T>({
       canRequestFocus: false,
       skipTraversal: true,
       onKeyEvent: (node, event) {
-        if (!event.logicalKey.isBackKey) return KeyEventResult.ignored;
+        if (!event.logicalKey.isBackKey) {
+          return KeyEventResult.ignored;
+        }
         if (event is KeyDownEvent) {
           DialogBackSuppressor.markDismissed();
           Navigator.of(sheetContext).pop();
@@ -200,7 +242,9 @@ class OverlaySheetController {
   static bool get hasOpenSheet => _openSheetCloseHandles.isNotEmpty;
 
   static bool closeTopSheet() {
-    if (_openSheetCloseHandles.isEmpty) return false;
+    if (_openSheetCloseHandles.isEmpty) {
+      return false;
+    }
     unawaited(_openSheetCloseHandles.last(restoreFocus: true));
     return true;
   }
@@ -222,7 +266,7 @@ class OverlaySheetController {
     FocusNode? initialFocusNode,
     bool barrierDismissible = true,
     Color? barrierColor,
-    Duration animationDuration = const Duration(milliseconds: 200),
+    Duration animationDuration = TvRevealTransition.duration,
   }) {
     final effectiveBarrierColor =
         barrierColor ?? AppColorScheme.scrim.withValues(alpha: 0.7);
@@ -260,9 +304,12 @@ class OverlaySheetController {
   }) {
     final scope =
         context
-            .getElementForInheritedWidgetOfExactType<_OverlaySheetScope>()
-            ?.widget as _OverlaySheetScope?;
-    if (scope == null) return Future.value();
+                .getElementForInheritedWidgetOfExactType<_OverlaySheetScope>()
+                ?.widget
+            as _OverlaySheetScope?;
+    if (scope == null) {
+      return Future.value();
+    }
     return scope.close(result, restoreFocus: restoreFocus);
   }
 }
@@ -280,9 +327,8 @@ class _AnchoredSheetLayout extends SingleChildLayoutDelegate {
   // space the clamps below measure against.
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
-      BoxConstraints.loose(constraints.biggest).deflate(
-        const EdgeInsets.all(_margin),
-      );
+      BoxConstraints.loose(constraints.biggest)
+          .deflate(const EdgeInsets.all(_margin));
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
@@ -361,7 +407,9 @@ class _OverlaySheetState<T> extends State<_OverlaySheet<T>>
     _controller.forward();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
         final initial = widget.initialFocusNode;
         if (initial != null && initial.canRequestFocus) {
           initial.requestFocus();
@@ -376,14 +424,18 @@ class _OverlaySheetState<T> extends State<_OverlaySheet<T>>
   void dispose() {
     OverlaySheetController._openSheetCloseHandles.remove(_registryCloseHandle);
     _controller.dispose();
-    if (!widget.completer.isCompleted) widget.completer.complete();
+    if (!widget.completer.isCompleted) {
+      widget.completer.complete();
+    }
     _scopeNode.dispose();
     super.dispose();
   }
 
   Future<void> _close([T? result, bool restoreFocus = true]) {
     if (_closing) {
-      if (!restoreFocus) _restoreFocusOnClose = false;
+      if (!restoreFocus) {
+        _restoreFocusOnClose = false;
+      }
       return _closeFuture ?? Future.value();
     }
     _restoreFocusOnClose = restoreFocus;
@@ -399,8 +451,12 @@ class _OverlaySheetState<T> extends State<_OverlaySheet<T>>
       // Disposal already removed the sheet, but navigation still has to settle.
       return;
     }
-    if (!mounted) return;
-    if (!widget.completer.isCompleted) widget.completer.complete(result);
+    if (!mounted) {
+      return;
+    }
+    if (!widget.completer.isCompleted) {
+      widget.completer.complete(result);
+    }
     widget.onClosed(_restoreFocusOnClose);
   }
 
@@ -413,7 +469,9 @@ class _OverlaySheetState<T> extends State<_OverlaySheet<T>>
         _close();
         return KeyEventResult.handled;
       }
-      if (event is KeyUpEvent) return KeyEventResult.handled;
+      if (event is KeyUpEvent) {
+        return KeyEventResult.handled;
+      }
     }
     return KeyEventResult.ignored;
   }

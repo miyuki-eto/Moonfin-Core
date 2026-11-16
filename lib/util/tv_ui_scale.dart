@@ -16,10 +16,10 @@ library;
 
 import 'package:flutter/material.dart';
 
-/// The canvas width every TV normalizes to. A 1080p panel lands on 1150x647
+/// The canvas width every TV normalizes to. A 1080p panel lands near 1145x644
 /// at an effective density of about 1.67, which is what the ten foot layouts
 /// are sized against.
-const double kTvDesignWidth = 1150;
+const double kTvDesignWidth = 1145;
 
 /// The scale a 1920 wide panel is driven at on [kTvDesignWidth].
 const double kTvTargetScale = 1920 / kTvDesignWidth;

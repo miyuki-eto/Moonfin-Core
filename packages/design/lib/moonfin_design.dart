@@ -23,6 +23,7 @@ export 'src/theme/app_color_scheme.dart';
 export 'src/theme/app_radius.dart';
 export 'src/theme/app_typography.dart';
 export 'src/theme/app_spacing.dart';
+export 'src/theme/app_motion.dart';
 export 'src/theme/app_shapes.dart';
 export 'src/theme/theme_spec.dart';
 export 'src/theme/theme_registry.dart';
@@ -34,3 +35,6 @@ export 'src/widgets/glass_surface.dart';
 export 'src/widgets/glass_backdrop.dart';
 export 'src/widgets/glass_recipe.dart';
 export 'src/widgets/pixel_border_painter.dart';
+export 'src/widgets/loading_throbber.dart';
+
+export 'src/theme/tv_tokens.dart';

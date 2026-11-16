@@ -401,8 +401,7 @@ class ServerDiscoveryService {
         (first == 172 && second >= 16 && second <= 31) ||
         (first == 192 && second == 168) ||
         (first == 169 && second == 254) ||
-        (first == 100 && second >= 64 && second <= 127) ||
-        first == 127;
+        (first == 100 && second >= 64 && second <= 127);
   }
 
   String _formatHostForUrl(String host) {

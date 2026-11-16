@@ -115,7 +115,7 @@ class _BarState extends State<_Bar> {
                     ? const SizedBox(
                         width: 18,
                         height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: LoadingThrobber(),
                       )
                     : Text(l10n.save),
               ),

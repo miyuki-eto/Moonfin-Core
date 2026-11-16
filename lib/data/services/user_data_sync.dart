@@ -30,6 +30,14 @@ class UserDataSync extends ChangeNotifier {
   final Map<String, Map<String, dynamic>> _userData = {};
   StreamSubscription<ServerWebSocketMessage>? _socketSubscription;
 
+  /// The newest favorite flag, or null when no flag has been published. Hero
+  /// slides carry a display model rather than the full server item.
+  bool? favoriteState(String itemId) =>
+      switch (_userData[itemId]?['IsFavorite']) {
+        final bool value => value,
+        _ => null,
+      };
+
   /// Records this client's own change before the server confirms it. Merges, so
   /// a patch that only carries `Played` leaves a known play count alone.
   void publish(String itemId, Map<String, dynamic> userData) {

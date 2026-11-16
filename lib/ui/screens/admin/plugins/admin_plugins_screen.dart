@@ -263,7 +263,7 @@ class _InstalledTab extends ConsumerWidget {
     final packagesAsync = ref.watch(adminAvailablePackagesProvider);
 
     return pluginsAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: LoadingThrobber()),
       error: (error, _) => Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -690,7 +690,7 @@ class _CatalogTab extends ConsumerWidget {
     final packagesAsync = ref.watch(adminAvailablePackagesProvider);
 
     return packagesAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: LoadingThrobber()),
       error: (error, _) => Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

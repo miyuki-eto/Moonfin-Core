@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:get_it/get_it.dart';
 import 'package:server_core/server_core.dart';
 
@@ -244,7 +245,7 @@ class _AdminConfigFormScreenState extends State<AdminConfigFormScreen>
       );
     }
     if (_config == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: LoadingThrobber());
     }
     return ListView(
       padding: EdgeInsets.fromLTRB(

@@ -341,7 +341,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
   }
 
   Widget _buildBody(BuildContext context) {
-    if (!_ready) return const Center(child: CircularProgressIndicator());
+    if (!_ready) return const Center(child: LoadingThrobber());
     final l10n = AppLocalizations.of(context);
     final step = _steps[_index];
     final options = _optionsFor(step, l10n);

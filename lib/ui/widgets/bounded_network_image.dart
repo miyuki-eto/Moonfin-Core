@@ -22,6 +22,9 @@ class BoundedNetworkImage extends StatelessWidget {
   final BoxFit fit;
   final Alignment alignment;
   final Duration fadeInDuration;
+
+  /// Shown while remote artwork is fetching.
+  final Widget Function(BuildContext context, String url)? placeholderBuilder;
   final Widget Function(BuildContext context, String url, Object error)?
   errorBuilder;
   final VoidCallback? onLoadFinished;
@@ -59,6 +62,7 @@ class BoundedNetworkImage extends StatelessWidget {
     this.fit = BoxFit.cover,
     this.alignment = Alignment.center,
     this.fadeInDuration = Duration.zero,
+    this.placeholderBuilder,
     this.errorBuilder,
     this.onLoadFinished,
     this.cacheManager,
@@ -177,6 +181,7 @@ class BoundedNetworkImage extends StatelessWidget {
       fit: fit,
       alignment: alignment,
       fadeInDuration: fadeInDuration,
+      placeholder: placeholderBuilder,
       memCacheWidth: decodeWidth,
       memCacheHeight: decodeHeight,
       imageBuilder: onLoadFinished == null

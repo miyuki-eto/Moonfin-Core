@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:moonfin_design/moonfin_design.dart';
 
 import '../../../../../data/models/aggregated_item.dart';
+import '../../../../../config/app_features.dart';
 import '../../../../../data/viewmodels/item_detail_view_model.dart';
 import '../../../../../l10n/app_localizations.dart';
 import '../../../../../preference/detail_section_layout.dart';
@@ -19,9 +20,11 @@ import '../../../../widgets/focus/focusable_wrapper.dart';
 import '../../../../widgets/focus/hub_focus_memory.dart';
 import '../../../../widgets/focus/locked_focus_row.dart';
 import '../../../../widgets/navigation_layout.dart';
+import '../../../../widgets/media_card.dart';
 import '../../../../widgets/overlay_sheet.dart';
 import '../../../../widgets/seerr/seerr_image_urls.dart';
 import '../../../../widgets/seerr_icons.dart';
+import '../../collection_sort_dialog.dart';
 import '../../item_detail_screen.dart';
 import '../shared/nouveau_landscape_media_card.dart';
 import '../shared/nouveau_poster_card.dart';
@@ -63,8 +66,7 @@ class NouveauCollectionSection extends StatefulWidget {
       NouveauCollectionSectionState();
 }
 
-class NouveauCollectionSectionState
-    extends State<NouveauCollectionSection> {
+class NouveauCollectionSectionState extends State<NouveauCollectionSection> {
   static int _hubSession = 0;
 
   static const int _paginationThreshold = 8;
@@ -115,16 +117,15 @@ class NouveauCollectionSectionState
     final missing = _vm.missingCollectionItems;
 
     if (live.isNotEmpty || missing.isNotEmpty) {
-      return showMissing
-          ? mergeMissingByReleaseOrder(live, missing)
-          : live;
+      return showMissing ? mergeMissingByReleaseOrder(live, missing) : live;
     }
 
     return _stableCollectionItems;
   }
 
   List<AggregatedItem> get _playlistItems {
-    if (!widget.visibility.shows(DetailSection.playlistOrder)) {
+    if (!AppFeatures.has(AppFeature.playlists) ||
+        !widget.visibility.shows(DetailSection.playlistOrder)) {
       return const [];
     }
 
@@ -714,8 +715,8 @@ class NouveauCollectionSectionState
 
   void _openItem(BuildContext context, AggregatedItem item) {
     if (item.serverId == 'seerr') {
-      final mediaType = item.seerrMediaType ??
-          (item.type == 'Series' ? 'tv' : 'movie');
+      final mediaType =
+          item.seerrMediaType ?? (item.type == 'Series' ? 'tv' : 'movie');
       final tmdbId = item.tmdbId;
       final targetId = (tmdbId != null && tmdbId.isNotEmpty)
           ? tmdbId
@@ -818,12 +819,13 @@ class NouveauCollectionSectionState
       return;
     }
 
-    final option = await showFocusRestoringDialog<CollectionSortOption>(
-      context: context,
-      builder: (dialogContext) {
-        return _NouveauCollectionSortDialog(selected: _vm.collectionSort);
-      },
-    );
+    final option = PlatformDetection.isTV
+        ? await showTvCollectionSortDialog(context, _vm.collectionSort)
+        : await showFocusRestoringDialog<CollectionSortOption>(
+            context: context,
+            builder: (_) =>
+                _NouveauCollectionSortDialog(selected: _vm.collectionSort),
+          );
 
     if (!mounted || option == null) {
       return;
@@ -898,7 +900,9 @@ class NouveauCollectionSectionState
       );
     }
 
-    final cardSpacing = NouveauSpacing.railItemGap;
+    final cardSpacing = PlatformDetection.isTV
+        ? Tv26Style.railItemGap
+        : NouveauSpacing.railItemGap;
 
     final visibleItemCount = NouveauSpacing.discoveryVisibleItemCount;
 
@@ -946,7 +950,7 @@ class NouveauCollectionSectionState
         : NouveauSpacing.railItemGap;
 
     final visibleItemCount = PlatformDetection.isTV
-        ? NouveauSpacing.tvEpisodeVisibleItemCount
+        ? NouveauSpacing.tvCollectionVisibleItemCount
         : NouveauSpacing.episodeVisibleItemCount;
 
     final cardWidth =
@@ -955,7 +959,9 @@ class NouveauCollectionSectionState
 
     final imageHeight = cardWidth * 9 / 16;
 
-    final detailsHeight = textScaler.scale(82).clamp(82.0, 118.0);
+    final detailsHeight = PlatformDetection.isTV
+        ? NouveauLandscapeMediaCard.tvCaptionHeight(textScaler)
+        : textScaler.scale(82).clamp(82.0, 118.0);
 
     return _PlaylistLayout(
       viewportWidth: availableWidth,
@@ -1186,7 +1192,9 @@ class NouveauCollectionSectionState
       children: [
         Text(
           title ?? l10n.collection,
-          style: layout.compact
+          style: PlatformDetection.isTV
+              ? Tv26Style.sectionTitle
+              : layout.compact
               ? textTheme.titleLarge?.copyWith(
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
@@ -1219,6 +1227,12 @@ class NouveauCollectionSectionState
                     width: layout.viewportWidth,
                     height: layout.cardHeight,
                     child: LockedFocusRow<AggregatedItem>(
+                      viewportInsets: PlatformDetection.isTV
+                          ? Tv26Style.railPadding
+                          : EdgeInsets.zero,
+                      paintOutset: PlatformDetection.isTV
+                          ? MediaCard.focusRingOutset
+                          : 0,
                       key: rowKey ?? _collectionRowKey,
                       items: items,
                       hubKey: hubKey ?? _collectionHubKey,
@@ -1232,13 +1246,16 @@ class NouveauCollectionSectionState
                       onLongPress: (_, item) {
                         _showItemContextMenu(context, item);
                       },
-                      onIndexChanged: onIndexChanged ?? _handleCollectionIndexChanged,
-                      onVerticalNavigation: onVerticalNavigation ??
+                      onIndexChanged:
+                          onIndexChanged ?? _handleCollectionIndexChanged,
+                      onVerticalNavigation:
+                          onVerticalNavigation ??
                           _handleCollectionVerticalNavigation,
                       onLeftEdge: _navbarIsLeft ? _handleLeftEdge : null,
                       itemBuilder: (context, item, index, isFocused) {
                         final hasNext = index < items.length - 1;
-                        final isSeerrItem = item.serverId == 'seerr' ||
+                        final isSeerrItem =
+                            item.serverId == 'seerr' ||
                             item.id.startsWith('tmdb:');
 
                         return Padding(
@@ -1303,7 +1320,9 @@ class NouveauCollectionSectionState
                 l10n.playlist,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: layout.compact
+                style: PlatformDetection.isTV
+                    ? Tv26Style.sectionTitle
+                    : layout.compact
                     ? theme.textTheme.titleLarge?.copyWith(
                         fontSize: 22,
                         fontWeight: FontWeight.w700,
@@ -1375,12 +1394,14 @@ class NouveauCollectionSectionState
                       ? foreground.withValues(alpha: 0.12)
                       : foreground.withValues(alpha: 0.045),
                   borderRadius: AppRadius.circular(999),
-                  border: Border.all(
-                    color: _sortFocused
-                        ? foreground.withValues(alpha: 0.72)
-                        : foreground.withValues(alpha: 0.10),
-                    width: _sortFocused ? 1.5 : 1,
-                  ),
+                  border: PlatformDetection.isTV && !_sortFocused
+                      ? Tv26Style.surfaceBorder
+                      : Border.all(
+                          color: _sortFocused
+                              ? foreground.withValues(alpha: 0.72)
+                              : foreground.withValues(alpha: 0.10),
+                          width: _sortFocused ? 1.5 : 1,
+                        ),
                   boxShadow: _sortFocused
                       ? [
                           BoxShadow(
@@ -1401,8 +1422,7 @@ class NouveauCollectionSectionState
                                 ),
                                 width: 17,
                                 height: 17,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 1.8,
+                                child: LoadingThrobber(
                                   color: foreground.withValues(alpha: 0.82),
                                 ),
                               )
@@ -1424,13 +1444,10 @@ class NouveauCollectionSectionState
                             duration: const Duration(milliseconds: 150),
                             child: _sortInProgress
                                 ? SizedBox(
-                                    key: const ValueKey(
-                                      'nouveau-sort-loading',
-                                    ),
+                                    key: const ValueKey('nouveau-sort-loading'),
                                     width: 17,
                                     height: 17,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 1.8,
+                                    child: LoadingThrobber(
                                       color: foreground.withValues(alpha: 0.82),
                                     ),
                                   )
@@ -1494,6 +1511,12 @@ class NouveauCollectionSectionState
               width: layout.viewportWidth,
               height: layout.railHeight,
               child: LockedFocusRow<AggregatedItem>(
+                viewportInsets: PlatformDetection.isTV
+                    ? Tv26Style.railPadding
+                    : EdgeInsets.zero,
+                paintOutset: PlatformDetection.isTV
+                    ? MediaCard.focusRingOutset
+                    : 0,
                 key: _playlistRowKey,
                 items: items,
                 hubKey: _playlistHubKey,
@@ -1502,7 +1525,11 @@ class NouveauCollectionSectionState
                 itemExtent: layout.itemExtent,
                 clipBehavior: Clip.none,
                 onTap: (_, item) {
-                  _playItem(context, item);
+                  if (PlatformDetection.isTV) {
+                    _openItem(context, item);
+                  } else {
+                    _playItem(context, item);
+                  }
                 },
                 onLongPress: (_, item) {
                   _showItemContextMenu(context, item);
@@ -1809,9 +1836,15 @@ class _CollectionPosterReservation extends StatelessWidget {
               width: layout.cardWidth,
               height: layout.cardHeight,
               decoration: BoxDecoration(
-                color: foreground.withValues(alpha: 0.035),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: foreground.withValues(alpha: 0.07)),
+                color: PlatformDetection.isTV
+                    ? Tv26Style.cardPlaceholder
+                    : foreground.withValues(alpha: 0.035),
+                borderRadius: BorderRadius.circular(
+                  PlatformDetection.isTV ? Tv26Style.cardRadius : 16,
+                ),
+                border: PlatformDetection.isTV
+                    ? Tv26Style.surfaceBorder
+                    : Border.all(color: foreground.withValues(alpha: 0.07)),
               ),
             );
           },

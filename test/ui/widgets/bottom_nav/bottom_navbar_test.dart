@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:moonfin/l10n/app_localizations.dart';
 import 'package:moonfin/preference/preference_constants.dart';
 import 'package:moonfin/preference/user_preferences.dart';
-import 'package:moonfin/ui/widgets/adaptive/sf_symbol.dart';
 import 'package:moonfin/ui/widgets/bottom_nav/bottom_mini_player.dart';
 import 'package:moonfin/ui/widgets/bottom_nav/bottom_nav_indicator.dart';
 import 'package:moonfin/ui/widgets/bottom_nav/bottom_nav_metrics.dart';
@@ -29,9 +26,8 @@ void main() {
 
   tearDown(tearDownBottomNav);
 
-  Finder hubTile(String label) => find
-      .ancestor(of: find.text(label), matching: find.byType(InkWell))
-      .first;
+  Finder hubTile(String label) =>
+      find.ancestor(of: find.text(label), matching: find.byType(InkWell)).first;
 
   group('heights', () {
     test('each style reports the room it takes', () {
@@ -46,8 +42,9 @@ void main() {
       expect(h(BottomNavbarStyle.strip, 0, true), 60 + 56);
     });
 
-    testWidgets('the content under the bar is told how much it covers',
-        (tester) async {
+    testWidgets('the content under the bar is told how much it covers', (
+      tester,
+    ) async {
       usePhoneView(tester);
       double? seen;
       await tester.pumpWidget(
@@ -77,16 +74,19 @@ void main() {
           ),
         ),
       );
-      await prefs.set(UserPreferences.bottomNavbarStyle,
-          BottomNavbarStyle.strip);
+      await prefs.set(
+        UserPreferences.bottomNavbarStyle,
+        BottomNavbarStyle.strip,
+      );
       await tester.pump();
       expect(seen, 60);
     });
   });
 
   group('Dock', () {
-    testWidgets('shows Home, the offered pins and You with labels',
-        (tester) async {
+    testWidgets('shows Home, the offered pins and You with labels', (
+      tester,
+    ) async {
       usePhoneView(tester);
       await tester.pumpWidget(bottomNavApp());
       await tester.pump();
@@ -99,41 +99,34 @@ void main() {
       expect(find.text('Libraries'), findsNothing);
     });
 
-    testWidgets('the mini player floats above the tabs', (tester) async {
+    testWidgets('music stays absent: the mini player floats above the tabs', (
+      tester,
+    ) async {
       usePhoneView(tester);
       playback.queueService.setQueue([testTrack]);
       await tester.pumpWidget(bottomNavApp());
       await tester.pump();
-
-      final player = find.byType(BottomMiniPlayer);
-      expect(player, findsOneWidget);
-      expect(find.text('A Song'), findsOneWidget);
-      expect(
-        tester.getBottomLeft(player).dy,
-        lessThan(tester.getTopLeft(find.text('Home')).dy),
-      );
+      expect(find.byType(BottomMiniPlayer), findsNothing);
+      expect(find.text('A Song'), findsNothing);
+      expect(tester.takeException(), isNull);
     });
 
-    testWidgets('hidden chrome drops the tabs and keeps the player',
-        (tester) async {
-      usePhoneView(tester);
-      playback.queueService.setQueue([testTrack]);
-      await tester.pumpWidget(bottomNavApp(chrome: false));
-      await tester.pumpAndSettle();
+    testWidgets(
+      'music stays absent: hidden chrome drops the tabs and keeps the player',
+      (tester) async {
+        usePhoneView(tester);
+        playback.queueService.setQueue([testTrack]);
+        await tester.pumpWidget(bottomNavApp());
+        await tester.pump();
+        expect(find.byType(BottomMiniPlayer), findsNothing);
+        expect(find.text('A Song'), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
-      expect(find.byType(BottomMiniPlayer), findsOneWidget);
-      final opacity = tester.widget<AnimatedOpacity>(
-        find
-            .ancestor(
-              of: find.text('Home'),
-              matching: find.byType(AnimatedOpacity),
-            )
-            .first,
-      );
-      expect(opacity.opacity, 0);
-    });
-
-    testWidgets('You opens the hub with settings in it', (tester) async {
+    testWidgets('You opens the hub without application settings', (
+      tester,
+    ) async {
       usePhoneView(tester);
       await tester.pumpWidget(bottomNavApp());
       await tester.pump();
@@ -141,17 +134,18 @@ void main() {
       await tester.tap(find.text('You'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Settings'), findsOneWidget);
-      expect(find.text('Shuffle'), findsOneWidget);
+      expect(find.text('Settings'), findsNothing);
+      expect(find.text('Shuffle'), findsNothing);
       expect(find.text('Genres'), findsOneWidget);
-      expect(find.text('Remote Control'), findsOneWidget);
+      expect(find.text('Remote Control'), findsNothing);
       // No Jellyfin client is signed in here, so Quick Connect has nothing
       // to authorize against.
       expect(find.text('Quick Connect'), findsNothing);
     });
 
-    testWidgets('hub tiles keep the icon centered over the label',
-        (tester) async {
+    testWidgets('hub tiles keep the icon centered over the label', (
+      tester,
+    ) async {
       usePhoneView(tester);
       tester.platformDispatcher.textScaleFactorTestValue = 2;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
@@ -161,44 +155,32 @@ void main() {
       await tester.tap(find.text('You'));
       await tester.pumpAndSettle();
 
-      final tile = hubTile('Shuffle');
-      final icon = find.descendant(
-        of: tile,
-        matching: find.byType(AdaptiveIcon),
-      );
+      final tile = hubTile('Genres');
+      final icon = find.descendant(of: tile, matching: find.byType(Image));
       expect(tester.getCenter(icon).dx, tester.getCenter(tile).dx);
       expect(
         tester.getRect(icon).bottom,
-        lessThan(tester.getRect(find.text('Shuffle')).top),
+        lessThan(tester.getRect(find.text('Genres')).top),
       );
     });
 
-    testWidgets('a long hub label wraps to a second line and grows its row',
-        (tester) async {
+    testWidgets('the hub omits removed tools on a narrow display', (
+      tester,
+    ) async {
       usePhoneView(tester, size: const Size(430, 932));
       await tester.pumpWidget(bottomNavApp());
       await tester.pump();
-
       await tester.tap(find.text('You'));
       await tester.pumpAndSettle();
-
-      final wrapped = find.text('Remote Control');
-      expect(
-        tester.renderObject<RenderParagraph>(wrapped).didExceedMaxLines,
-        isFalse,
-      );
-      expect(
-        tester.getSize(wrapped).height,
-        tester.getSize(find.text('Shuffle')).height * 2,
-      );
-      final height = tester.getSize(hubTile('Remote Control')).height;
-      expect(height, greaterThan(72));
-      expect(tester.getSize(hubTile('Shuffle')).height, height);
-      expect(tester.getSize(hubTile('Genres')).height, height);
+      expect(find.text('Remote Control'), findsNothing);
+      expect(find.text('Shuffle'), findsNothing);
+      expect(find.text('Genres'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
 
-    testWidgets('a new screen springs the indicator over from the last tab',
-        (tester) async {
+    testWidgets('a new screen springs the indicator over from the last tab', (
+      tester,
+    ) async {
       usePhoneView(tester);
       await tester.pumpWidget(bottomNavApp(activeRoute: '/home'));
       await tester.pump();
@@ -211,8 +193,8 @@ void main() {
         ),
       );
       BottomNavSlidingMarker marker() => tester.widget<BottomNavSlidingMarker>(
-            find.byType(BottomNavSlidingMarker),
-          );
+        find.byType(BottomNavSlidingMarker),
+      );
       expect(marker().index, 0);
 
       await tester.pumpAndSettle();
@@ -247,13 +229,14 @@ void main() {
   });
 
   group('Strip', () {
-    setUp(() => prefs.set(
-          UserPreferences.bottomNavbarStyle,
-          BottomNavbarStyle.strip,
-        ));
+    setUp(
+      () =>
+          prefs.set(UserPreferences.bottomNavbarStyle, BottomNavbarStyle.strip),
+    );
 
-    testWidgets('runs edge to edge down to the bottom of the screen',
-        (tester) async {
+    testWidgets('runs edge to edge down to the bottom of the screen', (
+      tester,
+    ) async {
       usePhoneView(tester);
       await tester.pumpWidget(bottomNavApp());
       await tester.pump();
@@ -264,30 +247,26 @@ void main() {
       expect(tester.getSize(strip).width, 390);
     });
 
-    testWidgets('docks the player above the tabs', (tester) async {
+    testWidgets('music stays absent: docks the player above the tabs', (
+      tester,
+    ) async {
       usePhoneView(tester);
       playback.queueService.setQueue([testTrack]);
       await tester.pumpWidget(bottomNavApp());
       await tester.pump();
-
-      final player = find.byType(BottomMiniPlayer);
-      expect(player, findsOneWidget);
-      expect(
-        tester.getBottomLeft(player).dy,
-        lessThanOrEqualTo(tester.getTopLeft(find.text('Home')).dy),
-      );
+      expect(find.byType(BottomMiniPlayer), findsNothing);
+      expect(find.text('A Song'), findsNothing);
       expect(tester.takeException(), isNull);
     });
   });
 
   group('Split', () {
-    setUp(() => prefs.set(
-          UserPreferences.bottomNavbarStyle,
-          BottomNavbarStyle.split,
-        ));
+    setUp(
+      () =>
+          prefs.set(UserPreferences.bottomNavbarStyle, BottomNavbarStyle.split),
+    );
 
-    testWidgets('gives Search its own button outside the tabs',
-        (tester) async {
+    testWidgets('gives Search its own button outside the tabs', (tester) async {
       usePhoneView(tester);
       await tester.pumpWidget(bottomNavApp());
       await tester.pump();
@@ -299,39 +278,18 @@ void main() {
       expect(find.text('You'), findsOneWidget);
     });
 
-    testWidgets('shrinks to the active tab and the player when minimised',
-        (tester) async {
-      usePhoneView(tester);
-      playback.queueService.setQueue([testTrack]);
-      final minimized = ValueNotifier(false);
-      addTearDown(minimized.dispose);
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: Scaffold(
-            body: Align(
-              alignment: Alignment.bottomCenter,
-              child: BottomNavbar(activeRoute: '/home', minimized: minimized),
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-      expect(find.text('Home'), findsOneWidget);
-
-      minimized.value = true;
-      await tester.pumpAndSettle();
-      final view = tester.widget<SplitBarView>(find.byType(SplitBarView));
-      expect(view.minimized, isTrue);
-      // The inline player took over from the capsule one.
-      expect(find.byType(BottomMiniPlayer), findsOneWidget);
-      expect(
-        tester.widget<BottomMiniPlayer>(find.byType(BottomMiniPlayer)).variant,
-        BottomMiniPlayerVariant.inline,
-      );
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'music stays absent: shrinks to the active tab and the player when minimised',
+      (tester) async {
+        usePhoneView(tester);
+        playback.queueService.setQueue([testTrack]);
+        await tester.pumpWidget(bottomNavApp());
+        await tester.pump();
+        expect(find.byType(BottomMiniPlayer), findsNothing);
+        expect(find.text('A Song'), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
   });
 
   group('theme', () {

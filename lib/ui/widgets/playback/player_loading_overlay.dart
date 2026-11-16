@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
+import 'package:moonfin_design/moonfin_design.dart';
 
 import '../../../preference/preference_constants.dart';
 import '../../../preference/user_preferences.dart';
 import 'loading_animation_widget.dart';
+import '../../../util/platform_detection.dart';
 
 class PlayerLoadingOverlay extends StatefulWidget {
   const PlayerLoadingOverlay({
@@ -49,7 +51,10 @@ class _PlayerLoadingOverlayState extends State<PlayerLoadingOverlay>
     _labelController = AnimationController(
       duration: const Duration(seconds: 2),
       vsync: this,
-    )..repeat(reverse: true);
+    );
+    if (!PlatformDetection.isTV) {
+      _labelController.repeat(reverse: true);
+    }
 
     final pulseCurve = CurvedAnimation(
       parent: _labelController,
@@ -67,28 +72,65 @@ class _PlayerLoadingOverlayState extends State<PlayerLoadingOverlay>
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformDetection.isTV) {
+      return IgnorePointer(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.black54,
+            borderRadius: BorderRadius.circular(Tv26Style.radius),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: Tv26Style.compactButtonPadding,
+              vertical: Tv26Style.playerControlGap,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              spacing: Tv26Style.playerControlGap,
+              children: [
+                const LoadingThrobber(color: Tv26Style.foreground),
+                if (widget.label case final label?)
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Tv26Style.text(13),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     final prefs = GetIt.instance.isRegistered<UserPreferences>()
         ? GetIt.instance<UserPreferences>()
         : null;
 
-    final image = widget.customImage ??
+    final image =
+        widget.customImage ??
         prefs?.get(UserPreferences.loadingAnimationImage) ??
         LoadingAnimationImage.moonfinLogo;
 
-    final sizePref = prefs?.get(UserPreferences.loadingAnimationSize) ??
+    final sizePref =
+        prefs?.get(UserPreferences.loadingAnimationSize) ??
         LoadingAnimationSize.medium;
 
     final effectiveSize = widget.customSize ?? sizePref.pixelSize;
 
-    final effectivePosition = widget.customPosition ??
+    final effectivePosition =
+        widget.customPosition ??
         prefs?.get(UserPreferences.loadingAnimationPosition) ??
         LoadingAnimationPosition.middle;
 
-    final showText = widget.customShowText ??
+    final showText =
+        widget.customShowText ??
         prefs?.get(UserPreferences.showLoadingAnimationText) ??
         true;
 
-    final effectiveSpeed = widget.customSpeed ??
+    final effectiveSpeed =
+        widget.customSpeed ??
         prefs?.get(UserPreferences.loadingAnimationSpeed) ??
         LoadingAnimationSpeed.fast;
 

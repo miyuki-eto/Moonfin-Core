@@ -47,7 +47,17 @@ bool isForcedSubtitleStream(Map<String, dynamic> stream) {
     stream['Title'] as String?,
     stream['Name'] as String?,
   ].whereType<String>().map((s) => s.toLowerCase()).join(' ');
-  return _forcedTitle.hasMatch(titleParts);
+  if (_forcedTitle.hasMatch(titleParts)) return true;
+  // Releases often label the dub's partial captions without setting IsForced.
+  // Full/dialogue tracks may mention signs too, so keep those in the full list.
+  if (RegExp(r'\b(full|dialogue|dialog)\b').hasMatch(titleParts)) return false;
+  if (RegExp(
+    r'\b(signs\s*(?:&|and|/|\+)\s*songs|songs\s*(?:&|and|/|\+)\s*signs|(?:signs|songs)\s+only)\b',
+  ).hasMatch(titleParts)) return true;
+  return ['Title', 'DisplayTitle', 'Name'].any((key) {
+    final label = (stream[key] as String?)?.trim().toLowerCase();
+    return label == 'signs' || label == 'songs';
+  });
 }
 
 bool shouldRenderSubtitleNatively(String? codec) {
@@ -256,20 +266,18 @@ int? computeEffectiveSubtitleIndex({
       return aSpecial ? 1 : -1;
     }
 
+    // Complete dialogue must win over partial captions, even when the full
+    // track is external, SDH, or a less preferred format.
+    if (a.forced != b.forced && subtitleMode != SubtitleMode.forced) {
+      return a.forced ? 1 : -1;
+    }
+
     // 2. SDH match
     if (preferSdh) {
       final aSdhMatch = isSdhSubtitleStream(streamA);
       final bSdhMatch = isSdhSubtitleStream(streamB);
       if (aSdhMatch != bSdhMatch) {
         return aSdhMatch ? -1 : 1;
-      }
-    }
-
-    // 3. A forced track only carries the foreign dialogue, so neither
-    // preference below may lift one above a full track.
-    if (preferTextSubtitles || preferExternalSubtitles) {
-      if (a.forced != b.forced) {
-        return a.forced ? 1 : -1;
       }
     }
 
@@ -308,15 +316,6 @@ int? computeEffectiveSubtitleIndex({
     final bFormat = getFormatPriority(streamB);
     if (aFormat != bFormat) {
       return aFormat > bFormat ? -1 : 1;
-    }
-
-    // 8. Forced flag (prefer non-forced for full subtitles, prefer forced for SubtitleMode.forced)
-    if (a.forced != b.forced) {
-      if (subtitleMode == SubtitleMode.forced) {
-        return a.forced ? -1 : 1;
-      } else {
-        return a.forced ? 1 : -1;
-      }
     }
 
     // 9. Default flag
@@ -450,7 +449,7 @@ int? matchSeriesTrackIndex({
 
   // Position only counts tracks of the same kind as the remembered one, so a
   // forced track listed first can't stand in for the full one.
-  final prefForced = _forcedTitle.hasMatch(targetTitle);
+  final prefForced = isForcedSubtitleStream({'Title': targetTitle});
   final sameKind = matchingStreams
       .where((s) => isForcedSubtitleStream(s) == prefForced)
       .toList();

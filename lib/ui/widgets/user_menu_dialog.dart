@@ -1,3 +1,5 @@
+import '../../config/app_features.dart';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +10,7 @@ import 'package:server_core/server_core.dart';
 
 import 'package:jellyfin_preference/jellyfin_preference.dart';
 
+import '../settings_visibility.dart';
 import '../../auth/models/server.dart';
 import '../../auth/models/user.dart';
 import '../../auth/repositories/server_repository.dart';
@@ -35,8 +38,12 @@ void showUserMenu(BuildContext context) {
     context: context,
     builder: (_) => const _AccountDialog(),
   ).then((action) {
-    if (action != _AccountDialogAction.quickConnect) return;
-    if (!context.mounted) return;
+    if (action != _AccountDialogAction.quickConnect) {
+      return;
+    }
+    if (!context.mounted) {
+      return;
+    }
     showQuickConnectCodeDialog(context);
   });
 }
@@ -86,7 +93,9 @@ class _AccountDialogState extends State<_AccountDialog> {
       }
     }
 
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _accounts
         ..clear()
@@ -101,7 +110,9 @@ class _AccountDialogState extends State<_AccountDialog> {
 
   String? _avatarUrl(_StoredAccount account) {
     final apiKey = account.user.accessToken;
-    if (apiKey.isEmpty) return null;
+    if (apiKey.isEmpty) {
+      return null;
+    }
 
     final base =
         '${account.server.address}/Users/${account.user.id}/Images/Primary?quality=90&maxHeight=180&${account.server.serverType.tokenQueryParam}=$apiKey';
@@ -113,10 +124,14 @@ class _AccountDialogState extends State<_AccountDialog> {
   }
 
   Future<void> _switchAccount(_StoredAccount account) async {
-    if (_busy) return;
+    if (_busy) {
+      return;
+    }
 
     if (_isActive(account)) {
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
       return;
     }
 
@@ -126,7 +141,9 @@ class _AccountDialogState extends State<_AccountDialog> {
     try {
       await _switchVerifiedAccount(account);
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
   }
 
@@ -139,7 +156,9 @@ class _AccountDialogState extends State<_AccountDialog> {
       accessToken: account.user.accessToken,
     );
     await guard.refresh();
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
     if (guard.pin.isPinEnabled) {
       final verified = await PinEntryDialog.show(
@@ -155,14 +174,18 @@ class _AccountDialogState extends State<_AccountDialog> {
           }
         },
       );
-      if (!verified) return;
+      if (!verified) {
+        return;
+      }
     }
 
     final ok = await _sessionRepo.switchCurrentSession(
       serverId: account.server.id,
       userId: account.user.id,
     );
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     final router = GoRouter.of(context);
 
     if (ok) {
@@ -178,17 +201,23 @@ class _AccountDialogState extends State<_AccountDialog> {
   }
 
   Future<void> _signOutCurrent() async {
-    if (_busy) return;
+    if (_busy) {
+      return;
+    }
     setState(() => _busy = true);
     await _sessionRepo.destroyCurrentSession();
 
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     Navigator.of(context).pop();
     context.go(Destinations.serverSelect);
   }
 
   Future<void> _signOutAll() async {
-    if (_busy) return;
+    if (_busy) {
+      return;
+    }
     setState(() => _busy = true);
 
     await _sessionRepo.destroyCurrentSession();
@@ -198,7 +227,9 @@ class _AccountDialogState extends State<_AccountDialog> {
       await _serverRepo.deleteServer(id);
     }
 
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     Navigator.of(context).pop();
     context.go(Destinations.serverSelect);
   }
@@ -264,16 +295,24 @@ class _AccountDialogState extends State<_AccountDialog> {
         ),
         decoration: BoxDecoration(
           color: AppColorScheme.surface.withValues(alpha: 0.9),
-          borderRadius: AppRadius.circular(20),
-          border: Border.fromBorderSide(ThemeRegistry.active.borders.chipBorder),
+          borderRadius: PlatformDetection.isTV
+              ? Tv26Style.modalShape.borderRadius
+              : AppRadius.circular(20),
+          border: Border.fromBorderSide(
+            ThemeRegistry.active.borders.chipBorder,
+          ),
         ),
-        padding: const EdgeInsets.symmetric(vertical: 20),
+        padding: PlatformDetection.isTV
+            ? Tv26Style.modalMenuPadding
+            : const EdgeInsets.symmetric(vertical: 20),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                padding: PlatformDetection.isTV
+                  ? Tv26Style.modalMenuHeaderPadding
+                  : const EdgeInsets.fromLTRB(24, 0, 24, 12),
                 child: Row(
                   children: [
                     Expanded(
@@ -290,7 +329,9 @@ class _AccountDialogState extends State<_AccountDialog> {
                     if (!PlatformDetection.isTV)
                       _CircleActionButton(
                         icon: Icons.close,
-                        onPressed: _busy ? null : () => Navigator.of(context).pop(),
+                        onPressed: _busy
+                            ? null
+                            : () => Navigator.of(context).pop(),
                         focusColor: focusColor,
                       ),
                   ],
@@ -308,7 +349,11 @@ class _AccountDialogState extends State<_AccountDialog> {
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                       final cards = <Widget>[
-                        for (var index = 0; index < _accounts.length; index++) ...[
+                        for (
+                          var index = 0;
+                          index < _accounts.length;
+                          index++
+                        ) ...[
                           if (index > 0) const SizedBox(width: 20),
                           _AccountCard(
                             username: _accounts[index].user.name,
@@ -316,7 +361,9 @@ class _AccountDialogState extends State<_AccountDialog> {
                             avatarUrl: _avatarUrl(_accounts[index]),
                             active: _isActive(_accounts[index]),
                             autofocus: index == initialAccountFocusIndex,
-                            onTap: _busy ? null : () => _switchAccount(_accounts[index]),
+                            onTap: _busy
+                                ? null
+                                : () => _switchAccount(_accounts[index]),
                             focusColor: focusColor,
                           ),
                         ],
@@ -332,7 +379,9 @@ class _AccountDialogState extends State<_AccountDialog> {
                       return SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: ConstrainedBox(
-                          constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                          constraints: BoxConstraints(
+                            minWidth: constraints.maxWidth,
+                          ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: cards,
@@ -383,30 +432,35 @@ class _AccountDialogState extends State<_AccountDialog> {
                 ),
               ],
               // The bottom navbar hub has these already.
-              if (!PlatformDetection.isTV &&
+              if (AppFeatures.has(AppFeature.casting) &&
+                  !PlatformDetection.isTV &&
                   !NavigationLayout.usesBottomNavbar) ...[
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: _ActionButton(
-                      label: l10n.settings,
-                      onPressed: _busy
-                          ? null
-                          : () async {
-                              Navigator.of(context).pop();
-                              if (!context.mounted) return;
-                              await SettingsPanel.open(
-                                context,
-                                const SettingsSidePanel(),
-                              );
-                            },
-                      focusColor: focusColor,
+                if (showAppSettings) ...[
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: _ActionButton(
+                        label: l10n.settings,
+                        onPressed: _busy
+                            ? null
+                            : () async {
+                                Navigator.of(context).pop();
+                                if (!context.mounted) {
+                                  return;
+                                }
+                                await SettingsPanel.open(
+                                  context,
+                                  const SettingsSidePanel(),
+                                );
+                              },
+                        focusColor: focusColor,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 8),
+                  const SizedBox(height: 8),
+                ],
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: _buildPairedActionButtons(
@@ -414,21 +468,23 @@ class _AccountDialogState extends State<_AccountDialog> {
                       label: l10n.quickConnect,
                       onPressed: _busy
                           ? null
-                          : () => Navigator.of(
-                              context,
-                            ).pop(_AccountDialogAction.quickConnect),
+                          : () =>
+                                Navigator.of(context)
+                                    .pop(_AccountDialogAction.quickConnect),
                       focusColor: focusColor,
                     ),
-                    second: _ActionButton(
-                      label: l10n.remoteControl,
-                      onPressed: _busy
-                          ? null
-                          : () {
-                              Navigator.of(context).pop();
-                              showRemoteControlDialog(context);
-                            },
-                      focusColor: focusColor,
-                    ),
+                    second: !AppFeatures.has(AppFeature.casting)
+                        ? const SizedBox.shrink()
+                        : _ActionButton(
+                            label: l10n.remoteControl,
+                            onPressed: _busy
+                                ? null
+                                : () {
+                                    Navigator.of(context).pop();
+                                    showRemoteControlDialog(context);
+                                  },
+                            focusColor: focusColor,
+                          ),
                   ),
                 ),
               ],
@@ -443,7 +499,9 @@ class _AccountDialogState extends State<_AccountDialog> {
 Future<void> showQuickConnectCodeDialog(BuildContext context) async {
   final l10n = AppLocalizations.of(context);
   final code = await _promptQuickConnectCode(context);
-  if (code == null || code.isEmpty || !context.mounted) return;
+  if (code == null || code.isEmpty || !context.mounted) {
+    return;
+  }
 
   final messenger = ScaffoldMessenger.of(context);
 
@@ -455,7 +513,9 @@ Future<void> showQuickConnectCodeDialog(BuildContext context) async {
       userId: userId,
     );
 
-    if (!context.mounted) return;
+    if (!context.mounted) {
+      return;
+    }
 
     messenger.showSnackBar(
       SnackBar(
@@ -540,7 +600,9 @@ Future<String?> _promptQuickConnectCode(BuildContext context) async {
         ),
         onSubmitted: (_) {
           final value = normalizedCode();
-          if (value.isNotEmpty) Navigator.pop(ctx, value);
+          if (value.isNotEmpty) {
+            Navigator.pop(ctx, value);
+          }
         },
       ),
       actions: [
@@ -551,7 +613,9 @@ Future<String?> _promptQuickConnectCode(BuildContext context) async {
         FilledButton(
           onPressed: () {
             final value = normalizedCode();
-            if (value.isNotEmpty) Navigator.pop(ctx, value);
+            if (value.isNotEmpty) {
+              Navigator.pop(ctx, value);
+            }
           },
           child: Text(l10n.quickConnectAuthorize),
         ),
@@ -586,7 +650,9 @@ class _CircleActionButtonState extends State<_CircleActionButton> {
   void initState() {
     super.initState();
     _focusNode.addListener(() {
-      if (mounted) setState(() => _focused = _focusNode.hasFocus);
+      if (mounted) {
+        setState(() => _focused = _focusNode.hasFocus);
+      }
     });
   }
 
@@ -619,7 +685,9 @@ class _CircleActionButtonState extends State<_CircleActionButton> {
             ? SystemMouseCursors.click
             : MouseCursor.defer,
         onEnter: (_) {
-          if (widget.onPressed != null) _focusNode.requestFocus();
+          if (widget.onPressed != null) {
+            _focusNode.requestFocus();
+          }
         },
         child: GestureDetector(
           onTap: widget.onPressed == null
@@ -684,7 +752,9 @@ class _ActionButtonState extends State<_ActionButton> {
   void initState() {
     super.initState();
     _focusNode.addListener(() {
-      if (mounted) setState(() => _focused = _focusNode.hasFocus);
+      if (mounted) {
+        setState(() => _focused = _focusNode.hasFocus);
+      }
     });
   }
 
@@ -717,7 +787,9 @@ class _ActionButtonState extends State<_ActionButton> {
             ? SystemMouseCursors.click
             : MouseCursor.defer,
         onEnter: (_) {
-          if (widget.onPressed != null) _focusNode.requestFocus();
+          if (widget.onPressed != null) {
+            _focusNode.requestFocus();
+          }
         },
         child: GestureDetector(
           onTap: widget.onPressed == null
@@ -742,7 +814,9 @@ class _ActionButtonState extends State<_ActionButton> {
                     ? (_focused
                           ? focusBorder.copyWith(color: widget.focusColor)
                           : baseBorder.copyWith(
-                              color: AppColorScheme.onSurface.withValues(alpha: 0.12),
+                              color: AppColorScheme.onSurface.withValues(
+                                alpha: 0.12,
+                              ),
                             ))
                     : baseBorder.copyWith(
                         color: AppColorScheme.onSurface.withValues(alpha: 0.08),
@@ -766,7 +840,9 @@ class _ActionButtonState extends State<_ActionButton> {
                   fontSize: 17,
                   fontWeight: FontWeight.w500,
                   color: enabled
-                      ? (_focused ? widget.focusColor : AppColorScheme.onSurface)
+                      ? (_focused
+                            ? widget.focusColor
+                            : AppColorScheme.onSurface)
                       : AppColorScheme.onSurface.withValues(alpha: 0.45),
                 ),
               ),
@@ -810,7 +886,9 @@ class _AccountCardState extends State<_AccountCard> {
   void initState() {
     super.initState();
     _focusNode.addListener(() {
-      if (mounted) setState(() => _focused = _focusNode.hasFocus);
+      if (mounted) {
+        setState(() => _focused = _focusNode.hasFocus);
+      }
     });
   }
 
@@ -853,7 +931,9 @@ class _AccountCardState extends State<_AccountCard> {
             ? SystemMouseCursors.click
             : MouseCursor.defer,
         onEnter: (_) {
-          if (widget.onTap != null) _focusNode.requestFocus();
+          if (widget.onTap != null) {
+            _focusNode.requestFocus();
+          }
         },
         child: GestureDetector(
           onTap: widget.onTap == null
@@ -878,7 +958,9 @@ class _AccountCardState extends State<_AccountCard> {
                     child: _avatarFailed || widget.avatarUrl == null
                         ? Icon(
                             Icons.person,
-                            color: AppColorScheme.onSurface.withValues(alpha: 0.55),
+                            color: AppColorScheme.onSurface.withValues(
+                              alpha: 0.55,
+                            ),
                             size: 68,
                           )
                         : Image.network(
@@ -891,16 +973,19 @@ class _AccountCardState extends State<_AccountCard> {
                             ),
                             errorBuilder: (_, _, _) {
                               if (!_avatarFailed) {
-                                WidgetsBinding.instance
-                                    .addPostFrameCallback((_) {
-                                      if (mounted) {
-                                        setState(() => _avatarFailed = true);
-                                      }
-                                    });
+                                WidgetsBinding.instance.addPostFrameCallback((
+                                  _,
+                                ) {
+                                  if (mounted) {
+                                    setState(() => _avatarFailed = true);
+                                  }
+                                });
                               }
                               return Icon(
                                 Icons.person,
-                                color: AppColorScheme.onSurface.withValues(alpha: 0.55),
+                                color: AppColorScheme.onSurface.withValues(
+                                  alpha: 0.55,
+                                ),
                                 size: 68,
                               );
                             },
@@ -975,7 +1060,9 @@ class _AddUserCardState extends State<_AddUserCard> {
   void initState() {
     super.initState();
     _focusNode.addListener(() {
-      if (mounted) setState(() => _focused = _focusNode.hasFocus);
+      if (mounted) {
+        setState(() => _focused = _focusNode.hasFocus);
+      }
     });
   }
 
@@ -989,10 +1076,10 @@ class _AddUserCardState extends State<_AddUserCard> {
   Widget build(BuildContext context) {
     final borderColor = _focused
         ? widget.focusColor
-      : AppColorScheme.onSurface.withValues(alpha: 0.25);
+        : AppColorScheme.onSurface.withValues(alpha: 0.25);
     final bg = _focused
         ? widget.focusColor.withValues(alpha: 0.14)
-      : AppColorScheme.onSurface.withValues(alpha: 0.06);
+        : AppColorScheme.onSurface.withValues(alpha: 0.06);
 
     return Focus(
       focusNode: _focusNode,
@@ -1013,7 +1100,9 @@ class _AddUserCardState extends State<_AddUserCard> {
             ? SystemMouseCursors.click
             : MouseCursor.defer,
         onEnter: (_) {
-          if (widget.onTap != null) _focusNode.requestFocus();
+          if (widget.onTap != null) {
+            _focusNode.requestFocus();
+          }
         },
         child: GestureDetector(
           onTap: widget.onTap == null

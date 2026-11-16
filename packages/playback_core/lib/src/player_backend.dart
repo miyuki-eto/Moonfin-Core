@@ -154,6 +154,7 @@ abstract class PlayerBackend {
     String? language,
     int? embeddedTrackId,
   }) async {}
+
   /// Additional delay, in seconds, on top of the primary subtitle delay.
   Future<void> setSecondarySubtitleDelay(double seconds) async {}
 
@@ -277,4 +278,30 @@ abstract class PlayerBackend {
   bool get supportsLetterboxCrop => letterboxCropper.isSupported;
 
   void dispose();
+}
+
+/// An engine-specific source preparation budget, shared with channel tuning.
+abstract interface class PlayerOpenLatency {
+  Duration get maxOpenLatency;
+}
+
+/// Opt-in for engines that load extracted PGS while video continues playing.
+/// Other engines keep the existing embedded-PGS extraction avoidance policy.
+abstract interface class AsyncPgsSubtitleBackend {
+  bool get loadsEmbeddedPgsAsFiles;
+}
+
+/// Optional standby source that can be promoted by the next matching play.
+abstract interface class PreviewStreamPreloader {
+  void preloadPreviewSource(
+    String url, {
+    String? container,
+    required Duration startPosition,
+  });
+
+  /// Keeps the active preview paused and available for a quick return.
+  bool parkPreviewSource(String url);
+
+  bool hasPreviewFrame(String url, Duration position);
+  void discardPreviewSource(String url);
 }

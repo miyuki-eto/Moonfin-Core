@@ -212,7 +212,7 @@ class _ThemeStoreScreenState extends State<ThemeStoreScreen> {
             ],
           ),
           body: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: LoadingThrobber())
               : ListView(
                   padding: EdgeInsets.fromLTRB(
                     20,
@@ -274,7 +274,7 @@ class _ThemeStoreScreenState extends State<ThemeStoreScreen> {
         ? const SizedBox(
             width: 20,
             height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
+            child: LoadingThrobber(),
           )
         : (saved ? const Icon(Icons.download_done_outlined) : null);
 

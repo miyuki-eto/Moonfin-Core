@@ -619,7 +619,7 @@ class _SeerrDiscoverScreenState extends State<SeerrDiscoverScreen> {
                   child: SizedBox(
                     width: 24,
                     height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: LoadingThrobber(),
                   ),
                 )
               : hasItems

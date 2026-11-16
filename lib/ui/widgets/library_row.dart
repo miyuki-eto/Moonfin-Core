@@ -6,7 +6,10 @@ import '../../l10n/app_localizations.dart';
 import '../../preference/user_preferences.dart';
 import '../../util/platform_detection.dart';
 import 'horizontal_scroll_section.dart';
+import 'scroll_edge_fade.dart';
 import 'media_card.dart';
+import 'scroll_rail_viewport.dart';
+import '../tv/tv26_button.dart';
 
 class LibraryRow extends StatefulWidget {
   final String title;
@@ -36,11 +39,47 @@ class _LibraryRowState extends State<LibraryRow> {
     final l10n = AppLocalizations.of(context);
     final hasItems = widget.children.isNotEmpty;
     final showControls = hasItems && PlatformDetection.useDesktopUi;
+    if (PlatformDetection.isTV) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: Tv26Style.sectionGap),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(widget.title, style: Tv26Style.sectionTitle),
+                ),
+                if (widget.onSeeAll != null)
+                  Tv26Button(label: l10n.seeAll, onPressed: widget.onSeeAll!),
+              ],
+            ),
+            const SizedBox(height: Tv26Style.railTitleGap),
+            ScrollRailViewport(
+              height: widget.rowHeight ?? 220,
+              viewportInsets: Tv26Style.railPadding,
+              paintOutset: Tv26Style.focusOutset,
+              builder: (context, padding) => ListView.separated(
+                controller: widget.scrollController,
+                scrollDirection: Axis.horizontal,
+                clipBehavior: Clip.none,
+                padding: padding,
+                itemCount: widget.children.length,
+                separatorBuilder: (_, _) =>
+                    const SizedBox(width: Tv26Style.railItemGap),
+                itemBuilder: (_, index) => widget.children[index],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     final desktopScale = GetIt.instance<UserPreferences>()
         .get(UserPreferences.desktopUiScale)
         .scaleFactor;
-    final cardFocusExpansion = GetIt.instance<UserPreferences>()
-        .get(UserPreferences.cardFocusExpansion);
+    final cardFocusExpansion = GetIt.instance<UserPreferences>().get(
+      UserPreferences.cardFocusExpansion,
+    );
     final isMobile = PlatformDetection.useMobileUi;
     final baseHeight = widget.rowHeight ?? 220.0;
     final estArtworkHeight = (baseHeight - 45.0).clamp(60.0, 400.0);
@@ -57,7 +96,7 @@ class _LibraryRowState extends State<LibraryRow> {
       scrollController: widget.scrollController,
       titleStyle: Theme.of(context).textTheme.titleLarge?.copyWith(
         color: AppColorScheme.onSurface,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w500,
       ),
       headerPadding: EdgeInsets.fromLTRB(
         16 * desktopScale,
@@ -68,10 +107,7 @@ class _LibraryRowState extends State<LibraryRow> {
       contentSpacing: 0,
       trailing: widget.onSeeAll == null
           ? null
-          : TextButton(
-              onPressed: widget.onSeeAll,
-              child: Text(l10n.seeAll),
-            ),
+          : TextButton(onPressed: widget.onSeeAll, child: Text(l10n.seeAll)),
       showControls: showControls,
       builder: (_, scrollController) => SizedBox(
         height: rowHeight + (10 * desktopScale),
@@ -80,36 +116,36 @@ class _LibraryRowState extends State<LibraryRow> {
                 child: SizedBox(
                   width: 24 * desktopScale,
                   height: 24 * desktopScale,
-                  child: const CircularProgressIndicator(strokeWidth: 2),
+                  child: const LoadingThrobber(),
                 ),
               )
             : hasItems
-                ? ListView.separated(
-                    controller: scrollController,
-                    scrollDirection: Axis.horizontal,
-                    clipBehavior: Clip.none,
-                    padding: EdgeInsets.fromLTRB(
-                      20 * desktopScale,
-                      topPadding,
-                      20 * desktopScale,
-                      5 * desktopScale,
-                    ),
-                    itemCount: widget.children.length,
-                    separatorBuilder: (_, _) =>
-                        SizedBox(width: itemSpacing),
-                    itemBuilder: (_, i) => widget.children[i],
-                  )
-                : Center(
-                    child: Text(
-                      l10n.noItems,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withAlpha(128),
-                          ),
-                    ),
+            ? ScrollEdgeFade(
+                axis: Axis.horizontal,
+                child: ListView.separated(
+                  controller: scrollController,
+                  scrollDirection: Axis.horizontal,
+                  clipBehavior: Clip.none,
+                  padding: EdgeInsets.fromLTRB(
+                    20 * desktopScale,
+                    topPadding,
+                    20 * desktopScale,
+                    5 * desktopScale,
                   ),
+                  itemCount: widget.children.length,
+                  separatorBuilder: (_, _) => SizedBox(width: itemSpacing),
+                  itemBuilder: (_, i) => widget.children[i],
+                ),
+              )
+            : Center(
+                child: Text(
+                  l10n.noItems,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface
+                        .withAlpha(128),
+                  ),
+                ),
+              ),
       ),
     );
   }

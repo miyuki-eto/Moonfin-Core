@@ -1,4 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart';
 import 'package:get_it/get_it.dart';
 import 'package:server_core/server_core.dart';
 
@@ -180,8 +183,8 @@ class NouveauPeopleSectionState extends State<NouveauPeopleSection> {
             NouveauSpacing.compactPeopleMaxAvatarSize,
           );
 
-      final nameHeight = textScaler.scale(38).clamp(38.0, 56.0);
-      final roleHeight = textScaler.scale(32).clamp(32.0, 48.0);
+      final nameHeight = textScaler.scale(38);
+      final roleHeight = textScaler.scale(32);
 
       final cardHeight = avatarSize + 12 + nameHeight + 4 + roleHeight;
 
@@ -212,10 +215,26 @@ class NouveauPeopleSectionState extends State<NouveauPeopleSection> {
 
     final avatarSize = cardWidth * avatarWidthFactor;
 
-    final nameHeight = textScaler.scale(34).clamp(34.0, 54.0);
-    final roleHeight = textScaler.scale(30).clamp(30.0, 48.0);
+    final textTheme = Theme.of(context).textTheme;
+    final nameHeight = math.max(
+      34.0,
+      textScaler
+          .scale((textTheme.bodyMedium?.fontSize ?? 14) * 1.15 * 2)
+          .ceilToDouble(),
+    );
+    final roleHeight = math.max(
+      30.0,
+      textScaler
+          .scale((textTheme.bodySmall?.fontSize ?? 12) * 1.2 * 2)
+          .ceilToDouble(),
+    );
 
-    final cardHeight = avatarSize + 12 + nameHeight + roleHeight;
+    final cardHeight =
+        avatarSize +
+        NouveauSpacing.peopleAvatarToName +
+        nameHeight +
+        NouveauSpacing.peopleNameToRole +
+        roleHeight;
 
     return _PeopleLayout(
       viewportWidth: availableWidth,
@@ -258,7 +277,9 @@ class NouveauPeopleSectionState extends State<NouveauPeopleSection> {
           children: [
             Text(
               title,
-              style: layout.compact
+              style: PlatformDetection.isTV
+                  ? Tv26Style.sectionTitle
+                  : layout.compact
                   ? textTheme.titleLarge?.copyWith(
                       fontSize: 22,
                       fontWeight: FontWeight.w700,
@@ -296,6 +317,10 @@ class NouveauPeopleSectionState extends State<NouveauPeopleSection> {
           width: layout.viewportWidth,
           height: layout.cardHeight,
           child: LockedFocusRow<Map<String, dynamic>>(
+            paintOutset: PlatformDetection.isTV ? Tv26Style.focusOutset : 0,
+            viewportInsets: PlatformDetection.isTV
+                ? Tv26Style.railPadding
+                : EdgeInsets.zero,
             key: _rowKey,
             items: people,
             hubKey: _hubKey,

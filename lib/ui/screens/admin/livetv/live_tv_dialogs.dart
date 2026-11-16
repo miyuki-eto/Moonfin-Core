@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:get_it/get_it.dart';
 import 'package:server_core/server_core.dart';
 
@@ -114,7 +115,7 @@ Widget _errorText(BuildContext context, String? error) => error == null
 Widget liveTvSpinner() => const SizedBox(
       width: 16,
       height: 16,
-      child: CircularProgressIndicator(strokeWidth: 2),
+      child: LoadingThrobber(),
     );
 
 /// [list]'s maps, copied, or none when it isn't a list.
@@ -877,7 +878,7 @@ class _LiveTvSchedulesDirectDialogState
           ),
           _gap,
           if (_loadingLineups)
-            const LinearProgressIndicator()
+            const LoadingThrobber()
           else
             DropdownButtonFormField<String>(
               key: ValueKey(_lineups),
@@ -1066,7 +1067,7 @@ class _LiveTvChannelMapperDialogState
         ),
       ],
       children: [
-        if (_loading) const LinearProgressIndicator(),
+        if (_loading) const LoadingThrobber(),
         if (!_loading && _error == null && _channels.isEmpty)
           Text(l10n.adminLiveTvNoTunerChannels),
         for (final channel in _channels)

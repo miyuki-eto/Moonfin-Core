@@ -27,7 +27,7 @@
       padding: 0;
       width: 100%;
       height: 100%;
-      background: #101010;
+      background: #000000;
       color: #ffffff;
       font-family: "Segoe UI", "Helvetica Neue", sans-serif;
     }
@@ -38,71 +38,54 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: rgba(0, 0, 0, 0.45);
+      background: #000000;
       transition: opacity 180ms ease-out;
       z-index: 9999;
       pointer-events: none;
     }
 
-    .moonfin-loader__content {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
+    .startup-throbber {
+      position: relative;
+      /* Match LoadingThrobber.defaultSize before Flutter starts. */
+      width: 96px;
+      aspect-ratio: 2;
+      animation: startup-appear 1200ms ease-in-out both;
     }
 
-    .moonfin-loader__logo-wrap {
-      width: 160px;
-      height: 160px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      perspective: 1000px;
-    }
-
-    .moonfin-loader__logo {
-      width: 100%;
-      height: 100%;
-      transform-style: preserve-3d;
-      backface-visibility: visible;
-      animation: moonfin-logo-spin 8s linear infinite;
-    }
-
-    .moonfin-loader__label {
-      margin-top: 40px;
-      font-size: 18px;
-      font-weight: 700;
-      letter-spacing: 6px;
-      text-transform: uppercase;
-      text-align: center;
-      background: linear-gradient(90deg, #aa5cc3, #00a4dc);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-      animation: moonfin-label-pulse 2s ease-in-out infinite alternate;
+    .startup-throbber::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 92%;
+      height: 15px;
+      background: radial-gradient(ellipse closest-side,
+        #fff, rgb(255 255 255 / .5) 22%, rgb(255 255 255 / .12) 52%, transparent);
+      /* Keep the beam on its own layer while Flutter starts on the main thread. */
+      will-change: transform;
+      animation: startup-breathe 4s ease-in-out infinite;
     }
 
     #moonfin-loader.ready {
       opacity: 0;
     }
 
-    @keyframes moonfin-logo-spin {
-      from {
-        transform: rotateY(0deg);
-      }
-      to {
-        transform: rotateY(360deg);
-      }
+    @keyframes startup-appear {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
 
-    @keyframes moonfin-label-pulse {
-      from {
-        opacity: 0.4;
-        transform: scale(0.98);
-      }
-      to {
-        opacity: 1;
-        transform: scale(1);
+    @keyframes startup-breathe {
+      0%, 100% { transform: translate(-50%, -50%) scale(.348, .6667); }
+      50% { transform: translate(-50%, -50%) scale(1); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #moonfin-loader { transition: none; }
+      .startup-throbber, .startup-throbber::before { animation: none; }
+      .startup-throbber::before {
+        transform: translate(-50%, -50%) scale(.674, .8333);
+        will-change: auto;
       }
     }
   </style>
@@ -143,18 +126,92 @@
           }
           return !!window.Hls.isSupported();
         },
-        attach: function (video, url, forceHls) {
+        attach: function (video, url, forceHls, startPosition, standby, preview) {
           if (!this.canUseHlsJs(video, url, forceHls)) {
             return null;
           }
-          var hls = new window.Hls({
+          const Hls = window.Hls;
+          const hls = new Hls({
             enableWorker: true,
             lowLatencyMode: true,
-            backBufferLength: 90,
+            startPosition: startPosition > 0 ? startPosition : -1,
+            backBufferLength: standby ? 0 : 90,
+            maxBufferLength: standby ? 5 : 30,
+            maxMaxBufferLength: standby ? 8 : 600,
+          });
+          if (preview && hls.config.fragLoadPolicy) {
+            // Retry a missing first byte while the tune is still waiting.
+            // Once a video fragment is buffered, resume the normal policy.
+            const normalPolicy = hls.config.fragLoadPolicy;
+            hls.config.fragLoadPolicy = {
+              default: {
+                ...normalPolicy.default,
+                maxTimeToFirstByteMs: 4500,
+                timeoutRetry: {
+                  ...normalPolicy.default.timeoutRetry,
+                  maxNumRetry: 1,
+                  retryDelayMs: 0,
+                },
+              },
+            };
+            const restoreFragmentPolicy = (_, { frag }) => {
+              if (frag.type !== 'main' || frag.sn === 'initSegment') return;
+              hls.config.fragLoadPolicy = normalPolicy;
+              hls.off(Hls.Events.FRAG_BUFFERED, restoreFragmentPolicy);
+            };
+            hls.on(Hls.Events.FRAG_BUFFERED, restoreFragmentPolicy);
+          }
+          hls.on(Hls.Events.ERROR, function (_, data) {
+            if (data.fatal) hls.moonfinFatalError = true;
           });
           hls.loadSource(url);
           hls.attachMedia(video);
           return hls;
+        },
+        isViable: function (hls) {
+          return !hls.moonfinFatalError;
+        },
+        playPreview: function (video, hls) {
+          if (!hls) return video.play();
+          if (!this.isViable(hls)) {
+            return Promise.reject(new Error('HLS preview failed'));
+          }
+          return new Promise(function (resolve, reject) {
+            const errorEvent = window.Hls.Events.ERROR;
+            const finish = function (complete, value) {
+              hls.off(errorEvent, onError);
+              complete(value);
+            };
+            const onError = function (_, data) {
+              if (data.fatal) finish(reject, new Error('HLS preview failed'));
+            };
+            hls.on(errorEvent, onError);
+            video.play().then(
+              value => finish(resolve, value),
+              error => finish(reject, error)
+            );
+          });
+        },
+        park: function (hls) {
+          hls.moonfinParked = true;
+          if (typeof hls.pauseBuffering === 'function') {
+            hls.pauseBuffering();
+          } else {
+            hls.stopLoad();
+          }
+        },
+        promote: function (hls) {
+          hls.config.backBufferLength = 90;
+          hls.config.maxBufferLength = 30;
+          hls.config.maxMaxBufferLength = 600;
+          if (hls.moonfinParked) {
+            hls.moonfinParked = false;
+            if (typeof hls.resumeBuffering === 'function') {
+              hls.resumeBuffering();
+            } else {
+              hls.startLoad();
+            }
+          }
         },
         destroy: function (hls) {
           if (hls && typeof hls.destroy === 'function') {
@@ -163,34 +220,12 @@
         },
       };
 
-      window.addEventListener('flutter-first-frame', function () {
-        var loader = document.getElementById('moonfin-loader');
-        if (!loader) {
-          return;
-        }
-        loader.classList.add('ready');
-        setTimeout(function () {
-          if (loader.parentNode) {
-            loader.parentNode.removeChild(loader);
-          }
-        }, 220);
-      });
     })();
   </script>
 </head>
 <body>
-  <div id="moonfin-loader" aria-hidden="true">
-    <div class="moonfin-loader__content">
-      <div class="moonfin-loader__logo-wrap">
-        <img
-          class="moonfin-loader__logo"
-          src="assets/assets/icons/moonfin_logo.svg"
-          alt="Moonfin"
-          onerror="this.onerror=null;this.src='assets/icons/moonfin_logo.svg';"
-        >
-      </div>
-      <div class="moonfin-loader__label">Loading Moonfin</div>
-    </div>
+  <div id="moonfin-loader" role="progressbar" aria-label="Loading">
+    <div class="startup-throbber" aria-hidden="true"></div>
   </div>
   <script src="flutter_bootstrap.js" async></script>
 </body>

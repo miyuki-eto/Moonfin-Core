@@ -190,6 +190,11 @@ class ConnectivityService extends ChangeNotifier {
   }
 
   void _triggerSync() {
+    // The first network result can arrive while authentication's lazy factory
+    // is registered but its socket/playback dependencies are still installing.
+    // A session without a client has nothing to reconnect or sync. The client
+    // handoff calls this again once restore/sign-in has completed.
+    if (!GetIt.instance.isRegistered<MediaServerClient>()) return;
     _nudgeSocket();
     // Every network flip lands here, and the full progress and metadata sync
     // keeps the radio and CPU busy on a device nobody is looking at. Defer it

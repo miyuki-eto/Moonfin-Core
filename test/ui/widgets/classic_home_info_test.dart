@@ -5,6 +5,7 @@ import 'package:moonfin/data/services/rating_icon_provider.dart';
 import 'package:moonfin/ui/widgets/media_card.dart';
 import 'package:moonfin/ui/widgets/rating_display.dart';
 import 'package:moonfin/ui/widgets/simple_info_row.dart';
+import 'package:moonfin/util/tv_ui_scale.dart';
 
 Widget _host(Widget child) => MaterialApp(
   home: Scaffold(
@@ -35,7 +36,13 @@ void main() {
         ),
       );
 
-      final order = ['S2:E5 - Low Tide', '2023', 'TV-14', '52m', 'Drama, Mystery, Crime'];
+      final order = [
+        'S2:E5 - Low Tide',
+        '2023',
+        'TV-14',
+        '52m',
+        'Drama, Mystery, Crime',
+      ];
       final xs = [for (final t in order) tester.getTopLeft(find.text(t)).dx];
       expect(xs, orderedEquals([...xs]..sort()));
       expect(find.text('S2:E5'), findsNothing);
@@ -161,8 +168,8 @@ void main() {
 
     testWidgets('classic home cards use the canvas sizes', (tester) async {
       final style = await titleStyle(tester, classic: true);
-      expect(style?.fontSize, moreOrLessEquals(22 / (1920 / 1150)));
-      expect(style?.fontWeight, FontWeight.w600);
+      expect(style!.fontSize! * kTvTargetScale, moreOrLessEquals(22));
+      expect(style.fontWeight, FontWeight.w600);
     });
 
     testWidgets('other cards keep their label', (tester) async {

@@ -77,6 +77,12 @@ abstract final class TrackPicker {
     final l10n = AppLocalizations.of(context);
     final prefs = GetIt.instance<UserPreferences>();
     final item = manager.queueService.currentItem;
+    final delaySession = manager.subtitleDelaySessionId;
+    final openedBackend = manager.backend;
+    bool isCurrentPlayback() =>
+        manager.subtitleDelaySessionId == delaySession &&
+        identical(manager.backend, openedBackend) &&
+        identical(manager.queueService.currentItem, item);
     final canDownloadRemote =
         !audio &&
         !secondary &&
@@ -141,9 +147,18 @@ abstract final class TrackPicker {
           ),
       ],
     ];
-    if (!context.mounted) return;
+    if (!context.mounted || !isCurrentPlayback()) return;
 
     final backend = manager.backend;
+    final authoredPgs =
+        !secondary &&
+        backend is AsyncPgsSubtitleBackend &&
+        (backend as AsyncPgsSubtitleBackend).loadsEmbeddedPgsAsFiles &&
+        streams.any(
+          (stream) =>
+              stream['Index'] == manager.subtitleStreamIndex &&
+              MediaStreamResolver.isPgsCodec(stream['Codec'] as String?),
+        );
     final SecondarySubtitleBackend? secondaryControls =
         backend is SecondarySubtitleBackend
         ? backend as SecondarySubtitleBackend
@@ -160,7 +175,8 @@ abstract final class TrackPicker {
         secondaryAppearance?.supportsSecondarySubtitleColor ??
         secondaryControls?.supportsSecondarySubtitleStyle ==
             true;
-    final delayLimits = !showControls
+    final burnedIn = !audio && !secondary && manager.subtitleIsBurnedIn;
+    final delayLimits = !showControls || burnedIn
         ? null
         : secondary
         ? secondaryControls?.supportsSecondarySubtitleDelay == true
@@ -191,6 +207,8 @@ abstract final class TrackPicker {
     Widget? footer;
     if (!audio &&
         showControls &&
+        !authoredPgs &&
+        !burnedIn &&
         (secondary || streams.any(isTextSubtitleStream)) &&
         (!secondary ||
             supportsSecondarySize ||
@@ -289,21 +307,30 @@ abstract final class TrackPicker {
         footer: footer,
       ),
     );
-    if (result == null || !context.mounted) return;
+    if (result == null || !context.mounted || !isCurrentPlayback()) return;
     if (delayLimits != null && result == options.length - 1) {
       await _whileOpen(
         onDialogOpenChanged,
         () => _showDelayBar(
           context,
+          audio: audio,
           useRootNavigator: useRootNavigator,
           bar: DelayFooter(
             initialDelay: delay,
             label: secondary ? l10n.secondaryDelayAdjustment : delayLabel,
             minDelay: delayLimits.$1,
             maxDelay: delayLimits.$2,
-            onDelayChanged: (d) => secondary
-                ? unawaited(manager.setSecondarySubtitleDelay(d))
-                : _applyDelay(manager, audio: audio, delay: d),
+            onDelayChanged: (d) {
+              if (!isCurrentPlayback()) {
+                Navigator.of(context, rootNavigator: useRootNavigator).pop();
+                return;
+              }
+              if (secondary) {
+                unawaited(manager.setSecondarySubtitleDelay(d));
+              } else {
+                _applyDelay(manager, audio: audio, delay: d);
+              }
+            },
             formatDelay: formatDelay,
           ),
         ),
@@ -402,19 +429,21 @@ abstract final class TrackPicker {
     }
   }
 
-  /// The delay on its own, in a slim bar at the bottom with nothing dimming
-  /// the picture, so the effect of each step can be seen while it's made.
+  /// Keeps subtitle timing above the usual caption region so each adjustment
+  /// can be judged while watching. Audio timing retains its bottom placement.
   static Future<void> _showDelayBar(
     BuildContext context, {
+    required bool audio,
     required Widget bar,
     required bool useRootNavigator,
   }) => showFocusRestoringDialog<void>(
     context: context,
     useRootNavigator: useRootNavigator,
     barrierColor: Colors.transparent,
+    blurBackground: false,
     builder: (_) => Dialog(
-      alignment: Alignment.bottomCenter,
-      insetPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      alignment: audio ? Alignment.bottomCenter : Alignment.topCenter,
+      insetPadding: const EdgeInsets.all(24),
       backgroundColor: Colors.transparent,
       child: playerDialogPanel(
         constraints: const BoxConstraints(maxWidth: 480),

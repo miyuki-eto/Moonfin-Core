@@ -514,7 +514,7 @@ abstract class BookCategoryState<T extends StatefulWidget>
   void addLoadingSection() => addSection(
     const Padding(
       padding: EdgeInsets.only(top: 48),
-      child: Center(child: CircularProgressIndicator()),
+      child: Center(child: LoadingThrobber()),
     ),
   );
 

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:app_links/app_links.dart';
 
+import '../../ui/navigation/destinations.dart';
 import '../../util/platform_detection.dart';
 
 /// Routes OS-registered `moonfin://` deep links into the app. tvOS and web
@@ -10,7 +11,9 @@ class DeepLinkService {
   StreamSubscription<Uri>? _subscription;
 
   static bool get _enabled =>
-      !PlatformDetection.isWeb && !PlatformDetection.isAppleTV;
+      !PlatformDetection.isWeb &&
+      !PlatformDetection.isAppleTV &&
+      !PlatformDetection.isTizen;
 
   /// Starts listening for `moonfin://` links, including the one the app was
   /// launched with. [onRoute] receives an in-app route path.
@@ -19,13 +22,10 @@ class DeepLinkService {
     _subscription?.cancel();
     // uriLinkStream replays the launch link before live ones, so this is both
     // the cold-start and the warm path.
-    _subscription = AppLinks().uriLinkStream.listen(
-      (uri) {
-        final route = routeForDeepLink(uri);
-        if (route != null) onRoute(route);
-      },
-      onError: (_) {},
-    );
+    _subscription = AppLinks().uriLinkStream.listen((uri) {
+      final route = routeForDeepLink(uri);
+      if (route != null) onRoute(route);
+    }, onError: (_) {});
   }
 
   void dispose() {
@@ -41,6 +41,7 @@ class DeepLinkService {
   ///  - `moonfin://play?id=<itemId>[&serverId=<serverId>][&userId=<userId>]`
   ///    (starts playback)
   ///  - `moonfin://search?query=<text>` (opens search with the query text)
+  ///  - `moonfin://retro-tv` (opens Retro TV on supported devices)
   ///
   /// `userId` optionally pins a stored user, skipping the profile picker on a
   /// cold start and switching to that user when another one is signed in. It
@@ -48,6 +49,7 @@ class DeepLinkService {
   /// bypasses a PIN, an always-authenticate setting or Kids Mode.
   static String? routeForDeepLink(Uri uri) {
     if (uri.scheme != 'moonfin') return null;
+    if (uri.host == 'retro-tv') return Destinations.retroTv;
     if (uri.host == 'search') {
       final searchQuery = uri.queryParameters['query'];
       if (searchQuery == null || searchQuery.isEmpty) return null;

@@ -61,6 +61,17 @@ dependencies:
   media_kit_libs_windows_video: 1.0.12
   media_kit_libs_linux: 1.2.1
 
+  # Native Samsung TV integration. Flutter-Tizen registers these only in TPKs.
+  video_player_videohole: 0.6.3
+  shared_preferences_tizen: ^2.3.5
+  flutter_secure_storage_tizen: ^0.1.6
+  path_provider_tizen: ^2.3.3
+  connectivity_plus_tizen: ^1.3.3
+  device_info_plus_tizen: ^1.4.3
+  # 1.2 requires a newer package_info_plus platform interface than this app.
+  package_info_plus_tizen: 1.1.2
+  wakelock_plus_tizen: ^2.1.5
+
   # Image Loading
   # Vendored fork of cached_network_image 3.4.1 that skips decoding an image
   # again once it's been shown, since that second decode painted blank on
@@ -75,6 +86,8 @@ dependencies:
   # Direct because the image cache wraps the cache manager's file service in a
   # client of its own. Keep in step with what flutter_cache_manager resolves.
   http: ^1.6.0
+  # Text subtitle sidecars may contain HTML entities and basic formatting tags.
+  html: ^0.15.6
   flutter_svg: ^2.2.1
   # Parses the seasonal effects' artwork into paths for the sprite atlas.
   path_parsing: ^1.1.0
@@ -211,6 +224,7 @@ dev_dependencies:
   # Lets a test stand in for the Android side of path_provider.
   path_provider_platform_interface: ^2.1.2
   plugin_platform_interface: ^2.1.8
+  sqflite_common_ffi: 2.3.6
 
 dependency_overrides:
   # objective_c 9.3.0's build hook imports a private path out of
@@ -294,9 +308,21 @@ flutter:
     - assets/fonts/
     - assets/subtitle_fonts/
     - assets/licenses/cores/
+    - assets/licenses/libpgs.txt
     - assets/reader/
+    - assets/programming/
 
   fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter.ttf
+          weight: 400
+        - asset: assets/fonts/Inter.ttf
+          weight: 500
+        - asset: assets/fonts/Inter.ttf
+          weight: 600
+        - asset: assets/fonts/Inter.ttf
+          weight: 700
     # The web engine fetches Roboto from fonts.gstatic.com unless it finds a
     # family of that name here. Material typography asks for Roboto, so this
     # is the font nearly all of the UI renders in.

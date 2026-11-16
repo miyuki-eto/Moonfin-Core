@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:jellyfin_preference/jellyfin_preference.dart';
@@ -38,6 +39,7 @@ void main() {
     required VoidCallback onSkip,
     required VoidCallback onDismiss,
     Duration position = const Duration(seconds: 20),
+    FocusNode? focusNode,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -50,6 +52,7 @@ void main() {
               onSkip: onSkip,
               onDismiss: onDismiss,
               initialPosition: position,
+              focusNode: focusNode,
             ),
           ],
         ),
@@ -107,6 +110,26 @@ void main() {
 
     expect(closeChip, findsNothing, reason: 'back already dismisses on TV');
     expect(find.textContaining('Skip'), findsOneWidget);
+  });
+
+  testWidgets('TV Select skips the focused segment once per press', (
+    tester,
+  ) async {
+    PlatformDetection.setTvMode(true);
+    final node = FocusNode();
+    addTearDown(node.dispose);
+    var skipped = 0;
+    await pumpOverlay(
+      tester,
+      onSkip: () => skipped++,
+      onDismiss: () {},
+      focusNode: node,
+    );
+    node.requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.select);
+    await tester.pump();
+    expect(skipped, 1);
   });
 
   testWidgets('the chip stays centered as the capsule changes width', (

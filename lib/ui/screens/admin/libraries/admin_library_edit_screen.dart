@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:collection/collection.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:get_it/get_it.dart';
@@ -238,7 +239,7 @@ class _AdminLibraryEditScreenState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: LoadingThrobber());
     }
     if (_error != null) {
       return Center(

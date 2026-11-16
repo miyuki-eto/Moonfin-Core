@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../../config/app_features.dart';
+
 import 'package:moonfin_design/moonfin_design.dart';
 
 import '../../preference/preference_constants.dart';
@@ -63,6 +66,10 @@ class AppThemeController extends ChangeNotifier {
   /// the custom theme registry has been updated (e.g. plugin sync) or when any
   /// of the theme preferences change.
   void refreshFromPreferences(UserPreferences prefs) {
+    if (!AppFeatures.has(AppFeature.settings)) {
+      _apply(VisualThemeId.moonfin, '', OledMode.off);
+      return;
+    }
     final builtIn = prefs.get(UserPreferences.visualTheme);
     final customId = prefs.get(UserPreferences.customThemeId);
     _apply(builtIn, customId, prefs.get(UserPreferences.oledMode));
@@ -109,7 +116,10 @@ class AppThemeController extends ChangeNotifier {
   ) async {
     await prefs.set(UserPreferences.visualTheme, themeId);
     await prefs.set(UserPreferences.customThemeId, '');
-    await prefs.set(UserPreferences.focusColor, _defaultFocusColorForTheme(themeId));
+    await prefs.set(
+      UserPreferences.focusColor,
+      _defaultFocusColorForTheme(themeId),
+    );
     _apply(themeId, '', _activeOled);
   }
 
@@ -153,15 +163,23 @@ class AppThemeController extends ChangeNotifier {
   }
 
   static AppThemeController fromPreferences(UserPreferences prefs) {
+    if (!AppFeatures.has(AppFeature.settings)) {
+      return AppThemeController(
+        ThemeRegistry.resolveById(ThemeRegistry.moonfinId),
+        VisualThemeId.moonfin,
+        '',
+        OledMode.off,
+      );
+    }
     final prefTheme = prefs.get(UserPreferences.visualTheme);
     final customId = prefs.get(UserPreferences.customThemeId);
     final hasCustom =
-      customId.isNotEmpty &&
-      !ThemeRegistry.builtInIds.contains(customId) &&
-      ThemeRegistry.availableThemes.containsKey(customId);
+        customId.isNotEmpty &&
+        !ThemeRegistry.builtInIds.contains(customId) &&
+        ThemeRegistry.availableThemes.containsKey(customId);
     final initial = hasCustom
         ? ThemeRegistry.resolveById(customId)
-      : ThemeRegistry.resolveById(builtInThemeIdFor(prefTheme));
+        : ThemeRegistry.resolveById(builtInThemeIdFor(prefTheme));
     return AppThemeController(
       initial,
       prefTheme,

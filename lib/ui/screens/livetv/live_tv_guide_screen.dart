@@ -1299,7 +1299,7 @@ class _LiveTvGuideScreenState extends State<LiveTvGuideScreen>
   Widget _buildMobileBody() {
     switch (_vm.state) {
       case GuideState.loading:
-        return const Center(child: CircularProgressIndicator());
+        return const Center(child: LoadingThrobber());
       case GuideState.error:
         final l10n = AppLocalizations.of(context);
         return Center(
@@ -1704,7 +1704,7 @@ class _LiveTvGuideScreenState extends State<LiveTvGuideScreen>
   Widget _buildBody() {
     switch (_vm.state) {
       case GuideState.loading:
-        return const Center(child: CircularProgressIndicator());
+        return const Center(child: LoadingThrobber());
       case GuideState.error:
         final l10n = AppLocalizations.of(context);
         return Center(

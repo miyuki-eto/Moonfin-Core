@@ -871,7 +871,7 @@ class _LoaderRow extends StatelessWidget {
         child: SizedBox(
           width: 24,
           height: 24,
-          child: CircularProgressIndicator(strokeWidth: 2),
+          child: LoadingThrobber(),
         ),
       ),
     );
@@ -1769,7 +1769,7 @@ class _RequestCardState extends State<_RequestCard> with FocusStateMixin {
         child: SizedBox(
           width: 18 * scale,
           height: 18 * scale,
-          child: CircularProgressIndicator(strokeWidth: 2, color: onSurface),
+          child: LoadingThrobber(color: onSurface),
         ),
       );
     } else if (widget.canManage &&
@@ -1832,8 +1832,7 @@ class _RequestCardState extends State<_RequestCard> with FocusStateMixin {
             color: _posterActionBackdrop,
             shape: BoxShape.circle,
           ),
-          child: const CircularProgressIndicator(
-            strokeWidth: 2,
+          child: const LoadingThrobber(
             color: Colors.white,
           ),
         ),
@@ -2148,8 +2147,7 @@ class _IssueCardState extends State<_IssueCard> with FocusStateMixin {
                           SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
+                            child: LoadingThrobber(
                               color: onSurface,
                             ),
                           )
@@ -2285,7 +2283,7 @@ class _IssueThreadDialogState extends State<_IssueThreadDialog> {
     if (issue == null) {
       return const SizedBox(
         height: 120,
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: LoadingThrobber()),
       );
     }
 
@@ -2360,7 +2358,7 @@ class _IssueThreadDialogState extends State<_IssueThreadDialog> {
                         ? const SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: LoadingThrobber(),
                           )
                         : Icon(
                             Icons.send,

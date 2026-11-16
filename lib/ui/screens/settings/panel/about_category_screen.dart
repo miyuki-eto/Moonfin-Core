@@ -162,7 +162,7 @@ class _CheckForUpdatesTileState extends State<_CheckForUpdatesTile> {
           ? const SizedBox(
               width: 24,
               height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: LoadingThrobber(),
             )
           : const Icon(Icons.system_update_alt),
       title: Text(l10n.settingsCheckForUpdates),

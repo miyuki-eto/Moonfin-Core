@@ -102,6 +102,7 @@ import io.github.peerless2012.ass.media.AssHandlerConfig
 import io.github.peerless2012.ass.media.kt.withAssSupport
 import io.github.peerless2012.ass.media.parser.AssSubtitleParserFactory
 import io.github.peerless2012.ass.media.type.AssRenderType
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.ByteBuffer
 import java.util.Locale
@@ -2300,6 +2301,8 @@ class Media3VideoView(
     fun handleControlCall(call: MethodCall, result: MethodChannel.Result) {
         try {
             when (call.method) {
+                "captureTransitionFrame" -> captureTransitionFrame(result)
+
                 "setSource" -> {
                     setSource(call.arguments)
                     result.success(null)
@@ -3839,29 +3842,56 @@ class Media3VideoView(
         sourceHeight: Int,
         result: MethodChannel.Result,
     ) {
+        copySurfaceSample(view) { bitmap ->
+            result.success(bitmap?.let {
+                scanBitmap(it, sourceWidth, sourceHeight)?.toWireMap(sourceWidth, sourceHeight)
+            })
+        }
+    }
+
+    private fun captureTransitionFrame(result: MethodChannel.Result) {
+        val view = videoView as? SurfaceView
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || view == null ||
+            !firstFrameRendered || tunnelingActive
+        ) {
+            result.success(null)
+            return
+        }
+        copySurfaceSample(view) { bitmap ->
+            val bytes = bitmap?.let {
+                val output = ByteArrayOutputStream()
+                if (it.compress(Bitmap.CompressFormat.JPEG, 80, output)) {
+                    output.toByteArray()
+                } else {
+                    null
+                }
+            }
+            result.success(bytes)
+        }
+    }
+
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.N)
+    private fun copySurfaceSample(view: SurfaceView, onSample: (Bitmap?) -> Unit) {
         val surface = view.holder.surface
         if (surface == null || !surface.isValid || view.width <= 0 || view.height <= 0) {
-            result.success(null)
+            onSample(null)
             return
         }
         val sample = letterboxSampleSize(view.width, view.height)
         val bitmap = Bitmap.createBitmap(sample.width, sample.height, Bitmap.Config.ARGB_8888)
         try {
             PixelCopy.request(view, bitmap, { copyResult ->
-                if (isDisposedByFlutter || copyResult != PixelCopy.SUCCESS) {
+                try {
+                    onSample(bitmap.takeIf {
+                        !isDisposedByFlutter && view === videoView && copyResult == PixelCopy.SUCCESS
+                    })
+                } finally {
                     bitmap.recycle()
-                    result.success(null)
-                    return@request
                 }
-                result.success(
-                    scanBitmap(bitmap, sourceWidth, sourceHeight)
-                        ?.toWireMap(sourceWidth, sourceHeight),
-                )
-                bitmap.recycle()
             }, mainHandler)
         } catch (_: Throwable) {
             bitmap.recycle()
-            result.success(null)
+            onSample(null)
         }
     }
 

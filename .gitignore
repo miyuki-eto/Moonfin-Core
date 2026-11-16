@@ -139,6 +139,20 @@ web/drift_worker.js.map
 /.arb-work/
 /.arb-work-brand/
 
-# Tizen build output. Tizen was removed upstream; these are generated
-# NuGet/MSBuild artifacts.
+# Native Samsung TV generated files and local signing/toolchain configuration.
+tizen/flutter/ephemeral/
+tizen/flutter/generated_main.dart
+tizen/flutter/GeneratedPluginRegistrant.cs
+tizen/flutter/generated_plugin_registrant.*
+tizen/flutter/generated_plugins.cmake
+tizen/GeneratedPluginRegistrant.cs
+tizen/*.csproj.user
+tizen/*.csproj.backup
+tizen/tizen_dotnet_project.yaml
+tizen/.app.deps.json
+tizen/.plugin_symlinks/
+tizen/bin/
+tizen/.vs/
+/build-tizen.private.env
+*.tpk
 tizen/obj/

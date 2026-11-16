@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:moonfin_design/moonfin_design.dart';
 
 import '../../../l10n/app_localizations.dart';
+import '../../../util/platform_detection.dart';
+import '../../tv/tv26_button.dart';
+import '../../tv/tv_modal.dart';
 import '../adaptive/adaptive_glass.dart';
 import '../overlay_sheet.dart';
 
@@ -32,6 +35,43 @@ class StillWatchingDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    if (PlatformDetection.isTV) {
+      return Dialog(
+        backgroundColor: Colors.transparent,
+        child: TvModalPanel(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                l10n.stillWatching,
+                textAlign: TextAlign.center,
+                style: Tv26Style.text(28, weight: FontWeight.w600),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                l10n.stillWatchingContent,
+                textAlign: TextAlign.center,
+                style: Tv26Style.text(18, color: Tv26Style.secondary),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Tv26Button(
+                    label: l10n.stillWatchingContinue,
+                    autofocus: true,
+                    onPressed: onContinue,
+                  ),
+                  const SizedBox(width: Tv26Style.gap),
+                  Tv26Button(label: l10n.stillWatchingStop, onPressed: onStop),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
@@ -109,8 +149,9 @@ class StillWatchingDialog extends StatelessWidget {
                 TextButton(
                   onPressed: onStop,
                   style: TextButton.styleFrom(
-                    foregroundColor:
-                        AppColorScheme.onSurface.withValues(alpha: 0.6),
+                    foregroundColor: AppColorScheme.onSurface.withValues(
+                      alpha: 0.6,
+                    ),
                     padding: const EdgeInsets.symmetric(vertical: 11),
                   ),
                   child: Text(l10n.stillWatchingStop),

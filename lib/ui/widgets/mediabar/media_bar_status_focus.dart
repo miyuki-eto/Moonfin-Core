@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:moonfin_design/moonfin_design.dart';
 
+import '../../../util/platform_detection.dart';
+
 /// Keeps the media bar's focus node attached while the bar shows a
 /// placeholder (loading spinner or error panel). The home screen still
 /// treats those states as part of the bar, so focus handoffs from the rows
@@ -65,6 +67,7 @@ class MediaBarStatusFocus extends StatelessWidget {
       onKeyEvent: (node, event) => _onKeyEvent(event),
       child: Builder(
         builder: (context) {
+          if (PlatformDetection.isTV) return child;
           final focused = Focus.of(context).hasFocus;
           return AnimatedContainer(
             duration: const Duration(milliseconds: 180),

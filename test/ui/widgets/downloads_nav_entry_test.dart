@@ -182,12 +182,12 @@ void main() {
       expect(downloads, findsNothing);
     });
 
-    testWidgets('appears once something is saved', (tester) async {
+    testWidgets('stays absent when files are saved', (tester) async {
       registerPresence(rows: [_savedMovie()]);
       await tester.pumpWidget(_host(const TopToolbar()));
       await tester.pumpAndSettle();
 
-      expect(downloads, findsOneWidget);
+      expect(downloads, findsNothing);
     });
 
     testWidgets('ignores rows that hold no file', (tester) async {
@@ -200,7 +200,7 @@ void main() {
       expect(downloads, findsNothing);
     });
 
-    testWidgets('appears for a download still running', (tester) async {
+    testWidgets('stays absent when an old download is running', (tester) async {
       // Nothing has finished, so this is the only way in to watch or cancel.
       registerPresence(
         active: {
@@ -214,7 +214,7 @@ void main() {
       await tester.pumpWidget(_host(const TopToolbar()));
       await tester.pumpAndSettle();
 
-      expect(downloads, findsOneWidget);
+      expect(downloads, findsNothing);
     });
 
     testWidgets('holds off on the sidebar too', (tester) async {
@@ -225,13 +225,14 @@ void main() {
       expect(sidebarDownloads, findsNothing);
     });
 
-    testWidgets('shows on the sidebar once something is saved', (tester) async {
+    testWidgets('stays absent from the sidebar when files are saved', (
+      tester,
+    ) async {
       registerPresence(rows: [_savedMovie()]);
       await tester.pumpWidget(_host(const LeftSidebar()));
       await tester.pumpAndSettle();
 
-      expect(sidebarDownloads, findsOneWidget);
+      expect(sidebarDownloads, findsNothing);
     });
   });
-
 }

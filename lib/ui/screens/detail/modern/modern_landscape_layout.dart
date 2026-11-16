@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
+
 import '../../../../preference/preference_constants.dart';
 import '../../../../preference/user_preferences.dart';
 import '../../../../util/platform_detection.dart';
 import '../../../widgets/bottom_nav/bottom_navbar.dart';
+import '../../../widgets/scroll_edge_fade.dart';
 
 /// Arranges the Modern detail pieces for landscape (TV, desktop, any landscape
 /// device): full-bleed backdrop, a left hero column, a floating Up Next card on
@@ -51,10 +53,18 @@ class ModernLandscapeLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final hasUpNext = upNext != null;
-    final scale = GetIt.instance<UserPreferences>().get(UserPreferences.desktopUiScale).scaleFactor;
-    final heroWidth = heroWidthFor(size, hasUpNext: hasUpNext, isBoxSet: isBoxSet);
+    final scale = GetIt.instance<UserPreferences>()
+        .get(UserPreferences.desktopUiScale)
+        .scaleFactor;
+    final heroWidth = heroWidthFor(
+      size,
+      hasUpNext: hasUpNext,
+      isBoxSet: isBoxSet,
+    );
 
-    final hasLeftSidebar = GetIt.instance<UserPreferences>().get(UserPreferences.navbarPosition) == NavbarPosition.left;
+    final hasLeftSidebar =
+        GetIt.instance<UserPreferences>().get(UserPreferences.navbarPosition) ==
+        NavbarPosition.left;
     final leftPadding = hasLeftSidebar ? 120.0 : 40.0;
 
     return Stack(
@@ -63,69 +73,88 @@ class ModernLandscapeLayout extends StatelessWidget {
         backdrop,
         SafeArea(
           bottom: false,
-          child: SingleChildScrollView(
-            controller: scrollController,
-            physics: PlatformDetection.isTV ? const NeverScrollableScrollPhysics() : const ScrollPhysics(),
-            padding: EdgeInsets.only(
-              top: (hasUpNext ? topInset - 24 : topInset - 12) / scale,
-              bottom: bottomContentInset(context),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: EdgeInsets.fromLTRB(leftPadding, 10 / scale, 40, 0),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: heroWidth,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ?aboveHero,
-                            if (aboveHero != null) const SizedBox(height: 10),
-                            hero,
-                          ],
+          child: ScrollEdgeFade(
+            child: SingleChildScrollView(
+              controller: scrollController,
+              physics: PlatformDetection.isTV
+                  ? const NeverScrollableScrollPhysics()
+                  : const ScrollPhysics(),
+              padding: EdgeInsets.only(
+                top: (hasUpNext ? topInset - 24 : topInset - 12) / scale,
+                bottom: bottomContentInset(context),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      leftPadding,
+                      10 / scale,
+                      40,
+                      0,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: heroWidth,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ?aboveHero,
+                              if (aboveHero != null) const SizedBox(height: 10),
+                              hero,
+                            ],
+                          ),
                         ),
-                      ),
-                      if (upNext != null)
-                        Expanded(
-                          child: Align(
-                            alignment: isBoxSet ? Alignment.topRight : Alignment.topCenter,
-                            child: Padding(
-                              padding: EdgeInsets.only(
-                                top: isBoxSet
-                                    ? 24.0 / scale
-                                    : (aboveHero != null ? 48.0 / scale : 0.0),
-                              ),
-                              child: ConstrainedBox(
-                                constraints:
-                                    const BoxConstraints(maxWidth: 310),
-                                child: upNext,
+                        if (upNext != null)
+                          Expanded(
+                            child: Align(
+                              alignment: isBoxSet
+                                  ? Alignment.topRight
+                                  : Alignment.topCenter,
+                              child: Padding(
+                                padding: EdgeInsets.only(
+                                  top: isBoxSet
+                                      ? 24.0 / scale
+                                      : (aboveHero != null
+                                            ? 48.0 / scale
+                                            : 0.0),
+                                ),
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 310,
+                                  ),
+                                  child: upNext,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                if (tabBar != null)
+                  if (tabBar != null)
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        leftPadding,
+                        16 / scale,
+                        40,
+                        8 / scale,
+                      ),
+                      child: tabBar,
+                    ),
                   Padding(
-                    padding: EdgeInsets.fromLTRB(leftPadding, 16 / scale, 40, 8 / scale),
-                    child: tabBar,
+                    padding: EdgeInsets.fromLTRB(
+                      leftPadding,
+                      0,
+                      40,
+                      40.0 / scale,
+                    ),
+                    child: tabContent,
                   ),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    leftPadding,
-                    0,
-                    40,
-                    40.0 / scale,
-                  ),
-                  child: tabContent,
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

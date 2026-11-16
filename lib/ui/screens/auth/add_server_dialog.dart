@@ -16,6 +16,9 @@ import '../../widgets/allow_self_signed_dialog.dart';
 import '../../widgets/client_certificate_dialog.dart';
 import '../../widgets/overlay_sheet.dart';
 import '../../widgets/server_type_icon.dart';
+import '../../tv/tv_modal.dart';
+import '../../tv/tv26_button.dart';
+import '../../tv/tv_reveal_transition.dart';
 
 /// Where the server screen goes once [AddServerDialog] closes.
 sealed class AddServerOutcome {
@@ -65,8 +68,7 @@ Color _fg(double alpha) =>
     );
 
 /// Moonfin's cyan is too light for white text, so labels on it go dark.
-Color get _onAccent =>
-    _isMoonfin ? const Color(0xFF04151C) : AppColorScheme.onAccent;
+Color get _onAccent => AppColorScheme.onAccent;
 
 const _errorText = Color(0xFFFFB4B4);
 const _warningText = Color(0xFFFFD27A);
@@ -93,6 +95,7 @@ String _brand(ServerType type) => switch (type) {
 };
 
 ButtonStyle _primaryStyle({bool compact = false}) {
+  if (PlatformDetection.isTV) return const ButtonStyle();
   final accent = AppColorScheme.accent;
   return FilledButton.styleFrom(
     backgroundColor: accent,
@@ -115,6 +118,7 @@ ButtonStyle _primaryStyle({bool compact = false}) {
 }
 
 ButtonStyle _ghostStyle() {
+  if (PlatformDetection.isTV) return const ButtonStyle();
   return TextButton.styleFrom(
     backgroundColor: _fg(0.06),
     foregroundColor: _fg(0.9),
@@ -164,6 +168,14 @@ class _AddServerButtonState extends State<AddServerButton> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    if (PlatformDetection.isTV && widget.onPressed != null) {
+      return TvMenuRow(
+        label: l10n.addServer,
+        subtitle: l10n.addServerButtonSubtitle,
+        icon: Icons.add,
+        onPressed: widget.onPressed!,
+      );
+    }
     final accent = AppColorScheme.accent;
     final enabled = widget.onPressed != null;
     final lit = enabled && (_hovered || _focused);
@@ -398,7 +410,12 @@ class _AddServerDialogState extends State<AddServerDialog> {
   Future<void> _submit() => _connect(widget.controller.text.trim());
 
   Future<void> _connect(String address) async {
-    if (address.isEmpty || _isConnecting) return;
+    if (_isConnecting) return;
+    if (address.isEmpty) {
+      _addressFocus.requestFocus();
+      if (PlatformDetection.isTV) _tvFieldKey.currentState?.openKeyboard();
+      return;
+    }
     final known = {for (final server in widget.serverRepo.servers) server.id};
 
     setState(() {
@@ -518,6 +535,7 @@ class _AddServerDialogState extends State<AddServerDialog> {
       return KeyEventResult.handled;
     }
     if (!_addressFocus.hasFocus) return KeyEventResult.ignored;
+    if (_isConnecting) return KeyEventResult.handled;
     if (key.isSelectKey || key == LogicalKeyboardKey.enter) {
       _tvFieldKey.currentState?.openKeyboard();
       return KeyEventResult.handled;
@@ -583,6 +601,9 @@ class _AddServerDialogState extends State<AddServerDialog> {
   }
 
   Widget _panel(Widget child) {
+    if (PlatformDetection.isTV) {
+      return TvModalPanel(padding: EdgeInsets.zero, child: child);
+    }
     final tier = GlassSettings.tier;
     final solid = tier == GlassTier.solid;
     return Container(
@@ -882,10 +903,8 @@ class _AddServerDialogState extends State<AddServerDialog> {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                child: LinearProgressIndicator(
-                  minHeight: 2,
+                child: LoadingThrobber(
                   color: accent,
-                  backgroundColor: accent.withValues(alpha: 0.15),
                 ),
               ),
           ],
@@ -907,9 +926,7 @@ class _AddServerDialogState extends State<AddServerDialog> {
             isFocused: focused,
             inputPurpose: InputPurpose.url,
             recentSuggestions: _recentServerAddresses,
-            keyboardStyle: _userPreferences.get(
-              UserPreferences.keyboardStyle,
-            ),
+            keyboardStyle: _userPreferences.get(UserPreferences.keyboardStyle),
             hint: l10n.serverAddressHint,
             textFieldType: TextFieldType.url,
             keyboardType: KeyboardType.alphabetic,
@@ -1089,6 +1106,7 @@ class _StepEntrance extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformDetection.isTV) return TvContentReveal(child: child);
     final direction = Directionality.of(context) == TextDirection.rtl ? -1 : 1;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
@@ -1133,6 +1151,15 @@ class _ChoiceCardState extends State<_ChoiceCard> {
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformDetection.isTV) {
+      return TvMenuRow(
+        label: widget.title,
+        subtitle: widget.subtitle,
+        focusNode: widget.focusNode,
+        trailing: widget.icon,
+        onPressed: widget.onTap,
+      );
+    }
     final accent = AppColorScheme.accent;
     final lit = _hovered || _focused;
     final card = AnimatedScale(
@@ -1243,6 +1270,15 @@ class _RoundIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformDetection.isTV && onPressed != null) {
+      return Tv26Button(
+        label: tooltip,
+        icon: icon,
+        iconOnly: true,
+        width: 40,
+        onPressed: onPressed!,
+      );
+    }
     return IconButton(
       onPressed: onPressed,
       tooltip: tooltip,
@@ -1371,7 +1407,7 @@ class _Spinner extends StatelessWidget {
     return SizedBox(
       width: 18,
       height: 18,
-      child: CircularProgressIndicator(strokeWidth: 2.4, color: _onAccent),
+      child: LoadingThrobber(color: _onAccent),
     );
   }
 }

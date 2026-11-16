@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get_it/get_it.dart';
@@ -1703,10 +1702,7 @@ class _AppleTvPlayerHostScreenState extends State<AppleTvPlayerHostScreen> {
           const ColoredBox(color: Colors.black),
           if (_bringupState.phase.isInProgress)
             const Center(
-              child: CupertinoActivityIndicator(
-                radius: 20,
-                color: Colors.white,
-              ),
+              child: LoadingThrobber(color: Colors.white),
             ),
         ],
       ),

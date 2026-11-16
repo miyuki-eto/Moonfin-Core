@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:moonfin_design/moonfin_design.dart';
 
 import '../../../../widgets/media_badge.dart';
+import '../../../../widgets/media_card.dart';
+import '../../../../../util/platform_detection.dart';
 import '../../../../widgets/offline_aware_image.dart';
 import 'nouveau_overflow_text.dart';
 
@@ -90,6 +92,23 @@ class _NouveauMediaRailCardState extends State<NouveauMediaRailCard> {
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformDetection.isTV) {
+      return MediaCard(
+        title: widget.title,
+        subtitle: widget.subtitle,
+        imageUrl: widget.imageUrl,
+        width: widget.width,
+        aspectRatio: widget.width / widget.artworkHeight,
+        externalIsFocused: widget.isFocused,
+        cardFocusExpansion: false,
+        isFavorite: widget.isFavorite,
+        isPlayed: widget.isPlayed,
+        playedPercentage: _progress > 0 && _progress < 1
+            ? _progress * 100
+            : null,
+        onTap: widget.onTap,
+      );
+    }
     final theme = Theme.of(context);
     final foreground = AppColorScheme.onSurface;
 
@@ -401,10 +420,7 @@ class _NouveauFavoriteIndicator extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColorScheme.recordingActive,
         shape: BoxShape.circle,
-        border: Border.all(
-          color: Colors.white,
-          width: 1.5,
-        ),
+        border: Border.all(color: Colors.white, width: 1.5),
         boxShadow: kMediaBadgeShadow,
       ),
       alignment: Alignment.center,

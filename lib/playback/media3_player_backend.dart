@@ -190,6 +190,7 @@ class Media3PlayerBackend extends PlayerBackend
   Timer? _watchdogTimer;
   String _watchdogItemLabel = 'item';
   bool _sawFirstFrame = false;
+  Completer<bool>? _firstVideoFrame;
   // Audio draws no frames, so for it playback starting stands in for the
   // first frame the watchdogs wait on.
   bool _watchdogItemIsAudio = false;
@@ -434,6 +435,7 @@ class Media3PlayerBackend extends PlayerBackend
         _onTunnelingDiscontinuity();
       case 'firstFrameRendered':
         _sawFirstFrame = true;
+        _finishFirstVideoFrameWait(true);
         _diag('Media3: first frame rendered @ ${_toInt(map['positionMs'])}ms');
       case 'droppedFrames':
         _diag(
@@ -814,7 +816,6 @@ class Media3PlayerBackend extends PlayerBackend
 
   void _resetPlaybackWatchdogs(String itemLabel) {
     _watchdogItemLabel = itemLabel;
-    _sawFirstFrame = false;
     _firstFrameWarned = false;
     _stallWarned = false;
     _playStartedAtMs = 0;
@@ -1067,6 +1068,7 @@ class Media3PlayerBackend extends PlayerBackend
   Future<void> play(
     dynamic mediaItem, {
     Duration startPosition = Duration.zero,
+    bool inlinePreview = false,
   }) async {
     final payload = mediaItem is Map ? mediaItem : const <String, dynamic>{};
     final autoPlay = payload['autoPlay'] != false;
@@ -1075,6 +1077,8 @@ class Media3PlayerBackend extends PlayerBackend
         : payload['url']?.toString() ?? '';
     if (_disposed || url.isEmpty) return;
 
+    _finishFirstVideoFrameWait(false);
+    _sawFirstFrame = false;
     _setSubtitleLoading(false);
     _currentUrl = url;
     final mediaType = payload['mediaType']?.toString() ?? 'video';
@@ -1087,8 +1091,6 @@ class Media3PlayerBackend extends PlayerBackend
             (key, value) => MapEntry(key.toString(), value.toString()),
           )
         : <String, String>{};
-
-    final isPreview = payload['preview'] == true;
 
     _completed = false;
     // The native ticker keeps reporting the previous item's frozen position
@@ -1108,7 +1110,7 @@ class Media3PlayerBackend extends PlayerBackend
     _tracksReadyCompleter = null;
     _discontinuityTimestamps.clear();
     _audioSinkErrorTimestamps.clear();
-    if (isPreview) {
+    if (inlinePreview) {
       // Muted previews/trailers are routinely canceled mid-load; disarm the
       // never-started watchdog instead of re-arming it and logging warnings.
       _loadRequestedAtMs = 0;
@@ -1216,7 +1218,9 @@ class Media3PlayerBackend extends PlayerBackend
       'audioDelayMs': (_audioDelaySeconds * 1000).round(),
       'subtitleDelayMs': (subtitleDelaySeconds * 1000).round(),
       'volumeBoostLevel': _volumeBoostLevel,
-      'preview': isPreview,
+      // The native preview slot is for inline trailers. PlaybackManager's
+      // preview payload can also be full-screen playback without reporting.
+      'preview': inlinePreview,
     });
     await _invoke<void>('setRepeatMode', {
       'mode': _repeatModeToWire(_repeatMode),
@@ -1235,7 +1239,7 @@ class Media3PlayerBackend extends PlayerBackend
     if (autoPlay) {
       await _invoke<void>('play');
     }
-    if (isPreview || mediaType == 'audio') {
+    if (inlinePreview || mediaType == 'audio') {
       unawaited(_letterboxCropper.reset());
     } else {
       unawaited(() async {
@@ -1286,6 +1290,8 @@ class Media3PlayerBackend extends PlayerBackend
   }
 
   Future<void> _teardown(String command) async {
+    _finishFirstVideoFrameWait(false);
+    _sawFirstFrame = false;
     _setSubtitleLoading(false);
     // The watchdogs guard a single item's bring-up, so stopping has to stop
     // the timer too or it keeps warning about a player that was told to stop.
@@ -1309,6 +1315,21 @@ class Media3PlayerBackend extends PlayerBackend
 
   @override
   Duration get position => _position;
+
+  /// Waits for this source to paint into the native video surface.
+  Future<bool> waitForFirstVideoFrame() {
+    if (_disposed) return Future.value(false);
+    if (_sawFirstFrame) return Future.value(true);
+    return (_firstVideoFrame ??= Completer<bool>()).future;
+  }
+
+  Future<Uint8List?> captureTransitionFrame() =>
+      _invoke<Uint8List>('captureTransitionFrame');
+
+  void _finishFirstVideoFrameWait(bool rendered) {
+    _firstVideoFrame?.complete(rendered);
+    _firstVideoFrame = null;
+  }
 
   @override
   Duration get duration => _duration;
@@ -1715,6 +1736,7 @@ class Media3PlayerBackend extends PlayerBackend
 
   @override
   void dispose() {
+    _finishFirstVideoFrameWait(false);
     if (_disposed) return;
     _disposed = true;
     _letterboxCropper.cancel();

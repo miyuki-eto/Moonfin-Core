@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:animated_reorderable_list/animated_reorderable_list.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -187,7 +188,7 @@ class _LibraryOrderScreenState extends State<LibraryOrderScreen> {
                     if (_isLoading)
                       const Padding(
                         padding: EdgeInsets.all(16),
-                        child: Center(child: CircularProgressIndicator()),
+                        child: Center(child: LoadingThrobber()),
                       )
                     else if (_loadFailed)
                       _buildMessage(l10n.failedToLoadLibraries, onRetry: _retry)

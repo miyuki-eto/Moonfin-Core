@@ -94,7 +94,7 @@ class _DownloadedGamesScreenState extends State<DownloadedGamesScreen> {
       Scaffold(
         appBar: buildSettingsAppBar(context, Text(l10n.downloadedGames)),
         body: games == null
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(child: LoadingThrobber())
             : ListView(
                 children: [
                   Padding(

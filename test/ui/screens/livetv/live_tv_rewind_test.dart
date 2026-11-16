@@ -92,6 +92,7 @@ class _Manager extends PlaybackManager {
     bool enableDirectPlay = true,
     bool enableDirectStream = true,
     bool enableTranscoding = true,
+    bool preview = false,
     bool autoPlay = true,
     bool carryTrackSelections = false,
   }) async {

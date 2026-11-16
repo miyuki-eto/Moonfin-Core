@@ -1247,15 +1247,16 @@ class _ChangeArtworkDialogState extends State<ChangeArtworkDialog> {
         ),
         decoration: BoxDecoration(
           color: AppColorScheme.surface.withValues(alpha: 0.95),
-          borderRadius: AppRadius.circular(24),
+          borderRadius: PlatformDetection.isTV
+              ? Tv26Style.modalShape.borderRadius
+              : AppRadius.circular(24),
           border: Border.fromBorderSide(
             ThemeRegistry.active.borders.chipBorder,
           ),
         ),
-        padding: EdgeInsets.symmetric(
-          vertical: PlatformDetection.isTV ? 24 : 16,
-          horizontal: PlatformDetection.isTV ? 24 : 16,
-        ),
+        padding: PlatformDetection.isTV
+            ? Tv26Style.modalContentPadding
+            : const EdgeInsets.all(16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1660,7 +1661,7 @@ class _ChangeArtworkDialogState extends State<ChangeArtworkDialog> {
               const SizedBox(
                 width: 16,
                 height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: LoadingThrobber(),
               ),
           ],
         ),
@@ -1773,7 +1774,7 @@ class _ChangeArtworkDialogState extends State<ChangeArtworkDialog> {
 
               if (isCategoryLoading) {
                 return const Center(
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: LoadingThrobber(),
                 );
               }
 
@@ -1885,9 +1886,8 @@ class _ChangeArtworkDialogState extends State<ChangeArtworkDialog> {
                     const SizedBox(
                       width: 14,
                       height: 14,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      child: LoadingThrobber(
+                        color: Colors.white,
                       ),
                     ),
                 ],
@@ -2023,9 +2023,8 @@ class _ChangeArtworkDialogState extends State<ChangeArtworkDialog> {
                 return Center(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: CircularProgressIndicator(
+                    child: LoadingThrobber(
                       color: AppColorScheme.accent,
-                      strokeWidth: 2,
                     ),
                   ),
                 );
@@ -2157,7 +2156,7 @@ class _ChangeArtworkDialogState extends State<ChangeArtworkDialog> {
                     child: SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: LoadingThrobber(),
                     ),
                   ),
                 ),
@@ -2464,9 +2463,7 @@ class _ChangeArtworkDialogState extends State<ChangeArtworkDialog> {
                               placeholder: (context, url) => AspectRatio(
                                 aspectRatio: imageAspectRatio,
                                 child: const Center(
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
+                                  child: LoadingThrobber(),
                                 ),
                               ),
                               errorWidget: (context, url, error) => AspectRatio(
@@ -2626,7 +2623,7 @@ class _ChangeArtworkDialogState extends State<ChangeArtworkDialog> {
                     child: SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: LoadingThrobber(),
                     ),
                   ),
                 ),

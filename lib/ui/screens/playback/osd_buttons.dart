@@ -1,3 +1,5 @@
+import '../../../config/app_features.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../l10n/app_localizations.dart';
@@ -39,8 +41,10 @@ enum OsdButton {
   /// Whether this device can put the button on screen at all. A button that
   /// never gets drawn here isn't worth offering a switch for.
   bool get isOffered => switch (this) {
-    OsdButton.castControls => false,
-    OsdButton.cast => !PlatformDetection.isTV,
+    OsdButton.castControls || OsdButton.chapters => false,
+    OsdButton.cast =>
+      AppFeatures.has(AppFeature.casting) && !PlatformDetection.isTV,
+    OsdButton.syncPlay => AppFeatures.has(AppFeature.syncPlay),
     OsdButton.volume => PlatformDetection.useDesktopUi,
     OsdButton.orientation => PlatformDetection.isMobile,
     OsdButton.fullscreen => PlatformDetection.useDesktopUi,

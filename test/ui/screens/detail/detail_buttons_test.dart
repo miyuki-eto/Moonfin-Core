@@ -56,8 +56,7 @@ void main() {
       expect(_arrangedIds(prefs).take(2), ['seerrRequest', 'seerrRequest4k']);
     });
 
-    test('the request buttons still lead a row arranged before they existed',
-        () async {
+    test('the request buttons still lead a row arranged before they existed', () async {
       // What an existing viewer has stored, with no idea the Seerr buttons are
       // coming. Anything declared before the first placed button keeps rank -1,
       // so the new ones land at the head rather than the end.
@@ -71,22 +70,24 @@ void main() {
       );
     });
 
-    test('the trailing Seerr buttons follow the one they were declared after',
-        () async {
-      final prefs = await _prefs(order: 'goToSeries,admin');
-      final ids = _arrangedIds(prefs);
+    test(
+      'the trailing Seerr buttons follow the one they were declared after',
+      () async {
+        final prefs = await _prefs(order: 'goToSeries,admin');
+        final ids = _arrangedIds(prefs);
 
-      // Declared between goToSeries and admin, so they inherit goToSeries'
-      // place rather than jumping to either end.
-      expect(ids.sublist(ids.indexOf('goToSeries')), [
-        'goToSeries',
-        'seerrWatchlist',
-        'seerrReportIssue',
-        'seerrManage',
-        'keepAsComplete',
-        'admin',
-      ]);
-    });
+        // Declared between goToSeries and admin, so they inherit goToSeries'
+        // place rather than jumping to either end.
+        expect(ids.sublist(ids.indexOf('goToSeries')), [
+          'goToSeries',
+          'seerrWatchlist',
+          'seerrReportIssue',
+          'seerrManage',
+          'keepAsComplete',
+          'admin',
+        ]);
+      },
+    );
 
     test('hiding a Seerr button is honoured like any other', () async {
       final prefs = await _prefs(hidden: 'seerrWatchlist');
@@ -96,12 +97,12 @@ void main() {
       );
     });
 
-    test('Android TV offers offline controls but not casting', () {
+    test('Android TV omits downloads and casting', () {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
       PlatformDetection.setTvMode(true);
 
-      expect(DetailButton.download.isOffered, isTrue);
-      expect(DetailButton.deleteFiles.isOffered, isTrue);
+      expect(DetailButton.download.isOffered, isFalse);
+      expect(DetailButton.deleteFiles.isOffered, isFalse);
       expect(DetailButton.cast.isOffered, isFalse);
     });
 
@@ -109,7 +110,7 @@ void main() {
       expect(DetailButton.watchWithGroup.isOffered, isFalse);
     });
 
-    test('Keep as Complete is only offered to someone who can manage Live TV', () {
+    test('Live TV management remains absent even for an administrator', () {
       final incomplete = _IncompleteRecordings();
       when(() => incomplete.supported).thenReturn(true);
       final users = UserRepository();
@@ -131,7 +132,7 @@ void main() {
       expect(DetailButton.keepAsComplete.isOffered, isFalse);
 
       users.setCurrentUser(user(canManageLiveTv: true));
-      expect(DetailButton.keepAsComplete.isOffered, isTrue);
+      expect(DetailButton.keepAsComplete.isOffered, isFalse);
     });
   });
 

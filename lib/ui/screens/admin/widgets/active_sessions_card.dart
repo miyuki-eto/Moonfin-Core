@@ -74,7 +74,7 @@ class _ActiveSessionsCardState extends ConsumerState<ActiveSessionsCard> {
               const SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2))
+                  child: LoadingThrobber())
             else
               Text('${sessions.length}', style: theme.textTheme.titleLarge),
             const SizedBox(width: AppSpacing.spaceXs),

@@ -6,11 +6,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:moonfin/data/services/connectivity_service.dart';
+import 'package:moonfin/auth/repositories/session_repository.dart';
 import 'package:server_core/server_core.dart';
 
 class _MockConnectivity extends Mock implements Connectivity {}
 
 class _MockMediaServerClient extends Mock implements MediaServerClient {}
+
+class _MockSession extends Mock implements SessionRepository {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -49,15 +52,13 @@ void main() {
 
     final client = _MockMediaServerClient();
     when(() => client.serverType).thenReturn(ServerType.jellyfin);
-    when(
-      () => client.baseUrl,
-    ).thenReturn('http://${server.address.address}:${server.port}');
+    when(() => client.baseUrl)
+        .thenReturn('http://${server.address.address}:${server.port}');
     GetIt.instance.registerSingleton<MediaServerClient>(client);
 
     connectivity = _MockConnectivity();
-    when(
-      () => connectivity.onConnectivityChanged,
-    ).thenAnswer((_) => const Stream.empty());
+    when(() => connectivity.onConnectivityChanged)
+        .thenAnswer((_) => const Stream.empty());
   });
 
   tearDown(() async {
@@ -74,6 +75,39 @@ void main() {
       retryBase: const Duration(milliseconds: 50),
     );
   }
+
+  test('initial connectivity waits for an active client before waking session services', () async {
+    final client = GetIt.instance<MediaServerClient>();
+    await GetIt.instance.unregister<MediaServerClient>();
+    var sessionRequests = 0;
+    GetIt.instance.registerLazySingleton<SessionRepository>(() {
+      sessionRequests++;
+      return _MockSession();
+    });
+    final service = serviceOnline(online: true);
+    addTearDown(service.dispose);
+    final initialState = Completer<void>();
+    service.addListener(() {
+      if (!initialState.isCompleted) initialState.complete();
+    });
+    service.initialize();
+    await initialState.future.timeout(const Duration(seconds: 2));
+    expect(
+      sessionRequests,
+      0,
+      reason: 'Authentication may be registered while its socket/playback dependencies are still being installed',
+    );
+    expect(probes, 0);
+
+    GetIt.instance.registerSingleton<MediaServerClient>(client);
+    await service.onServerClientReady('server');
+    expect(
+      sessionRequests,
+      1,
+      reason: 'The active-client handoff still wakes the session and syncs',
+    );
+    expect(probes, 1);
+  });
 
   // Nothing else re-asks while the verdict stands, so a lost probe has to be
   // retried on its own.

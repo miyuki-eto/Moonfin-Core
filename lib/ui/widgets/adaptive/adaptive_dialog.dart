@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart' show CupertinoDialogAction;
 import 'package:flutter/material.dart';
 
 import '../../../util/idiom/app_ui_idiom.dart';
+import '../../../util/platform_detection.dart';
 
 /// Dialog action button that keeps its native look on Apple idioms.
 ///
@@ -23,6 +24,14 @@ Widget adaptiveDialogAction({
   Color? backgroundColor,
   Color? focusedBackgroundColor,
 }) {
+  if (PlatformDetection.isTV) {
+    return TextButton(
+      onPressed: onPressed,
+      autofocus: autofocus,
+      focusNode: focusNode,
+      child: child,
+    );
+  }
   if (AppUiIdiomResolver.isApple) {
     return CupertinoDialogAction(
       onPressed: onPressed,

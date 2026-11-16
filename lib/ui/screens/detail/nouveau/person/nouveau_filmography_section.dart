@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart';
 import 'package:server_core/server_core.dart';
 
 import '../../../../../data/models/aggregated_item.dart';
@@ -8,6 +9,7 @@ import '../../../../../util/platform_detection.dart';
 import '../../../../widgets/navigation_layout.dart';
 import '../../../../widgets/focus/locked_focus_row.dart';
 import '../shared/nouveau_spacing.dart';
+import '../../../../widgets/media_card.dart';
 import 'nouveau_filmography_card.dart';
 
 class NouveauFilmographySection extends StatefulWidget {
@@ -41,8 +43,7 @@ class NouveauFilmographySection extends StatefulWidget {
       NouveauFilmographySectionState();
 }
 
-class NouveauFilmographySectionState
-    extends State<NouveauFilmographySection> {
+class NouveauFilmographySectionState extends State<NouveauFilmographySection> {
   static const int _fullVisibleEpisodeCards = 4;
   static const int _fullVisiblePosterCards = 6;
 
@@ -180,7 +181,9 @@ class NouveauFilmographySectionState
             if (hasTitle) ...[
               Text(
                 widget.title,
-                style: layout.compact
+                style: PlatformDetection.isTV
+                    ? Tv26Style.sectionTitle
+                    : layout.compact
                     ? textTheme.titleLarge?.copyWith(
                         fontSize: 22,
                         fontWeight: FontWeight.w700,
@@ -219,6 +222,10 @@ class NouveauFilmographySectionState
           width: layout.viewportWidth,
           height: layout.railHeight,
           child: LockedFocusRow<AggregatedItem>(
+            viewportInsets: PlatformDetection.isTV
+                ? Tv26Style.railPadding
+                : EdgeInsets.zero,
+            paintOutset: PlatformDetection.isTV ? MediaCard.focusRingOutset : 0,
             key: _rowKey,
             items: widget.items,
             hubKey: _hubKey,

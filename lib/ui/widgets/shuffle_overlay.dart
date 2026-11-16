@@ -841,7 +841,7 @@ class _ShuffleOverlayState extends State<_ShuffleOverlay> {
 
   Widget _buildCardsArea(AppLocalizations l10n) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: LoadingThrobber());
     }
 
     if (_hasLoadError) {
@@ -1185,7 +1185,7 @@ class _ShuffleOverlayState extends State<_ShuffleOverlay> {
                   SizedBox(
                     width: isMobile ? 14 : 16,
                     height: isMobile ? 14 : 16,
-                    child: const CircularProgressIndicator(strokeWidth: 2),
+                    child: const LoadingThrobber(),
                   ),
                   SizedBox(width: isMobile ? 8 : 10),
                   Text(
@@ -1861,7 +1861,7 @@ class _ShufflePickerDialogState<T> extends State<_ShufflePickerDialog<T>> {
                   ? const Padding(
                       padding: EdgeInsets.all(24),
                       child: Center(
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: LoadingThrobber(),
                       ),
                     )
                   : _items.isEmpty

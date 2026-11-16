@@ -10,6 +10,7 @@ import '../../../../../data/viewmodels/item_detail_view_model.dart';
 import '../../../../../l10n/app_localizations.dart';
 import '../../../../../preference/user_preferences.dart';
 import '../../../../../util/detail_playback_info.dart';
+import '../../../../../util/platform_detection.dart';
 import '../../../../../util/detail_track_highlight.dart';
 import '../../../../../util/direct_play_reasons_formatter.dart';
 import '../../../../../util/media_source_summary.dart';
@@ -79,15 +80,16 @@ class _SpotlightFileDetailsSectionState
 
     try {
       final rawStreams = mediaSourceStreams(widget.mediaSource);
-      final audioStreams =
-          rawStreams.where((s) => s['Type'] == 'Audio').toList();
-      final subtitleStreams =
-          rawStreams.where((s) => s['Type'] == 'Subtitle').toList();
+      final audioStreams = rawStreams
+          .where((s) => s['Type'] == 'Audio')
+          .toList();
+      final subtitleStreams = rawStreams
+          .where((s) => s['Type'] == 'Subtitle')
+          .toList();
 
-      final manager =
-          GetIt.instance.isRegistered<PlaybackManager>()
-              ? GetIt.instance<PlaybackManager>()
-              : null;
+      final manager = GetIt.instance.isRegistered<PlaybackManager>()
+          ? GetIt.instance<PlaybackManager>()
+          : null;
       final currentQueueItem = manager?.queueService.currentItem;
       final isPlayingThisItem =
           currentQueueItem is AggregatedItem &&
@@ -97,16 +99,18 @@ class _SpotlightFileDetailsSectionState
         audioStreams: audioStreams,
         seriesId: widget.item.seriesId,
         selectedIndex: widget.vm.selectedAudioIndex,
-        activePlaybackIndex:
-            isPlayingThisItem ? manager?.audioStreamIndex : null,
+        activePlaybackIndex: isPlayingThisItem
+            ? manager?.audioStreamIndex
+            : null,
       );
       final effectiveSubtitle = highlightedSubtitleIndex(
         subtitleStreams: subtitleStreams,
         audioStreams: audioStreams,
         seriesId: widget.item.seriesId,
         selectedIndex: widget.vm.selectedSubtitleIndex,
-        activePlaybackIndex:
-            isPlayingThisItem ? manager?.subtitleStreamIndex : null,
+        activePlaybackIndex: isPlayingThisItem
+            ? manager?.subtitleStreamIndex
+            : null,
         activeAudioIndex: effectiveAudio,
       );
 
@@ -157,26 +161,25 @@ class _SpotlightFileDetailsSectionState
     final DateTime? addedOn = widget.item.dateCreated?.toLocal();
     final String? addedLabel = addedOn == null
         ? null
-        : DateFormat.yMMMd(
-            Localizations.localeOf(context).toString(),
-          ).format(addedOn);
+        : DateFormat.yMMMd(Localizations.localeOf(context).toString())
+              .format(addedOn);
 
     // Parse streams
     final rawStreams = mediaSourceStreams(widget.mediaSource);
 
     final videoStreams = rawStreams.where((s) => s['Type'] == 'Video').toList();
     final audioStreams = rawStreams.where((s) => s['Type'] == 'Audio').toList();
-    final subtitleStreams =
-        rawStreams.where((s) => s['Type'] == 'Subtitle').toList();
+    final subtitleStreams = rawStreams
+        .where((s) => s['Type'] == 'Subtitle')
+        .toList();
 
     final videoDetails = videoStreams.isEmpty
         ? const <String>[]
         : videoStreamSummary(videoStreams.first, unknownCodec: l10n.unknown);
 
-    final manager =
-        GetIt.instance.isRegistered<PlaybackManager>()
-            ? GetIt.instance<PlaybackManager>()
-            : null;
+    final manager = GetIt.instance.isRegistered<PlaybackManager>()
+        ? GetIt.instance<PlaybackManager>()
+        : null;
     final currentQueueItem = manager?.queueService.currentItem;
     final isPlayingThisItem =
         currentQueueItem is AggregatedItem &&
@@ -186,16 +189,16 @@ class _SpotlightFileDetailsSectionState
       audioStreams: audioStreams,
       seriesId: widget.item.seriesId,
       selectedIndex: widget.vm.selectedAudioIndex,
-      activePlaybackIndex:
-          isPlayingThisItem ? manager?.audioStreamIndex : null,
+      activePlaybackIndex: isPlayingThisItem ? manager?.audioStreamIndex : null,
     );
     final activeSubtitleIndex = highlightedSubtitleIndex(
       subtitleStreams: subtitleStreams,
       audioStreams: audioStreams,
       seriesId: widget.item.seriesId,
       selectedIndex: widget.vm.selectedSubtitleIndex,
-      activePlaybackIndex:
-          isPlayingThisItem ? manager?.subtitleStreamIndex : null,
+      activePlaybackIndex: isPlayingThisItem
+          ? manager?.subtitleStreamIndex
+          : null,
       activeAudioIndex: activeAudioIndex,
     );
 
@@ -208,7 +211,8 @@ class _SpotlightFileDetailsSectionState
       children: [
         // File name details card
         FocusableWrapper(
-          focusNode: (!hasAudioButton && !hasSubtitleButton && !_playbackInfoFailed)
+          focusNode:
+              (!hasAudioButton && !hasSubtitleButton && !_playbackInfoFailed)
               ? effectiveFirstNode
               : null,
           suppressFocusGlow: true,
@@ -220,7 +224,9 @@ class _SpotlightFileDetailsSectionState
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.04),
               borderRadius: AppRadius.circular(8),
-              border: Border.all(color: Colors.white10),
+              border: PlatformDetection.isTV
+                  ? Tv26Style.surfaceBorder
+                  : Border.all(color: Colors.white10),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -284,10 +290,9 @@ class _SpotlightFileDetailsSectionState
                           a['Language'],
                           unknown: l10n.unknown,
                         );
-                        final isDefault =
-                            a['IsDefault'] == true
-                                ? ' [${l10n.defaultLabel}]'
-                                : '';
+                        final isDefault = a['IsDefault'] == true
+                            ? ' [${l10n.defaultLabel}]'
+                            : '';
                         final isSelected = a['Index'] == activeAudioIndex;
 
                         return [
@@ -298,14 +303,12 @@ class _SpotlightFileDetailsSectionState
                               color: Colors.white.withValues(
                                 alpha: isSelected ? 1.0 : 0.7,
                               ),
-                              fontWeight:
-                                  isSelected
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                              decoration:
-                                  isSelected
-                                      ? TextDecoration.underline
-                                      : TextDecoration.none,
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              decoration: isSelected
+                                  ? TextDecoration.underline
+                                  : TextDecoration.none,
                               decorationColor: AppColorScheme.accent,
                               decorationThickness: 1.5,
                               height: 1.3,
@@ -326,8 +329,8 @@ class _SpotlightFileDetailsSectionState
                 const SizedBox(width: 90),
                 FocusableWrapper(
                   focusNode: effectiveFirstNode ?? _audioShowAllFocusNode,
-                  onSelect:
-                      () => setState(() => _audioExpanded = !_audioExpanded),
+                  onSelect: () =>
+                      setState(() => _audioExpanded = !_audioExpanded),
                   borderRadius: 6,
                   suppressFocusGlow: true,
                   child: Padding(
@@ -375,12 +378,12 @@ class _SpotlightFileDetailsSectionState
                           s['Language'],
                           unknown: l10n.unknown,
                         );
-                        final isDefault =
-                            s['IsDefault'] == true
-                                ? ' [${l10n.defaultLabel}]'
-                                : '';
-                        final isForced =
-                            s['IsForced'] == true ? ' [${l10n.forced}]' : '';
+                        final isDefault = s['IsDefault'] == true
+                            ? ' [${l10n.defaultLabel}]'
+                            : '';
+                        final isForced = s['IsForced'] == true
+                            ? ' [${l10n.forced}]'
+                            : '';
                         final isSelected = s['Index'] == activeSubtitleIndex;
 
                         return [
@@ -391,14 +394,12 @@ class _SpotlightFileDetailsSectionState
                               color: Colors.white.withValues(
                                 alpha: isSelected ? 1.0 : 0.7,
                               ),
-                              fontWeight:
-                                  isSelected
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                              decoration:
-                                  isSelected
-                                      ? TextDecoration.underline
-                                      : TextDecoration.none,
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              decoration: isSelected
+                                  ? TextDecoration.underline
+                                  : TextDecoration.none,
                               decorationColor: AppColorScheme.accent,
                               decorationThickness: 1.5,
                               height: 1.3,
@@ -418,14 +419,11 @@ class _SpotlightFileDetailsSectionState
               children: [
                 const SizedBox(width: 90),
                 FocusableWrapper(
-                  focusNode:
-                      (!hasAudioButton && effectiveFirstNode != null)
-                          ? effectiveFirstNode
-                          : _subtitleShowAllFocusNode,
-                  onSelect:
-                      () => setState(
-                        () => _subtitlesExpanded = !_subtitlesExpanded,
-                      ),
+                  focusNode: (!hasAudioButton && effectiveFirstNode != null)
+                      ? effectiveFirstNode
+                      : _subtitleShowAllFocusNode,
+                  onSelect: () =>
+                      setState(() => _subtitlesExpanded = !_subtitlesExpanded),
                   borderRadius: 6,
                   suppressFocusGlow: true,
                   child: Padding(
@@ -458,10 +456,9 @@ class _SpotlightFileDetailsSectionState
           l10n,
           activeAudioIndex: activeAudioIndex,
           activeSubtitleIndex: activeSubtitleIndex,
-          firstFocusNode:
-              (!hasAudioButton && !hasSubtitleButton)
-                  ? effectiveFirstNode
-                  : null,
+          firstFocusNode: (!hasAudioButton && !hasSubtitleButton)
+              ? effectiveFirstNode
+              : null,
         ),
       ],
     );
@@ -500,10 +497,7 @@ class _SpotlightFileDetailsSectionState
           const SizedBox(
             width: 14,
             height: 14,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: Colors.white70,
-            ),
+            child: LoadingThrobber(color: Colors.white70),
           ),
           const SizedBox(width: 8),
           Text(
@@ -559,17 +553,15 @@ class _SpotlightFileDetailsSectionState
 
     final source = _playbackInfo!.mediaSources.first;
 
-    final manager =
-        GetIt.instance.isRegistered<PlaybackManager>()
-            ? GetIt.instance<PlaybackManager>()
-            : null;
+    final manager = GetIt.instance.isRegistered<PlaybackManager>()
+        ? GetIt.instance<PlaybackManager>()
+        : null;
     final profile = manager?.backend?.getDeviceProfile() ?? <String, dynamic>{};
     final bitrate = (profile['MaxStreamingBitrate'] as num?)?.toInt();
 
-    final mediaStreams =
-        source.mediaStreams.isNotEmpty
-            ? source.mediaStreams
-            : mediaSourceStreams(widget.mediaSource);
+    final mediaStreams = source.mediaStreams.isNotEmpty
+        ? source.mediaStreams
+        : mediaSourceStreams(widget.mediaSource);
 
     final clientDvReason = checkClientDolbyVisionTranscodeReason(
       mediaStreams,
@@ -584,21 +576,20 @@ class _SpotlightFileDetailsSectionState
       'MediaStreams': mediaStreams,
     };
 
-    final reasons =
-        !canDirectPlay
-            ? buildDirectPlayReasonItems(
-              serverReasons: source.transcodingReasons,
-              mediaSource: mediaSourceMap,
-              deviceProfile: profile,
-              prefs: widget.prefs,
-              l10n: l10n,
-              selectedAudioIndex:
-                  widget.vm.selectedAudioIndex ?? activeAudioIndex,
-              selectedSubtitleIndex:
-                  widget.vm.selectedSubtitleIndex ?? activeSubtitleIndex,
-              maxStreamingBitrate: bitrate,
-            )
-            : const <DirectPlayReasonItem>[];
+    final reasons = !canDirectPlay
+        ? buildDirectPlayReasonItems(
+            serverReasons: source.transcodingReasons,
+            mediaSource: mediaSourceMap,
+            deviceProfile: profile,
+            prefs: widget.prefs,
+            l10n: l10n,
+            selectedAudioIndex:
+                widget.vm.selectedAudioIndex ?? activeAudioIndex,
+            selectedSubtitleIndex:
+                widget.vm.selectedSubtitleIndex ?? activeSubtitleIndex,
+            maxStreamingBitrate: bitrate,
+          )
+        : const <DirectPlayReasonItem>[];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -615,10 +606,9 @@ class _SpotlightFileDetailsSectionState
             Text(
               canDirectPlay ? l10n.yes : l10n.no,
               style: textTheme.bodyMedium?.copyWith(
-                color:
-                    canDirectPlay
-                        ? const Color(0xFF2E7D32)
-                        : const Color(0xFFD32F2F),
+                color: canDirectPlay
+                    ? const Color(0xFF2E7D32)
+                    : const Color(0xFFD32F2F),
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -630,34 +620,33 @@ class _SpotlightFileDetailsSectionState
             padding: const EdgeInsets.only(left: 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children:
-                  reasons.map((reason) {
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 3),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '• ${reason.description}',
+              children: reasons.map((reason) {
+                return Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '• ${reason.description}',
+                        style: textTheme.bodySmall?.copyWith(
+                          color: Colors.white70,
+                        ),
+                      ),
+                      if (reason.hint != null)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8, top: 2),
+                          child: Text(
+                            reason.hint!,
                             style: textTheme.bodySmall?.copyWith(
-                              color: Colors.white70,
+                              color: Colors.white54,
+                              fontStyle: FontStyle.italic,
                             ),
                           ),
-                          if (reason.hint != null)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 8, top: 2),
-                              child: Text(
-                                reason.hint!,
-                                style: textTheme.bodySmall?.copyWith(
-                                  color: Colors.white54,
-                                  fontStyle: FontStyle.italic,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
+                        ),
+                    ],
+                  ),
+                );
+              }).toList(),
             ),
           ),
         ],

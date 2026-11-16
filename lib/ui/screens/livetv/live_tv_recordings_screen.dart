@@ -177,7 +177,7 @@ class _LiveTvRecordingsScreenState extends State<LiveTvRecordingsScreen> {
 
   Widget _buildRecordingsTab() {
     if (_vm.state == RecordingsState.loading) {
-      return Center(child: CircularProgressIndicator(color: AppColorScheme.accent));
+      return Center(child: LoadingThrobber(color: AppColorScheme.accent));
     }
     if (_vm.state == RecordingsState.error) {
       return Center(
@@ -223,7 +223,7 @@ class _LiveTvRecordingsScreenState extends State<LiveTvRecordingsScreen> {
 
   Widget _buildScheduledTab() {
     if (_scheduleVm.state == ScheduleState.loading) {
-      return Center(child: CircularProgressIndicator(color: AppColorScheme.accent));
+      return Center(child: LoadingThrobber(color: AppColorScheme.accent));
     }
     if (_scheduleVm.state == ScheduleState.error) {
       return Center(
@@ -258,7 +258,7 @@ class _LiveTvRecordingsScreenState extends State<LiveTvRecordingsScreen> {
 
   Widget _buildSeriesTab() {
     if (_seriesVm.state == SeriesRecordingsState.loading) {
-      return Center(child: CircularProgressIndicator(color: AppColorScheme.accent));
+      return Center(child: LoadingThrobber(color: AppColorScheme.accent));
     }
     if (_seriesVm.state == SeriesRecordingsState.error) {
       return Center(

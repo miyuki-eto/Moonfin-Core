@@ -1,8 +1,6 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
-import 'package:moonfin_design/moonfin_design.dart';
 import 'package:jellyfin_preference/jellyfin_preference.dart';
 import 'package:server_core/server_core.dart';
 
@@ -12,6 +10,7 @@ import '../../../auth/store/authentication_preferences.dart';
 import '../../../auth/store/credential_store.dart';
 import '../../../data/services/connectivity_service.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../platform/web_startup_splash.dart';
 import '../../../util/pin_code_util.dart';
 import '../../../preference/preference_constants.dart';
 import '../../navigation/destinations.dart';
@@ -19,43 +18,22 @@ import '../../widgets/adaptive/adaptive_dialog.dart';
 import '../../widgets/overlay_sheet.dart';
 import '../../widgets/pin_entry_dialog.dart';
 import '../../widgets/focus/request_initial_focus.dart';
+import '../../widgets/startup_loading.dart';
 
 class StartupScreen extends StatefulWidget {
   final bool bootstrapActiveSession;
 
-  const StartupScreen({
-    super.key,
-    this.bootstrapActiveSession = false,
-  });
+  const StartupScreen({super.key, this.bootstrapActiveSession = false});
 
   @override
   State<StartupScreen> createState() => _StartupScreenState();
 }
 
-class _StartupScreenState extends State<StartupScreen>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _fadeController;
-  late final Animation<double> _fadeAnimation;
-
+class _StartupScreenState extends State<StartupScreen> {
   @override
   void initState() {
     super.initState();
-    _fadeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-    _fadeAnimation = CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeIn,
-    );
-    _fadeController.forward();
     _initialize();
-  }
-
-  @override
-  void dispose() {
-    _fadeController.dispose();
-    super.dispose();
   }
 
   /// On a cold boot the app can win the race against Wi-Fi association and
@@ -126,7 +104,8 @@ class _StartupScreenState extends State<StartupScreen>
       pinEnabledForAutoLoginUser = pinUtil.isPinEnabled;
     }
 
-    final restored = (authPrefs.shouldAlwaysAuthenticate || pinEnabledForAutoLoginUser)
+    final restored =
+        (authPrefs.shouldAlwaysAuthenticate || pinEnabledForAutoLoginUser)
         ? false
         : await session.restoreSession();
 
@@ -146,6 +125,7 @@ class _StartupScreenState extends State<StartupScreen>
       final pinUtil = PinCodeUtil(store, session.activeUserId!);
 
       if (pinUtil.isPinEnabled) {
+        finishWebStartupSplash();
         final verified = await PinEntryDialog.show(
           context,
           mode: PinEntryMode.verify,
@@ -177,15 +157,14 @@ class _StartupScreenState extends State<StartupScreen>
   }
 
   Future<void> _showSecureStorageWarning() async {
+    finishWebStartupSplash();
     final l10n = AppLocalizations.of(context);
     await showFocusRestoringDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (context) => AlertDialog.adaptive(
         title: Text(l10n.secureStorageUnavailable),
-        content: Text(
-          l10n.secureStorageUnavailableMessage,
-        ),
+        content: Text(l10n.secureStorageUnavailableMessage),
         actions: [
           adaptiveDialogAction(
             onPressed: () => Navigator.of(context).pop(),
@@ -196,56 +175,8 @@ class _StartupScreenState extends State<StartupScreen>
     );
   }
 
-  bool get _isLargeScreen {
-    final platform = defaultTargetPlatform;
-    return platform == TargetPlatform.linux ||
-        platform == TargetPlatform.macOS ||
-        platform == TargetPlatform.windows;
-  }
-
   @override
-  Widget build(BuildContext context) =>
-      RequestInitialFocus(child: _buildContent(context));
-
-  Widget _buildContent(BuildContext context) {
-    final gradientColors = [
-      AppColorScheme.background,
-      AppColorScheme.surfaceVariant,
-      AppColorScheme.surface,
-    ];
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: gradientColors,
-          ),
-        ),
-        child: Center(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Image.asset(
-                  'assets/images/logo_and_text.png',
-                  height: _isLargeScreen ? 80 : 56,
-                ),
-                const SizedBox(height: 32),
-                SizedBox(
-                  height: 24,
-                  width: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppColorScheme.accent.withValues(alpha: 0.7),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const RequestInitialFocus(
+    child: Scaffold(backgroundColor: Colors.black, body: StartupLoading()),
+  );
 }

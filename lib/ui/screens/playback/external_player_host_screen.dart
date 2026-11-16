@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:playback_core/playback_core.dart';
@@ -386,7 +387,7 @@ class _ExternalPlayerHostScreenState extends State<ExternalPlayerHostScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const CircularProgressIndicator(),
+                const LoadingThrobber(),
                 const SizedBox(height: 20),
                 Text(
                   l10n.openExternally,

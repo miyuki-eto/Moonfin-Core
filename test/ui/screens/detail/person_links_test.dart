@@ -15,6 +15,9 @@ import 'package:moonfin/ui/screens/detail/item_detail_screen.dart';
 import 'package:moonfin/ui/screens/detail/person_links_row.dart';
 import 'package:moonfin/util/platform_detection.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
+import 'package:server_core/server_core.dart';
+import 'package:moonfin/ui/screens/detail/nouveau/person/nouveau_person_hero.dart';
 
 class _ViewModel extends Mock implements ItemDetailViewModel {}
 
@@ -23,6 +26,8 @@ class _Sync extends Mock implements PluginSyncService {}
 class _SeerrPrefs extends Mock implements SeerrPreferences {}
 
 class _Users extends Mock implements UserRepository {}
+
+class _Images extends Mock implements ImageApi {}
 
 // Issue #1721: a person page links out to the person's own pages.
 
@@ -140,7 +145,8 @@ void main() {
       GetIt.instance.registerSingleton<SeerrPreferences>(seerrPrefs);
 
       final users = _Users();
-      when(() => users.currentUserStream).thenAnswer((_) => const Stream.empty());
+      when(() => users.currentUserStream)
+          .thenAnswer((_) => const Stream.empty());
       when(() => users.currentUser).thenReturn(null);
       GetIt.instance.registerSingleton<UserRepository>(users);
 
@@ -191,8 +197,14 @@ void main() {
       tester,
     ) async {
       final prefs = GetIt.instance<UserPreferences>();
-      await prefs.set(UserPreferences.hiddenDetailSectionsMobile, 'personLinks');
-      await prefs.set(UserPreferences.hiddenDetailSectionsDesktop, 'personLinks');
+      await prefs.set(
+        UserPreferences.hiddenDetailSectionsMobile,
+        'personLinks',
+      );
+      await prefs.set(
+        UserPreferences.hiddenDetailSectionsDesktop,
+        'personLinks',
+      );
 
       await tester.pumpWidget(
         app(PersonLinksRow(item: _person(), accounts: _jackBlack)),
@@ -210,7 +222,7 @@ void main() {
       expect(find.byType(Wrap), findsNothing);
     });
 
-    testWidgets('on a phone Favorite, Display and Seerr are round', (
+    testWidgets('on a phone Favorite and Seerr are round with Display hidden', (
       tester,
     ) async {
       PlatformDetection.setInterfaceLayout(InterfaceLayout.phone);
@@ -222,10 +234,64 @@ void main() {
       await tester.pump();
 
       expect(roundTile('Favorite'), findsOneWidget);
-      expect(roundTile('Display'), findsOneWidget);
+      expect(find.text('Display'), findsNothing);
       expect(roundTile('Seerr'), findsOneWidget);
       expect(find.byTooltip('Instagram · @jackblack'), findsOneWidget);
     });
+
+    testWidgets('person actions skip hidden Display in both directions', (
+      tester,
+    ) async {
+      PlatformDetection.setInterfaceLayout(InterfaceLayout.phone);
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(app(actions()));
+      await tester.pump();
+      final favoriteContext = tester.element(find.text('Favorite'));
+      Focus.of(favoriteContext).requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      expect(Focus.of(tester.element(find.text('Seerr'))).hasFocus, isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      expect(Focus.of(favoriteContext).hasFocus, isTrue);
+      expect(find.text('Display'), findsNothing);
+    });
+
+    testWidgets(
+      'Nouveau person hero hides Display without an unattached focus stop',
+      (tester) async {
+        PlatformDetection.setInterfaceLayout(InterfaceLayout.tv);
+        tester.view.physicalSize = const Size(1440, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final key = GlobalKey<NouveauPersonHeroState>();
+        Widget hero() => NouveauPersonHero(
+          key: key,
+          item: _person(),
+          viewModel: vm,
+          imageApi: _Images(),
+          prefs: GetIt.instance<UserPreferences>(),
+        );
+        await tester.pumpWidget(app(hero()));
+        await tester.pump();
+        expect(find.text('Display'), findsNothing);
+        expect(key.currentState!.focusBottom(), isTrue);
+        await tester.pump();
+        final favorite = FocusManager.instance.primaryFocus;
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await tester.pump();
+        expect(FocusManager.instance.primaryFocus, favorite);
+        when(() => vm.supportsPersonFavorites).thenReturn(false);
+        await tester.pumpWidget(app(hero()));
+        await tester.pump();
+        expect(find.text('Favorite'), findsNothing);
+        expect(key.currentState!.canFocusBottom, isFalse);
+        expect(key.currentState!.focusBottom(), isFalse);
+      },
+    );
 
     testWidgets('on desktop Favorite stays the wide button, without Seerr', (
       tester,

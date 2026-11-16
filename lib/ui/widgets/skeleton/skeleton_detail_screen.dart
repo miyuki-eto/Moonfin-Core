@@ -7,6 +7,7 @@ import '../../../preference/preference_constants.dart';
 import '../../../preference/user_preferences.dart';
 import '../../../util/platform_detection.dart';
 import '../../screens/detail/detail_layout_metrics.dart';
+import '../../screens/detail/nouveau/hero/tv_detail_hero.dart';
 import '../../screens/detail/spotlight/spotlight_landscape_layout.dart';
 import '../top_toolbar.dart';
 import 'skeleton_shimmer.dart';
@@ -500,6 +501,49 @@ class DetailScreenSkeleton extends StatelessWidget {
     final topPadding = isLandscape
         ? (heroTop + safePadding.top)
         : safePadding.top;
+
+    if (PlatformDetection.isTV) {
+      return SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TvDetailHeroFrame(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SkeletonBox(width: 260, height: 72),
+                  const SizedBox(height: 12),
+                  const SkeletonBox(width: 180, height: 20),
+                  const SizedBox(height: 10),
+                  const SkeletonBox(width: 420, height: 52),
+                  const SizedBox(height: 12),
+                  const SkeletonBox(width: 300, height: 20),
+                  const SizedBox(height: 18),
+                  Row(children: [
+                    SkeletonBox(
+                      key: const ValueKey('nouveau-tv-skeleton-play'),
+                      width: 143, height: 40,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    const SizedBox(width: 12),
+                    SkeletonBox(width: 40, height: 40, borderRadius: BorderRadius.circular(20)),
+                    const SizedBox(width: 12),
+                    SkeletonBox(width: 40, height: 40, borderRadius: BorderRadius.circular(20)),
+                  ]),
+                ],
+              ),
+            ),
+            const SizedBox(height: 40),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: horizontalInset),
+              child: const SkeletonBox(width: 100, height: 20),
+            ),
+          ],
+        ),
+      );
+    }
 
     // The hero block is the same either way. Only where it sits differs.
     final heroChildren = <Widget>[

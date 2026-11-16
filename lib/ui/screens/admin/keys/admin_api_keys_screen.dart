@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:flutter/services.dart';
 import 'package:get_it/get_it.dart';
 import 'package:server_core/server_core.dart';
@@ -219,7 +220,7 @@ class _AdminApiKeysScreenState extends State<AdminApiKeysScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: LoadingThrobber());
     }
 
     if (_error != null) {

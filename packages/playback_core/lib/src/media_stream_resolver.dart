@@ -102,7 +102,8 @@ abstract class MediaStreamResolver {
     if (staticIds.contains(mediaSourceId)) return mediaSourceId;
     // A live session id maps back to the static source that opened it.
     for (final source in sources) {
-      if (source is Map && source['LiveStreamId']?.toString() == mediaSourceId) {
+      if (source is Map &&
+          source['LiveStreamId']?.toString() == mediaSourceId) {
         return _mediaSourceId(source);
       }
     }
@@ -212,7 +213,8 @@ abstract class MediaStreamResolver {
     required bool isManagedLiveStream,
     required String? path,
   }) {
-    if (!enableDirectPlay || isWebPlatform || !isManagedLiveStream) return false;
+    if (!enableDirectPlay || isWebPlatform || !isManagedLiveStream)
+      return false;
     return path != null &&
         (path.startsWith('http://') || path.startsWith('https://'));
   }
@@ -312,7 +314,11 @@ abstract class MediaStreamResolver {
     return uri.hasQuery ? '$base${uri.path}?${uri.query}' : '$base${uri.path}';
   }
 
-  static String applyStreamIndices(String url, int? audioStreamIndex, int? subtitleStreamIndex) {
+  static String applyStreamIndices(
+    String url,
+    int? audioStreamIndex,
+    int? subtitleStreamIndex,
+  ) {
     try {
       final uri = Uri.parse(url);
       final params = Map<String, String>.from(uri.queryParameters);
@@ -357,8 +363,9 @@ abstract class MediaStreamResolver {
 
   static List<ExternalSubtitle> extractExternalSubtitles(
     List<Map<String, dynamic>> mediaStreams,
-    String baseUrl,
-  ) {
+    String baseUrl, {
+    bool includeEmbeddedPgs = false,
+  }) {
     final subs = <ExternalSubtitle>[];
     for (final stream in mediaStreams) {
       if (stream['Type'] != 'Subtitle') continue;
@@ -366,20 +373,27 @@ abstract class MediaStreamResolver {
       if (deliveryUrl == null || deliveryUrl.isEmpty) continue;
       // The server has to extract all of an embedded PGS track before it
       // sends the file, which can take minutes.
-      if (isEmbeddedPgsSubtitle(stream)) continue;
+      if (isEmbeddedPgsSubtitle(stream) && !includeEmbeddedPgs) continue;
       final isExternal = stream['IsExternal'] == true;
-      final supportsExternal = stream['SupportsExternalStream'] == true;
+      final supportsExternal =
+          stream['SupportsExternalStream'] == true ||
+          (includeEmbeddedPgs && isPgsCodec(stream['Codec'] as String?) &&
+              stream['DeliveryMethod'] == 'External');
       if (!isExternal && !supportsExternal) continue;
-      subs.add(ExternalSubtitle(
-        deliveryUrl: '$baseUrl$deliveryUrl',
-        title: stream['DisplayTitle'] as String? ??
-            stream['Title'] as String?,
-        language: stream['Language'] as String?,
-        codec: (stream['Codec'] as String?) ?? 'srt',
-        isDefault: stream['IsDefault'] as bool? ?? false,
-        isForced: stream['IsForced'] as bool? ?? false,
-        streamIndex: stream['Index'] as int?,
-      ));
+      subs.add(
+        ExternalSubtitle(
+          deliveryUrl: Uri.tryParse(deliveryUrl)?.hasScheme == true
+              ? deliveryUrl
+              : '$baseUrl$deliveryUrl',
+          title:
+              stream['DisplayTitle'] as String? ?? stream['Title'] as String?,
+          language: stream['Language'] as String?,
+          codec: (stream['Codec'] as String?) ?? 'srt',
+          isDefault: stream['IsDefault'] as bool? ?? false,
+          isForced: stream['IsForced'] as bool? ?? false,
+          streamIndex: stream['Index'] as int?,
+        ),
+      );
     }
     return subs;
   }
@@ -411,22 +425,24 @@ abstract class MediaStreamResolver {
         _ => null,
       };
       if (extension == null) continue;
-      subs.add(ExternalSubtitle(
-        deliveryUrl: base
-            .resolve(
-              'Videos/${Uri.encodeComponent(itemId)}/'
-              '${Uri.encodeComponent(mediaSourceId)}/Subtitles/$index/0/'
-              'Stream.$extension',
-            )
-            .toString(),
-        title: stream['DisplayTitle'] as String? ??
-            stream['Title'] as String?,
-        language: stream['Language'] as String?,
-        codec: codec!,
-        isDefault: stream['IsDefault'] as bool? ?? false,
-        isForced: stream['IsForced'] as bool? ?? false,
-        streamIndex: index,
-      ));
+      subs.add(
+        ExternalSubtitle(
+          deliveryUrl: base
+              .resolve(
+                'Videos/${Uri.encodeComponent(itemId)}/'
+                '${Uri.encodeComponent(mediaSourceId)}/Subtitles/$index/0/'
+                'Stream.$extension',
+              )
+              .toString(),
+          title:
+              stream['DisplayTitle'] as String? ?? stream['Title'] as String?,
+          language: stream['Language'] as String?,
+          codec: codec!,
+          isDefault: stream['IsDefault'] as bool? ?? false,
+          isForced: stream['IsForced'] as bool? ?? false,
+          streamIndex: index,
+        ),
+      );
     }
     return subs;
   }

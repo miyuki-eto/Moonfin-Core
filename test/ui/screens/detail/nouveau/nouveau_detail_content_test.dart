@@ -25,6 +25,8 @@ import 'package:moonfin/auth/repositories/session_repository.dart';
 import 'package:moonfin/ui/screens/detail/nouveau/chapters/nouveau_chapters_section.dart';
 import 'package:moonfin/ui/screens/detail/nouveau/details/nouveau_details_section.dart';
 import 'package:moonfin/ui/screens/detail/nouveau/discovery/nouveau_discovery_rail.dart';
+import 'package:moonfin/ui/screens/detail/nouveau/episodes/nouveau_episodes_section.dart';
+import 'package:moonfin/ui/screens/detail/nouveau/episodes/nouveau_season_selector.dart';
 import 'package:moonfin/ui/screens/detail/nouveau/hero/nouveau_action_buttons.dart';
 import 'package:moonfin/ui/screens/detail/nouveau/hero/nouveau_hero.dart';
 import 'package:moonfin/ui/screens/detail/nouveau/nouveau_detail_content.dart';
@@ -33,12 +35,16 @@ import 'package:moonfin/ui/screens/detail/nouveau/person/nouveau_filmography_sec
 import 'package:moonfin/ui/screens/detail/nouveau/person/nouveau_person_content.dart';
 import 'package:moonfin/ui/screens/detail/nouveau/reviews/nouveau_reviews_section.dart';
 import 'package:moonfin/ui/screens/detail/nouveau/shared/nouveau_segmented_selector.dart';
+import 'package:moonfin/ui/screens/detail/nouveau/shared/nouveau_landscape_media_card.dart';
 import 'package:moonfin/ui/theme/app_theme.dart';
+import 'package:moonfin/ui/widgets/focus/locked_focus_row.dart';
+import 'package:moonfin/ui/tv/tv26_classification.dart';
+import 'package:moonfin/ui/tv/tv26_button.dart';
 import 'package:moonfin/ui/widgets/rating_display.dart';
+import 'package:moonfin/ui/widgets/media_card.dart';
 import 'package:moonfin/ui/widgets/seerr/seerr_item_chips.dart';
 import 'package:moonfin/ui/widgets/seerr/seerr_stats_card.dart';
 import 'package:moonfin/ui/widgets/skeleton/skeleton_detail_screen.dart';
-import 'package:moonfin/ui/widgets/skeleton/skeleton_shimmer.dart';
 import 'package:moonfin/util/platform_detection.dart';
 import 'package:moonfin_design/moonfin_design.dart';
 import 'package:playback_core/playback_core.dart';
@@ -80,6 +86,23 @@ class _StubbedViewModel extends ItemDetailViewModel {
   List<AggregatedItem>? similarOverride;
   List<AggregatedItem>? filmographyOverride;
   List<TmdbReview>? reviewsOverride;
+  List<AggregatedItem>? featuresOverride;
+  List<AggregatedItem>? collectionOverride;
+  List<AggregatedItem>? episodesOverride;
+  List<AggregatedItem>? seriesEpisodesOverride;
+
+  @override
+  List<AggregatedItem> get features => featuresOverride ?? super.features;
+  @override
+  List<AggregatedItem> get collectionItems =>
+      collectionOverride ?? super.collectionItems;
+  @override
+  List<AggregatedItem> get episodes => episodesOverride ?? super.episodes;
+  @override
+  bool get episodesLoaded => episodesOverride != null || super.episodesLoaded;
+  @override
+  List<AggregatedItem> get seriesEpisodes =>
+      seriesEpisodesOverride ?? super.seriesEpisodes;
 
   @override
   SeerrMediaDetailViewModel? get seerr => seerrOverride ?? super.seerr;
@@ -156,15 +179,12 @@ void main() {
     GetIt.instance.registerSingleton<OfflineRepository>(_OfflineRepository());
     final playback = GetIt.instance<PlaybackManager>();
     when(() => playback.queueService).thenReturn(_QueueService());
-    when(
-      () => GetIt.instance<OfflineRepository>().getItem(any()),
-    ).thenAnswer((_) async => null);
-    when(
-      () => GetIt.instance<OfflineRepository>().getSeriesEpisodes(any()),
-    ).thenAnswer((_) async => const []);
-    when(
-      () => GetIt.instance<OfflineRepository>().getSeasonEpisodes(any()),
-    ).thenAnswer((_) async => const []);
+    when(() => GetIt.instance<OfflineRepository>().getItem(any()))
+        .thenAnswer((_) async => null);
+    when(() => GetIt.instance<OfflineRepository>().getSeriesEpisodes(any()))
+        .thenAnswer((_) async => const []);
+    when(() => GetIt.instance<OfflineRepository>().getSeasonEpisodes(any()))
+        .thenAnswer((_) async => const []);
     final seerrStore = PreferenceStore();
     await seerrStore.init();
     GetIt.instance.registerSingleton<SeerrPreferences>(
@@ -256,6 +276,336 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
   }
 
+  for (final type in ['Movie', 'BoxSet', 'Season', 'Person']) {
+    testWidgets('TV $type rails share screen-edge viewport and focus gutters', (
+      tester,
+    ) async {
+      PlatformDetection.setTvMode(true);
+      tester.view.physicalSize = const Size(1145, 644);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        PlatformDetection.setTvMode(false);
+        tester.view.reset();
+      });
+      List<AggregatedItem> items(String itemType) => List.generate(
+        12,
+        (index) => AggregatedItem(
+          id: '$itemType-$index',
+          serverId: 'server',
+          rawData: {
+            'Id': '$itemType-$index',
+            'Name': '$itemType $index',
+            'Type': itemType,
+            'IndexNumber': index + 1,
+            'ParentIndexNumber': 1,
+          },
+        ),
+      );
+      final vm = viewModel(
+        type,
+        data: itemData(
+          type,
+          people: [
+            for (var index = 0; index < 12; index++)
+              {'Id': 'person-$index', 'Name': 'Actor $index', 'Type': 'Actor'},
+          ],
+        ),
+      );
+      vm.featuresOverride = items('Video');
+      vm.collectionOverride = items('Movie');
+      vm.episodesOverride = items('Episode');
+      vm.similarOverride = items('Movie');
+      vm.filmographyOverride = items('Movie');
+      vm.reviewsOverride = List.filled(8, (
+        author: 'Critic',
+        rating: 8.0,
+        content: 'A complete review.',
+        createdAt: null,
+        avatarUrl: null,
+        url: null,
+      ));
+      await pumpContent(tester, vm, size: const Size(1145, 644));
+      await tester.pumpAndSettle();
+      final rails = find.byWidgetPredicate(
+        (widget) => widget is LockedFocusRow,
+      );
+      expect(
+        rails,
+        type == 'Person'
+            ? findsOneWidget
+            : findsAtLeastNWidgets(type == 'Movie' ? 4 : 1),
+      );
+      for (final element in rails.evaluate()) {
+        final row = element.widget as LockedFocusRow;
+        expect(row.viewportInsets, Tv26Style.railPadding, reason: row.hubKey);
+        expect(row.paintOutset, Tv26Style.focusOutset, reason: row.hubKey);
+        final mask = find.descendant(
+          of: find.byWidget(row),
+          matching: find.byType(ShaderMask),
+        );
+        final rect = tester.getRect(mask);
+        final overflow = Tv26Style.focusOutset + Tv26Style.railFadeDistance;
+        expect(rect.left, closeTo(-overflow, .01), reason: row.hubKey);
+        expect(rect.right, closeTo(1145 + overflow, .01), reason: row.hubKey);
+      }
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      vm.dispose();
+    });
+  }
+
+  testWidgets('TV episodes have one target and keep seasons outside the fade', (
+    tester,
+  ) async {
+    PlatformDetection.setTvMode(true);
+    tester.view.physicalSize = const Size(1145, 644);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      PlatformDetection.setTvMode(false);
+      tester.view.reset();
+    });
+    final play = FocusNode();
+    addTearDown(play.dispose);
+    final vm = viewModel('Series');
+    vm.seriesEpisodesOverride = List.generate(
+      8,
+      (index) => AggregatedItem(
+        id: 'episode-$index',
+        serverId: 'server',
+        rawData: {
+          'Id': 'episode-$index',
+          'Name': 'Episode $index',
+          'Type': 'Episode',
+          'Overview': 'The episode synopsis.',
+          'RunTimeTicks': 13200000000,
+          'PremiereDate': '2005-08-04T00:00:00Z',
+          'IndexNumber': index % 4 + 1,
+          'ParentIndexNumber': index ~/ 4 + 1,
+        },
+      ),
+    );
+    vm.similarOverride = [
+      AggregatedItem(
+        id: 'similar',
+        serverId: 'server',
+        rawData: const {'Id': 'similar', 'Name': 'Similar', 'Type': 'Series'},
+      ),
+    ];
+    await pumpContent(
+      tester,
+      vm,
+      initialFocusNode: play,
+      size: const Size(1145, 644),
+    );
+    Future<void> press(LogicalKeyboardKey key) async {
+      await tester.sendKeyEvent(key);
+      await tester.pumpAndSettle();
+    }
+
+    final title = find.byKey(const ValueKey('tv-scrolled-series-title'));
+    double titleOpacity() => tester
+        .widget<FadeTransition>(
+          find.ancestor(of: title, matching: find.byType(FadeTransition)).first,
+        )
+        .opacity
+        .value;
+    double heroOpacity() => tester
+        .widget<FadeTransition>(
+          find
+              .ancestor(
+                of: find.byType(NouveauHero),
+                matching: find.byType(FadeTransition),
+              )
+              .first,
+        )
+        .opacity
+        .value;
+    expect(titleOpacity(), 0);
+    expect(heroOpacity(), 1);
+    play.requestFocus();
+    await tester.pumpAndSettle();
+    await press(LogicalKeyboardKey.arrowDown);
+    expect(titleOpacity(), 1);
+    expect(heroOpacity(), 0);
+    expect(tester.getCenter(title).dx, closeTo(1145 / 2, .01));
+    final selector = find.byType(NouveauSeasonSelector);
+    expect(
+      tester.getRect(selector).top - tester.getRect(title).bottom,
+      closeTo(Tv26Style.detailHeaderGap, .01),
+    );
+    final firstEpisode = find.byType(NouveauLandscapeMediaCard).first;
+    expect(
+      find.descendant(of: firstEpisode, matching: find.text('EPISODE 1')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: firstEpisode, matching: find.text('22m')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: firstEpisode, matching: find.text('Aug 4, 2005')),
+      findsOneWidget,
+    );
+    expect(
+      tester.getRect(firstEpisode).bottom,
+      lessThanOrEqualTo(
+        tester.getRect(find.byType(NouveauEpisodesSection)).bottom,
+      ),
+    );
+    await press(LogicalKeyboardKey.arrowDown);
+    final rowFocus = FocusManager.instance.primaryFocus;
+    expect(
+      rowFocus?.context
+          ?.findAncestorWidgetOfExactType<NouveauEpisodesSection>(),
+      isNotNull,
+    );
+    await press(LogicalKeyboardKey.arrowRight);
+    await press(LogicalKeyboardKey.arrowDown);
+    expect(FocusManager.instance.primaryFocus, isNot(rowFocus));
+    expect(
+      FocusManager.instance.primaryFocus?.context
+          ?.findAncestorWidgetOfExactType<NouveauEpisodesSection>(),
+      isNull,
+    );
+    await press(LogicalKeyboardKey.arrowUp);
+    expect(FocusManager.instance.primaryFocus, rowFocus);
+    await press(LogicalKeyboardKey.arrowUp);
+    expect(
+      FocusManager.instance.primaryFocus?.context
+          ?.findAncestorWidgetOfExactType<NouveauSeasonSelector>(),
+      isNotNull,
+    );
+    await press(LogicalKeyboardKey.arrowUp);
+    expect(play.hasPrimaryFocus, isTrue);
+    expect(titleOpacity(), 0);
+    expect(heroOpacity(), 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('TV episode image and caption activate the same card', (
+    tester,
+  ) async {
+    PlatformDetection.setTvMode(true);
+    addTearDown(() => PlatformDetection.setTvMode(false));
+    var details = 0;
+    var plays = 0;
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: NouveauLandscapeMediaCard(
+            item: AggregatedItem(
+              id: 'episode',
+              serverId: 'server',
+              rawData: const {
+                'Id': 'episode',
+                'Name': 'Episode name',
+                'Type': 'Episode',
+                'Overview': 'Episode synopsis',
+              },
+            ),
+            imageUrl: null,
+            width: 300,
+            imageHeight: 169,
+            isFocused: false,
+            isNextUp: false,
+            suppressArtworkFocus: false,
+            onArtworkSelect: () => plays++,
+            onDetailsSelect: () => details++,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('Episode name'), findsOneWidget);
+    await tester.tapAt(tester.getCenter(find.byType(MediaCard)));
+    await tester.tap(find.text('Episode synopsis'));
+    expect(details, 2);
+    expect(plays, 0);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
+  testWidgets('TV episode cards omit unavailable metadata', (tester) async {
+    PlatformDetection.setTvMode(true);
+    addTearDown(() => PlatformDetection.setTvMode(false));
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: NouveauLandscapeMediaCard(
+            item: AggregatedItem(
+              id: 'episode',
+              serverId: 'server',
+              rawData: const {
+                'Id': 'episode',
+                'Name': 'Episode without metadata',
+                'Type': 'Episode',
+                'ProductionYear': 1999,
+                'RunTimeTicks': 0,
+                'PremiereDate': 'invalid',
+              },
+            ),
+            imageUrl: null,
+            width: 300,
+            imageHeight: 169,
+            isFocused: false,
+            isNextUp: false,
+            suppressArtworkFocus: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('0m'), findsNothing);
+    expect(find.textContaining(RegExp(r'^EPISODE \d+$')), findsNothing);
+    expect(find.textContaining('1999'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'TV studio links use shared buttons and preserve wrapped navigation',
+    (tester) async {
+      PlatformDetection.setTvMode(true);
+      tester.view.physicalSize = const Size(1145, 644);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        PlatformDetection.setTvMode(false);
+        tester.view.reset();
+      });
+      final vm = viewModel(
+        'Movie',
+        data: {
+          ...itemData('Movie'),
+          'Studios': [
+            {'Name': 'Studio A'},
+            {'Name': 'Studio B'},
+          ],
+        },
+      );
+      await pumpContent(tester, vm, size: const Size(1145, 644));
+      await tester.pumpAndSettle();
+      final first = tester.widget<Tv26Button>(
+        find.byWidgetPredicate((w) => w is Tv26Button && w.label == 'Studio A'),
+      );
+      first.focusNode!.requestFocus();
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pumpAndSettle();
+      expect(
+        FocusManager.instance.primaryFocus?.debugLabel,
+        'nouveau-details-studio-1',
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pumpAndSettle();
+      expect(FocusManager.instance.primaryFocus, first.focusNode);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   Map<String, dynamic> ratedMovie({
     double? community,
     int? critic,
@@ -268,10 +618,7 @@ void main() {
   };
 
   testWidgets('the hero hands its ratings to the shared row', (tester) async {
-    final vm = viewModel(
-      'Movie',
-      data: ratedMovie(community: 7.8, critic: 91),
-    );
+    final vm = viewModel('Movie', data: ratedMovie(community: 7.8, critic: 91));
     await pumpContent(tester, vm);
 
     expect(find.byType(RatingsRow), findsOneWidget);
@@ -285,10 +632,7 @@ void main() {
     await prefs.set(UserPreferences.enableAdditionalRatings, true);
     await prefs.set(UserPreferences.enabledRatings, 'tomatoes');
 
-    final vm = viewModel(
-      'Movie',
-      data: ratedMovie(community: 7.8, critic: 91),
-    );
+    final vm = viewModel('Movie', data: ratedMovie(community: 7.8, critic: 91));
     await pumpContent(tester, vm);
 
     // Community rides in as 'stars', which the picker left out.
@@ -315,10 +659,7 @@ void main() {
     tester.view.physicalSize = const Size(1920, 1080);
     addTearDown(tester.view.reset);
 
-    final vm = viewModel(
-      'Movie',
-      data: ratedMovie(community: 7.8, critic: 91),
-    );
+    final vm = viewModel('Movie', data: ratedMovie(community: 7.8, critic: 91));
     await pumpContent(tester, vm, size: const Size(1920, 1080));
 
     final box = tester.renderObject(find.byType(RatingsRow)) as RenderBox;
@@ -365,6 +706,30 @@ void main() {
     }
   });
 
+  testWidgets('TV omits chapters even when the movie has chapter data', (
+    tester,
+  ) async {
+    PlatformDetection.setTvMode(true);
+    addTearDown(() => PlatformDetection.setTvMode(false));
+    await pumpContent(
+      tester,
+      viewModel(
+        'Movie',
+        data: itemData(
+          'Movie',
+          chapters: [
+            {'StartPositionTicks': 1000, 'Name': 'Chapter one'},
+          ],
+        ),
+      ),
+    );
+    expect(find.byType(NouveauChaptersSection), findsNothing);
+    expect(
+      find.byKey(const ValueKey('nouveau-section-chapters')),
+      findsNothing,
+    );
+  });
+
   // Movie and Episode are the types that actually carry chapters, and every
   // other detail style shows them on the strength of the list alone.
   testWidgets('chapters show for any item that has them', (tester) async {
@@ -400,14 +765,8 @@ void main() {
       find.byKey(const ValueKey('nouveau-section-collection')),
       findsOneWidget,
     );
-    expect(
-      find.byKey(const ValueKey('nouveau-section-people')),
-      findsNothing,
-    );
-    expect(
-      find.byKey(const ValueKey('nouveau-section-extras')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('nouveau-section-people')), findsNothing);
+    expect(find.byKey(const ValueKey('nouveau-section-extras')), findsNothing);
     expect(
       find.byKey(const ValueKey('nouveau-section-discovery')),
       findsNothing,
@@ -443,6 +802,53 @@ void main() {
   // A 1080p TV reports 960x540 logical pixels. The page pins itself to the
   // top whenever the hero has focus, so an action row below the fold is
   // unreachable rather than merely off screen.
+  testWidgets('TV collections, seasons and videos are not labelled as series', (
+    tester,
+  ) async {
+    PlatformDetection.setTvMode(true);
+    addTearDown(() => PlatformDetection.setTvMode(false));
+    for (final entry in {
+      'BoxSet': 'Collection',
+      'Season': 'Season',
+      'Video': 'Video',
+    }.entries) {
+      await pumpContent(
+        tester,
+        viewModel(entry.key),
+        size: const Size(1145, 644),
+      );
+      expect(
+        find.descendant(
+          of: find.byType(Tv26Classification),
+          matching: find.text(entry.value),
+        ),
+        findsOneWidget,
+        reason: entry.key,
+      );
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('TV episode details identify the selected episode', (
+    tester,
+  ) async {
+    PlatformDetection.setTvMode(true);
+    addTearDown(() => PlatformDetection.setTvMode(false));
+    final vm = viewModel(
+      'Episode',
+      data: {
+        ...itemData('Episode'),
+        'Name': 'Mordland',
+        'SeriesName': 'Metalocalypse',
+        'ParentIndexNumber': 1,
+        'IndexNumber': 9,
+      },
+    );
+    await pumpContent(tester, vm, size: const Size(1145, 644));
+    expect(find.textContaining('S1:E9 · Mordland'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the TV hero keeps its action row on screen', (tester) async {
     PlatformDetection.setTvMode(true);
     addTearDown(() => PlatformDetection.setTvMode(false));
@@ -472,12 +878,7 @@ void main() {
           {
             'Size': 4738224128,
             'MediaStreams': [
-              {
-                'Type': 'Video',
-                'Height': 1080,
-                'Width': 1920,
-                'Codec': 'hevc',
-              },
+              {'Type': 'Video', 'Height': 1080, 'Width': 1920, 'Codec': 'hevc'},
               {
                 'Type': 'Audio',
                 'Codec': 'eac3',
@@ -495,9 +896,9 @@ void main() {
     expect(actions.bottom, lessThanOrEqualTo(tvSize.height));
   });
 
-  // Both read the same hero inset helper, and this is what holds them to it.
-  // A copy of the formula on either side shows up here as a jump on load.
-  testWidgets('the TV skeleton and content start their hero at the same place', (
+  // Title and overview heights vary, but the loading action baseline should
+  // stay in place when the real TV hero arrives.
+  testWidgets('the TV skeleton and content keep their action baseline', (
     tester,
   ) async {
     PlatformDetection.setTvMode(true);
@@ -510,7 +911,9 @@ void main() {
 
     final vm = viewModel('Movie');
     await pumpContent(tester, vm, size: tvSize);
-    final contentHeroTop = tester.getRect(find.byType(NouveauHero)).top;
+    final contentActionBottom = tester
+        .getRect(find.byType(NouveauActionButtons).first)
+        .bottom;
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpWidget(
@@ -525,9 +928,11 @@ void main() {
       ),
     );
     await tester.pump(const Duration(milliseconds: 100));
-    final skeletonHeroTop = tester.getRect(find.byType(SkeletonBox).first).top;
+    final skeletonActionBottom = tester
+        .getRect(find.byKey(const ValueKey('nouveau-tv-skeleton-play')))
+        .bottom;
 
-    expect(skeletonHeroTop, closeTo(contentHeroTop, 2.0));
+    expect(skeletonActionBottom, closeTo(contentActionBottom, 2.0));
   });
 
   testWidgets('null metadata and empty rails render safely', (tester) async {
@@ -559,9 +964,7 @@ void main() {
     expect(find.text('Dune.epub'), findsNothing);
   });
 
-  testWidgets('a book without an extension has no format line', (
-    tester,
-  ) async {
+  testWidgets('a book without an extension has no format line', (tester) async {
     final vm = viewModel(
       'Book',
       data: {...itemData('Book'), 'Path': '/books/Dune'},
@@ -650,17 +1053,11 @@ void main() {
 
       await focusPlay(tester);
       await press(tester, LogicalKeyboardKey.arrowDown);
-      expect(focusIn<NouveauChaptersSection>(), isTrue);
-
-      await hide(tester, vm, 'chapters');
+      expect(focusIn<NouveauPeopleSection>(), isTrue);
       expect(
         find.byKey(const ValueKey('nouveau-section-chapters')),
         findsNothing,
       );
-
-      await focusPlay(tester);
-      await press(tester, LogicalKeyboardKey.arrowDown);
-      expect(focusIn<NouveauPeopleSection>(), isTrue);
 
       await press(tester, LogicalKeyboardKey.arrowDown);
       expect(focusIn<NouveauDetailsSection>(), isTrue);
@@ -672,7 +1069,7 @@ void main() {
       expect(play.hasPrimaryFocus, isTrue);
 
       // Cast was the only thing in the people rail, so it goes as a whole.
-      await hide(tester, vm, 'chapters,cast');
+      await hide(tester, vm, 'cast');
       expect(
         find.byKey(const ValueKey('nouveau-section-people')),
         findsNothing,
@@ -695,10 +1092,7 @@ void main() {
         avatarUrl: null,
         url: null,
       );
-      final vm = viewModel(
-        'Movie',
-        data: itemData('Movie', people: [actor]),
-      );
+      final vm = viewModel('Movie', data: itemData('Movie', people: [actor]));
       await pumpContent(tester, vm, initialFocusNode: play, size: tvSize);
       expect(find.byType(NouveauReviewsSection), findsNothing);
 
@@ -796,83 +1190,88 @@ void main() {
       expect(focusIn<NouveauPeopleSection>(), isTrue);
     });
 
-    testWidgets('hidden Seerr recommendations stop stripping the related rail', (
-      tester,
-    ) async {
-      when(() => plugin.seerrAvailable).thenReturn(true);
+    testWidgets(
+      'hidden Seerr recommendations stop stripping the related rail',
+      (tester) async {
+        when(() => plugin.seerrAvailable).thenReturn(true);
 
-      AggregatedItem library(int index, {int? tmdb, String? name}) =>
-          AggregatedItem(
-            id: 'similar-$index',
-            serverId: 'server',
-            rawData: {
-              'Id': 'similar-$index',
-              'Name': name ?? 'Similar $index',
-              'Type': 'Movie',
-              'ProductionYear': 2000 + index,
-              'ProviderIds': {'Tmdb': '${tmdb ?? 200 + index}'},
-            },
-          );
-
-      // The first seven are the protected head of the rail. The two after it
-      // are the tail, and one of them is also a Seerr recommendation.
-      final similar = [
-        for (var i = 0; i < 7; i++) library(i),
-        library(7, tmdb: 900, name: 'Shared pick'),
-        library(8),
-      ];
-
-      final seerr = seerrWith(
-        const SeerrMediaDetailState(
-          movie: SeerrMovieDetails(id: 100, title: 'Movie title'),
-          recommendations: [
-            SeerrDiscoverItem(id: 900, mediaType: 'movie', title: 'Shared'),
-            SeerrDiscoverItem(id: 901, mediaType: 'movie', title: 'Both'),
-          ],
-          similar: [
-            SeerrDiscoverItem(id: 901, mediaType: 'movie', title: 'Both'),
-            SeerrDiscoverItem(id: 902, mediaType: 'movie', title: 'Only here'),
-          ],
-        ),
-      );
-
-      final vm =
-          viewModel(
-              'Movie',
-              data: {
-                ...itemData('Movie'),
-                'ProviderIds': const {'Tmdb': '100'},
+        AggregatedItem library(int index, {int? tmdb, String? name}) =>
+            AggregatedItem(
+              id: 'similar-$index',
+              serverId: 'server',
+              rawData: {
+                'Id': 'similar-$index',
+                'Name': name ?? 'Similar $index',
+                'Type': 'Movie',
+                'ProductionYear': 2000 + index,
+                'ProviderIds': {'Tmdb': '${tmdb ?? 200 + index}'},
               },
-            )
-            ..similarOverride = similar
-            ..seerrOverride = seerr;
-      await pumpContent(tester, vm);
+            );
 
-      List<List<String>> rails() => [
-        for (final rail in tester.widgetList<NouveauDiscoveryRail>(
-          find.byType(NouveauDiscoveryRail),
-        ))
-          [for (final item in rail.items) item.id],
-      ];
+        // The first seven are the protected head of the rail. The two after it
+        // are the tail, and one of them is also a Seerr recommendation.
+        final similar = [
+          for (var i = 0; i < 7; i++) library(i),
+          library(7, tmdb: 900, name: 'Shared pick'),
+          library(8),
+        ];
 
-      final head = [for (var i = 0; i < 7; i++) 'similar-$i'];
+        final seerr = seerrWith(
+          const SeerrMediaDetailState(
+            movie: SeerrMovieDetails(id: 100, title: 'Movie title'),
+            recommendations: [
+              SeerrDiscoverItem(id: 900, mediaType: 'movie', title: 'Shared'),
+              SeerrDiscoverItem(id: 901, mediaType: 'movie', title: 'Both'),
+            ],
+            similar: [
+              SeerrDiscoverItem(id: 901, mediaType: 'movie', title: 'Both'),
+              SeerrDiscoverItem(
+                id: 902,
+                mediaType: 'movie',
+                title: 'Only here',
+              ),
+            ],
+          ),
+        );
 
-      expect(rails(), [
-        [...head, 'similar-8', '902'],
-        ['900', '901'],
-      ]);
+        final vm =
+            viewModel(
+                'Movie',
+                data: {
+                  ...itemData('Movie'),
+                  'ProviderIds': const {'Tmdb': '100'},
+                },
+              )
+              ..similarOverride = similar
+              ..seerrOverride = seerr;
+        await pumpContent(tester, vm);
 
-      await prefs.set(
-        detailSectionLayout.hiddenPreference,
-        'seerrRecommendations',
-      );
-      await tester.pumpWidget(content(vm));
-      await tester.pump(const Duration(milliseconds: 500));
+        List<List<String>> rails() => [
+          for (final rail in tester.widgetList<NouveauDiscoveryRail>(
+            find.byType(NouveauDiscoveryRail),
+          ))
+            [for (final item in rail.items) item.id],
+        ];
 
-      expect(rails(), [
-        [...head, 'similar-7', 'similar-8', '901', '902'],
-      ]);
-    });
+        final head = [for (var i = 0; i < 7; i++) 'similar-$i'];
+
+        expect(rails(), [
+          [...head, 'similar-8', '902'],
+          ['900', '901'],
+        ]);
+
+        await prefs.set(
+          detailSectionLayout.hiddenPreference,
+          'seerrRecommendations',
+        );
+        await tester.pumpWidget(content(vm));
+        await tester.pump(const Duration(milliseconds: 500));
+
+        expect(rails(), [
+          [...head, 'similar-7', 'similar-8', '901', '902'],
+        ]);
+      },
+    );
 
     testWidgets('person tabs and the All fallback leave hidden credits out', (
       tester,
@@ -897,25 +1296,28 @@ void main() {
       }
 
       List<String> rail() => [
-        for (final item in tester
-            .widget<NouveauFilmographySection>(
-              find.byType(NouveauFilmographySection),
-            )
-            .items)
+        for (final item
+            in tester
+                .widget<NouveauFilmographySection>(
+                  find.byType(NouveauFilmographySection),
+                )
+                .items)
           item.id,
       ];
 
-      final vm = viewModel(
-        'Person',
-        data: {
-          ...itemData('Person'),
-          'ProductionLocations': const ['Springfield'],
-        },
-      )..filmographyOverride = [
-          credit('movie-1', 'Movie'),
-          credit('guest-1', 'Episode', seriesId: 'someone-elses-show'),
-          credit('video-1', 'MusicVideo'),
-        ];
+      final vm =
+          viewModel(
+              'Person',
+              data: {
+                ...itemData('Person'),
+                'ProductionLocations': const ['Springfield'],
+              },
+            )
+            ..filmographyOverride = [
+              credit('movie-1', 'Movie'),
+              credit('guest-1', 'Episode', seriesId: 'someone-elses-show'),
+              credit('video-1', 'MusicVideo'),
+            ];
       await pumpContent(tester, vm);
 
       expect(tabs(), ['movies', 'guestAppearances', 'musicVideos']);
@@ -953,13 +1355,13 @@ void main() {
       await tester.pumpWidget(content(vm));
       await tester.pump(const Duration(milliseconds: 500));
 
-      expect(find.byWidgetPredicate((w) => w is NouveauSegmentedSelector),
-          findsNothing);
+      expect(
+        find.byWidgetPredicate((w) => w is NouveauSegmentedSelector),
+        findsNothing,
+      );
       expect(
         tester
-            .state<NouveauPersonContentState>(
-              find.byType(NouveauPersonContent),
-            )
+            .state<NouveauPersonContentState>(find.byType(NouveauPersonContent))
             .canFocusTop,
         isFalse,
       );

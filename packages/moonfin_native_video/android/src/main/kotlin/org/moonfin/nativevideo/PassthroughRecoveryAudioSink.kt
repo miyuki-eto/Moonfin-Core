@@ -47,11 +47,8 @@ class PassthroughRecoveryAudioSink(
         super.setListener(FilteringListener(listener))
     }
 
-    override fun configure(
-        inputFormat: Format,
-        specifiedBufferSize: Int,
-        outputChannels: IntArray?,
-    ) {
+    override fun configure(configuration: AudioSink.AudioSinkConfig) {
+        val inputFormat = configuration.format
         this.inputFormat = inputFormat
         // The delegate reports capability changes on the thread it was
         // configured from, so that is the thread a deferral must land on.
@@ -75,7 +72,7 @@ class PassthroughRecoveryAudioSink(
             passthrough = !decodedPcm,
             nowMs = clock(),
         )
-        super.configure(inputFormat, specifiedBufferSize, outputChannels)
+        super.configure(configuration)
     }
 
     override fun play() {

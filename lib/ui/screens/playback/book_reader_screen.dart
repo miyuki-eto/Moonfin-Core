@@ -2446,7 +2446,7 @@ class _BookReaderScreenState extends State<BookReaderScreen>
     return Scaffold(
       appBar: AppBar(title: Text(title)),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: LoadingThrobber())
           : Column(
               children: [
                 Padding(
@@ -2495,9 +2495,7 @@ class _BookReaderScreenState extends State<BookReaderScreen>
                                 ? const SizedBox(
                                     width: 14,
                                     height: 14,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
+                                    child: LoadingThrobber(),
                                   )
                                 : AdaptiveIcon(
                                     isPlayed
@@ -2520,9 +2518,7 @@ class _BookReaderScreenState extends State<BookReaderScreen>
                                 ? const SizedBox(
                                     width: 14,
                                     height: 14,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
+                                    child: LoadingThrobber(),
                                   )
                                 : const AdaptiveIcon(Icons.refresh),
                             label: Text(l10n.reloadReader),
@@ -2573,7 +2569,7 @@ class _BookReaderScreenState extends State<BookReaderScreen>
     return Scaffold(
       backgroundColor: Colors.black,
       body: _loadingContent
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: LoadingThrobber())
           : _comicEntries.isEmpty
           ? Center(
               child: Text(
@@ -3307,7 +3303,7 @@ class _BookReaderScreenState extends State<BookReaderScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const CircularProgressIndicator(),
+            const LoadingThrobber(),
             const SizedBox(height: 12),
             Text(
               AppLocalizations.of(context).preparingInAppReader,
@@ -3497,7 +3493,7 @@ class _BookReaderScreenState extends State<BookReaderScreen>
     if (_mode == _ReaderMode.epub && _useEpubJs) {
       final bytes = _epubBytes;
       if (bytes == null) {
-        return const Center(child: CircularProgressIndicator());
+        return const Center(child: LoadingThrobber());
       }
       return SafeArea(
         child: EpubJsView(

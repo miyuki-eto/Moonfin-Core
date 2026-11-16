@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:get_it/get_it.dart';
 import 'package:server_core/server_core.dart';
 
@@ -150,7 +151,7 @@ class _AdminSyncJobsListState extends State<AdminSyncJobsList> {
               if (jobs == null)
                 const Padding(
                   padding: EdgeInsets.all(16),
-                  child: Center(child: CircularProgressIndicator()),
+                  child: Center(child: LoadingThrobber()),
                 )
               else if (jobs.isEmpty)
                 ListTile(title: Text(l10n.adminSyncJobsEmpty))

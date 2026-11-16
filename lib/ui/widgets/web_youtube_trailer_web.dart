@@ -16,6 +16,8 @@ extension type _YTPlayer._(JSObject _) implements JSObject {
   external void unMute();
   external void playVideo();
   external void pauseVideo();
+  external double getCurrentTime();
+  external void seekTo(double seconds, bool allowSeekAhead);
   external void loadModule(JSString module);
   external void unloadModule(JSString module);
   external JSObject getIframe();
@@ -34,6 +36,7 @@ class WebYouTubeTrailer extends StatefulWidget {
   final bool suspended;
   final VoidCallback? onPlaybackStarted;
   final VoidCallback? onCompleted;
+  final ValueChanged<bool>? onPausedChanged;
   final VoidCallback? onAutoplayFailed;
   final VoidCallback? onEmbeddedUnavailable;
   final Duration autoplayTimeout;
@@ -49,16 +52,17 @@ class WebYouTubeTrailer extends StatefulWidget {
     this.suspended = false,
     this.onPlaybackStarted,
     this.onCompleted,
+    this.onPausedChanged,
     this.onAutoplayFailed,
     this.onEmbeddedUnavailable,
     this.autoplayTimeout = const Duration(seconds: 3),
   });
 
   @override
-  State<WebYouTubeTrailer> createState() => _WebYouTubeTrailerState();
+  State<WebYouTubeTrailer> createState() => WebYouTubeTrailerState();
 }
 
-class _WebYouTubeTrailerState extends State<WebYouTubeTrailer> {
+class WebYouTubeTrailerState extends State<WebYouTubeTrailer> {
   static const int _stateEnded = 0;
   static const int _statePlaying = 1;
 
@@ -68,8 +72,8 @@ class _WebYouTubeTrailerState extends State<WebYouTubeTrailer> {
   static const int _stageHeight = 1080;
 
   static final Set<String> _registeredViewTypes = <String>{};
-  static final Map<String, _WebYouTubeTrailerState> _owners =
-      <String, _WebYouTubeTrailerState>{};
+  static final Map<String, WebYouTubeTrailerState> _owners =
+      <String, WebYouTubeTrailerState>{};
   static int _instanceCounter = 0;
 
   static Future<void>? _ytApiReady;
@@ -81,6 +85,8 @@ class _WebYouTubeTrailerState extends State<WebYouTubeTrailer> {
   web.ResizeObserver? _resizeObserver;
   _YTPlayer? _player;
   Timer? _autoplayTimer;
+  Timer? _seekTargetTimer;
+  double? _seekTarget;
 
   late final JSFunction _onReadyJs;
   late final JSFunction _onStateChangeJs;
@@ -94,6 +100,29 @@ class _WebYouTubeTrailerState extends State<WebYouTubeTrailer> {
   bool _completedReported = false;
   bool _failureReported = false;
   bool _unavailableReported = false;
+
+  void setPaused(bool paused) {
+    if (paused) {
+      _player?.pauseVideo();
+    } else {
+      _player?.playVideo();
+    }
+  }
+
+  void seekRelative(Duration offset) {
+    final player = _player;
+    if (player == null) return;
+    // The iframe's reported time can lag behind a seek. Accumulate remote
+    // repeats against the requested position until that burst has settled.
+    final target = math.max(
+      0.0,
+      (_seekTarget ?? player.getCurrentTime()) + offset.inMilliseconds / 1000,
+    );
+    _seekTarget = target;
+    _seekTargetTimer?.cancel();
+    _seekTargetTimer = Timer(const Duration(seconds: 1), () => _seekTarget = null);
+    player.seekTo(target, true);
+  }
 
   @override
   void initState() {
@@ -142,6 +171,7 @@ class _WebYouTubeTrailerState extends State<WebYouTubeTrailer> {
   void dispose() {
     _disposed = true;
     _autoplayTimer?.cancel();
+    _seekTargetTimer?.cancel();
     _resizeObserver?.disconnect();
     _resizeObserver = null;
     web.window.removeEventListener('message', _messageListener);
@@ -287,7 +317,11 @@ class _WebYouTubeTrailerState extends State<WebYouTubeTrailer> {
     options.setProperty('events'.toJS, events);
 
     try {
-      _player = _YTPlayer(host as JSAny, options);
+      // The API replaces its target with an iframe. Keep the scaled stage
+      // around that target so sizing does not disappear when the iframe mounts.
+      final mount = web.HTMLDivElement();
+      host.appendChild(mount);
+      _player = _YTPlayer(mount as JSAny, options);
       _applyIframeStyle();
     } catch (_) {
       _reportEmbeddedUnavailable();
@@ -370,6 +404,9 @@ class _WebYouTubeTrailerState extends State<WebYouTubeTrailer> {
   }
 
   void _handleState(int? state) {
+    if (state == 1 || state == 2 || state == 0) {
+      widget.onPausedChanged?.call(state != 1);
+    }
     if (state == _statePlaying) {
       _applyCaptions();
       _reportPlaybackStarted();

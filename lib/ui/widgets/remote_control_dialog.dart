@@ -1,3 +1,5 @@
+import '../../config/app_features.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -16,6 +18,9 @@ import 'remote_search_sheet.dart';
 import 'remote_navigation_pad.dart';
 
 void showRemoteControlDialog(BuildContext context) {
+  if (!AppFeatures.has(AppFeature.casting)) {
+    return;
+  }
   showFocusRestoringModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -72,7 +77,9 @@ class _RemoteControlSheetState extends State<_RemoteControlSheet>
     _socketSub = GetIt.instance<SocketHandler>().events.listen((event) {
       switch (event) {
         case SessionEndedMessage(:final sessionId):
-          if (_searchSessionId == sessionId) _searchConnected.value = false;
+          if (_searchSessionId == sessionId) {
+            _searchConnected.value = false;
+          }
           if (_selectedSession?['Id'] == sessionId) {
             _cancelNavigation();
             _cancelVolume();
@@ -154,14 +161,18 @@ class _RemoteControlSheetState extends State<_RemoteControlSheet>
     });
     try {
       await sender.add(command, volume: volume);
-      if (!mounted || request != _volumeRequest) return;
+      if (!mounted || request != _volumeRequest) {
+        return;
+      }
       if (volume != null) {
         // Older receivers only report every five seconds, so this bounds the
         // optimistic display without delaying or retrying the command. A
         // session that reports no level keeps ours, as it's the only number
         // either side knows.
         _volumeConfirmationTimer = Timer(const Duration(seconds: 6), () {
-          if (!mounted || request != _volumeRequest) return;
+          if (!mounted || request != _volumeRequest) {
+            return;
+          }
           if (_selectedSession?['PlayState']?['VolumeLevel'] is num) {
             setState(_cancelVolume);
           } else {
@@ -172,7 +183,9 @@ class _RemoteControlSheetState extends State<_RemoteControlSheet>
       }
       _scheduleVolumeRefresh(request);
     } catch (error) {
-      if (!mounted || request != _volumeRequest) return;
+      if (!mounted || request != _volumeRequest) {
+        return;
+      }
       setState(_cancelVolume);
       final l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -188,7 +201,9 @@ class _RemoteControlSheetState extends State<_RemoteControlSheet>
     Duration delay = const Duration(milliseconds: 300),
   }) {
     _volumeRefreshTimer = Timer(delay, () async {
-      if (!mounted || request != _volumeRequest) return;
+      if (!mounted || request != _volumeRequest) {
+        return;
+      }
       await _refresh();
       if (mounted && request == _volumeRequest && _volume != null) {
         _scheduleVolumeRefresh(request, delay: const Duration(seconds: 1));
@@ -211,7 +226,9 @@ class _RemoteControlSheetState extends State<_RemoteControlSheet>
   }
 
   bool get _sameAccount {
-    if (!GetIt.instance.isRegistered<MediaServerClient>()) return false;
+    if (!GetIt.instance.isRegistered<MediaServerClient>()) {
+      return false;
+    }
     final client = GetIt.instance<MediaServerClient>();
     return identical(client.sessionApi, _sessionApi) &&
         client.userId == _userId;
@@ -245,12 +262,16 @@ class _RemoteControlSheetState extends State<_RemoteControlSheet>
           await _sessionApi.sendGeneralCommand(id, name);
         },
         onError: (error) {
-          if (!mounted || !identical(_navigation, queue)) return;
+          if (!mounted || !identical(_navigation, queue)) {
+            return;
+          }
           // Overflow can fail while a request is still in flight. Keep the
           // closed queue until it settles so a later tap can't overtake it.
           unawaited(
             queue.settled.then((_) {
-              if (identical(_navigation, queue)) _navigation = null;
+              if (identical(_navigation, queue)) {
+                _navigation = null;
+              }
             }),
           );
           final l10n = AppLocalizations.of(context);
@@ -269,7 +290,9 @@ class _RemoteControlSheetState extends State<_RemoteControlSheet>
   }
 
   Future<void> _load() async {
-    if (_fetching) return;
+    if (_fetching) {
+      return;
+    }
     _fetching = true;
     final volumeRequest = _volumeRequest;
     try {
@@ -305,7 +328,9 @@ class _RemoteControlSheetState extends State<_RemoteControlSheet>
         ...strictSessions,
         ...fallbackSessions,
       ]);
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       if (!_sameAccount) {
         _cancelNavigation();
         _cancelVolume();
@@ -356,10 +381,14 @@ class _RemoteControlSheetState extends State<_RemoteControlSheet>
         _reconcileVolume(volumeRequest);
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       _cancelNavigation();
       _cancelVolume();
-      if (_searchSessionId != null) _searchConnected.value = false;
+      if (_searchSessionId != null) {
+        _searchConnected.value = false;
+      }
       setState(() {
         _error = describeError(e, AppLocalizations.of(context));
         _loading = false;
@@ -408,12 +437,16 @@ class _RemoteControlSheetState extends State<_RemoteControlSheet>
   }
 
   Future<void> _refresh() async {
-    if (_fetching) return;
+    if (_fetching) {
+      return;
+    }
     await _load();
   }
 
   Future<void> _run(Future<void> Function() action) async {
-    if (_busy) return;
+    if (_busy) {
+      return;
+    }
     setState(() => _busy = true);
     try {
       await action();
@@ -430,13 +463,17 @@ class _RemoteControlSheetState extends State<_RemoteControlSheet>
         );
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
   }
 
   Future<void> _sendPlayState(String command, {int? seekTicks}) {
     final id = _selectedSession?['Id']?.toString();
-    if (id == null) return Future.value();
+    if (id == null) {
+      return Future.value();
+    }
     return _run(
       () => _sessionApi.sendPlayStateCommand(
         id,
@@ -449,7 +486,9 @@ class _RemoteControlSheetState extends State<_RemoteControlSheet>
   Future<void> _openSearch() async {
     final session = _selectedSession;
     final id = session?['Id']?.toString();
-    if (_openingSearch || session == null || id == null) return;
+    if (_openingSearch || session == null || id == null) {
+      return;
+    }
     _openingSearch = true;
     try {
       final navigation = _navigation;
@@ -493,7 +532,9 @@ class _RemoteControlSheetState extends State<_RemoteControlSheet>
   /// A successful command POST doesn't mean Sessions has its new volume yet.
   void _reconcileVolume(int request) {
     final held = _volume;
-    if (held == null) return;
+    if (held == null) {
+      return;
+    }
 
     final currentId = _selectedSession?['Id']?.toString();
     if (currentId == null || currentId != _volumeSessionId) {
@@ -555,7 +596,7 @@ class _RemoteControlSheetState extends State<_RemoteControlSheet>
                     const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: LoadingThrobber(),
                     ),
                 ],
               ),
@@ -563,7 +604,7 @@ class _RemoteControlSheetState extends State<_RemoteControlSheet>
             const Divider(height: 1),
             Expanded(
               child: _loading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: LoadingThrobber())
                   : _error != null
                   ? Center(
                       child: Column(
@@ -1186,7 +1227,9 @@ class _RemoteControlSheetState extends State<_RemoteControlSheet>
 
   String? _posterUrlFor(Map<String, dynamic> nowPlaying) {
     final id = nowPlaying['Id']?.toString();
-    if (id == null || id.isEmpty) return null;
+    if (id == null || id.isEmpty) {
+      return null;
+    }
     return GetIt.instance<MediaServerClient>().imageApi.getPrimaryImageUrl(
       id,
       maxHeight: 300,

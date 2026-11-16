@@ -98,7 +98,7 @@ class _HomeScreenCategoryScreenState extends State<_HomeScreenCategoryScreen> {
                     SizedBox(
                       width: 50,
                       height: 50,
-                      child: CircularProgressIndicator(),
+                      child: LoadingThrobber(),
                     ),
                     SizedBox(height: 24),
                     Text(

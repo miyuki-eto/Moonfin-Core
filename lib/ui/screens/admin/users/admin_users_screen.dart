@@ -100,7 +100,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
     final client = GetIt.instance<MediaServerClient>();
 
     return usersAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: LoadingThrobber()),
       error: (e, _) => Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

@@ -6,6 +6,7 @@ import 'package:moonfin/util/image_cache_index.dart';
 import 'package:moonfin/util/tv_image_cache_io.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 /// Lets [clearImageDiskCache] see a controlled temporary directory.
 class _FakePathProvider extends PathProviderPlatform
@@ -23,6 +24,11 @@ class _FakePathProvider extends PathProviderPlatform
 }
 
 void main() {
+  setUpAll(() {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  });
+
   late Directory root;
   final now = DateTime(2026, 1, 1, 12);
 

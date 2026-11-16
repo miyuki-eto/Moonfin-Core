@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 
 /// A snack bar that sits there with a spinner while something is still
 /// running, instead of the silence a remote subtitle search and download used
@@ -13,7 +14,7 @@ SnackBar _progressSnackBar(String message) {
         const SizedBox(
           width: 16,
           height: 16,
-          child: CircularProgressIndicator(strokeWidth: 2),
+          child: LoadingThrobber(),
         ),
         const SizedBox(width: 16),
         Expanded(child: Text(message)),

@@ -7,6 +7,8 @@ import 'package:moonfin/l10n/app_localizations.dart';
 import 'package:moonfin/playback/media_kit_player_backend.dart';
 import 'package:moonfin/preference/user_preferences.dart';
 import 'package:moonfin/ui/widgets/playback/track_picker.dart';
+import 'package:moonfin/ui/widgets/playback/delay_footer.dart';
+import 'package:moonfin/util/platform_detection.dart';
 import 'package:playback_core/playback_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -56,10 +58,26 @@ class _Backend extends Fake implements MediaKitPlayerBackend {
 
   @override
   Future<void> setAudioDelay(double seconds) async => audioDelays.add(seconds);
+
+  @override
+  Future<void> setSubtitleDelay(double seconds) async =>
+      subtitleDelaySeconds = seconds;
+}
+
+class _PgsBackend extends _Backend implements AsyncPgsSubtitleBackend {
+  @override
+  bool get loadsEmbeddedPgsAsFiles => true;
 }
 
 class _Manager extends PlaybackManager {
   _Manager(this._backend, {this.resolution, this.primaryIndex, this.secondaryIndex});
+
+  int timingSession = 0;
+  bool burnedIn = false;
+  @override
+  int get subtitleDelaySessionId => timingSession;
+  @override
+  bool get subtitleIsBurnedIn => burnedIn;
 
   final PlayerBackend _backend;
   final StreamResolutionResult? resolution;
@@ -170,6 +188,75 @@ void main() {
     Navigator.of(tester.element(find.byType(Dialog))).pop();
     await tester.pumpAndSettle();
     expect(events, [true, false, true, false]);
+  });
+
+  for (final secondary in [false, true]) {
+    testWidgets(
+      'subtitle timing leaves lower captions visible (secondary=$secondary)',
+      (tester) async {
+        PlatformDetection.setTvMode(true);
+        addTearDown(() => PlatformDetection.setTvMode(false));
+        await tester.binding.setSurfaceSize(const Size(1280, 720));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final manager = _Manager(_Backend());
+        addTearDown(manager.dispose);
+        await openPicker(tester, manager, audio: false, secondary: secondary);
+        const lowerCaptionRegion = Rect.fromLTWH(160, 540, 960, 160);
+        expect(
+          tester.widgetList<BackdropFilter>(find.byType(BackdropFilter)).any(
+            (filter) => tester.getRect(find.byWidget(filter)).overlaps(lowerCaptionRegion),
+          ),
+          isTrue,
+        );
+        await tester.tap(find.text(l10n.subtitleDelay));
+        await tester.pumpAndSettle();
+
+        final panel = tester.getRect(find.byType(DelayFooter));
+        expect(panel.overlaps(lowerCaptionRegion), isFalse);
+        expect(panel.bottom, lessThan(360));
+        // A transparent scrim alone still left the TV modal's full-screen
+        // backdrop blur active, making Flutter-rendered captions unreadable.
+        final backdropRects = tester.widgetList<BackdropFilter>(find.byType(BackdropFilter))
+            .map((filter) => tester.getRect(find.byWidget(filter)));
+        expect(backdropRects.where((rect) => rect.overlaps(lowerCaptionRegion)), isEmpty);
+        await tester.tap(find.text('Reset'));
+        await tester.pump();
+        expect(find.byType(DelayFooter), findsOneWidget);
+      },
+    );
+  }
+
+  testWidgets('an open delay bar cannot change the next programme', (tester) async {
+    final backend = _Backend();
+    final manager = _Manager(backend);
+    addTearDown(manager.dispose);
+    await openPicker(tester, manager);
+    await tester.tap(find.text(l10n.audioDelay));
+    await tester.pumpAndSettle();
+    manager.timingSession++;
+    await tester.tap(find.byTooltip(l10n.delayPlusMs(100)));
+    await tester.pumpAndSettle();
+    expect(backend.audioDelays, isEmpty);
+    expect(TrackPicker.audioDelay, 0);
+    expect(find.byType(Dialog), findsNothing);
+  });
+
+  testWidgets('a track picker from the previous programme cannot open its delay', (tester) async {
+    final manager = _Manager(_Backend());
+    addTearDown(manager.dispose);
+    await openPicker(tester, manager);
+    manager.timingSession++;
+    await tester.tap(find.text(l10n.audioDelay));
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsNothing);
+  });
+
+  testWidgets('burned-in captions do not offer ineffective timing controls', (tester) async {
+    final manager = _Manager(_Backend())..burnedIn = true;
+    addTearDown(manager.dispose);
+    await openPicker(tester, manager, audio: false);
+    expect(find.text(l10n.subtitleDelay), findsNothing);
+    expect(find.text(l10n.off), findsOneWidget);
   });
 
   testWidgets('the secondary subtitle delay opens in the same bar', (
@@ -304,6 +391,31 @@ void main() {
           await tester.pumpAndSettle();
         }
       }
+    }
+  });
+
+  testWidgets('native PGS keeps delay but hides ineffective text appearance controls', (tester) async {
+    for (final selected in [-1, 2, 3]) {
+      final manager = _Manager(
+        _PgsBackend(),
+        primaryIndex: selected,
+        resolution: StreamResolutionResult(
+          streamUrl: 'https://host/stream',
+          mediaSourceId: 'source',
+          playMethod: StreamPlayMethod.directPlay,
+          mediaStreams: [
+            {'Type': 'Subtitle', 'Index': 2, 'Codec': 'PGSSUB'},
+            {'Type': 'Subtitle', 'Index': 3, 'Codec': 'subrip'},
+          ],
+        ),
+      );
+      addTearDown(manager.dispose);
+      await openPicker(tester, manager, audio: false);
+      expect(find.text(l10n.subtitleDelay), findsOneWidget);
+      expect(find.text(l10n.subtitleSize), selected == 2 ? findsNothing : findsOneWidget);
+      expect(find.text(l10n.verticalOffset), selected == 2 ? findsNothing : findsOneWidget);
+      Navigator.of(tester.element(find.byType(Dialog))).pop();
+      await tester.pumpAndSettle();
     }
   });
 

@@ -1,3 +1,5 @@
+import '../../../config/app_features.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../widgets/settings/settings_panel.dart';
@@ -11,6 +13,9 @@ import 'downloads_home.dart';
 /// The panel carries its own navigator, so opening a saved show pushes inside
 /// it and Back returns to the list rather than closing the whole thing.
 Future<void> showDownloadsDialog(BuildContext context) {
+  if (!AppFeatures.has(AppFeature.downloads)) {
+    return Future.value();
+  }
   // Wide, because this panel browses artwork, tabs and metadata rather than
   // listing settings. A phone gets the whole screen either way.
   return SettingsPanel.open(context, const DownloadsPanel(), wide: true);

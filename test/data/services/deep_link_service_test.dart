@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moonfin/data/services/deep_link_service.dart';
+import 'package:moonfin/ui/navigation/destinations.dart';
 
 void main() {
   group('routeForDeepLink', () {
@@ -16,6 +17,13 @@ void main() {
       expect(
         DeepLinkService.routeForDeepLink(Uri.parse('moonfin://play?serverId=s1')),
         isNull,
+      );
+    });
+
+    test('opens Retro TV without an item id', () {
+      expect(
+        DeepLinkService.routeForDeepLink(Uri.parse('moonfin://retro-tv')),
+        Destinations.retroTv,
       );
     });
 

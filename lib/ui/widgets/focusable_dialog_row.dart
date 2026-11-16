@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import '../../util/platform_detection.dart';
+import '../tv/tv_modal.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:moonfin_design/moonfin_design.dart';
@@ -46,7 +49,9 @@ class _FocusableDialogRowState extends State<FocusableDialogRow> {
   void initState() {
     super.initState();
     _focusNode.addListener(() {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       final hasFocus = _focusNode.hasFocus;
       setState(() => _isFocused = hasFocus);
       if (!hasFocus) {
@@ -57,7 +62,9 @@ class _FocusableDialogRowState extends State<FocusableDialogRow> {
         return;
       }
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_focusNode.hasFocus) return;
+        if (!mounted || !_focusNode.hasFocus) {
+          return;
+        }
         Scrollable.ensureVisible(
           context,
           alignment: 0.5,
@@ -78,14 +85,26 @@ class _FocusableDialogRowState extends State<FocusableDialogRow> {
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformDetection.isTV &&
+        widget.onLongPress == null &&
+        widget.iconBuilder == null) {
+      return TvMenuRow(
+        focusNode: _focusNode,
+        label: widget.label,
+        icon: widget.icon,
+        autofocus: widget.autofocus,
+        dimmed: widget.dimmed,
+        onPressed: widget.onTap,
+      );
+    }
     // A touch leaves focus parked on the row it hit, which shouldn't read as a
     // pick, so only a remote, a keyboard or the mouse lights a row.
     final showActive = InputModeTracker.of(context) == InputMode.keyboard
         ? _isFocused
         : _isHovered;
     final baseColor = widget.dimmed
-      ? AppColorScheme.onSurface.withValues(alpha: 0.5)
-      : AppColorScheme.onSurface.withValues(alpha: 0.8);
+        ? AppColorScheme.onSurface.withValues(alpha: 0.5)
+        : AppColorScheme.onSurface.withValues(alpha: 0.8);
     final color = showActive ? FocusTheme.solidFocusForeground : baseColor;
 
     return Focus(
@@ -97,12 +116,16 @@ class _FocusableDialogRowState extends State<FocusableDialogRow> {
         }
 
         if (event is KeyDownEvent) {
-          if (_selectPressed) return KeyEventResult.handled;
+          if (_selectPressed) {
+            return KeyEventResult.handled;
+          }
           _selectPressed = true;
           _longPressFired = false;
           _longPressTimer?.cancel();
           _longPressTimer = Timer(widget.longPressDuration, () {
-            if (!mounted || !_focusNode.hasFocus) return;
+            if (!mounted || !_focusNode.hasFocus) {
+              return;
+            }
             _longPressFired = true;
             (widget.onLongPress ?? widget.onTap).call();
           });

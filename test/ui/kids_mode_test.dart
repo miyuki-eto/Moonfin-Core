@@ -183,7 +183,11 @@ void main() {
           enabled: false,
           order: 0,
         ),
-        HomeSectionConfig(type: HomeSectionType.resume, enabled: true, order: 1),
+        HomeSectionConfig(
+          type: HomeSectionType.resume,
+          enabled: true,
+          order: 1,
+        ),
       ], kidsMode: true);
 
       final types = prefs.activeHomeSectionConfigs.map((c) => c.type);
@@ -276,8 +280,16 @@ void main() {
           enabled: true,
           order: 2,
         ),
-        HomeSectionConfig(type: HomeSectionType.resume, enabled: true, order: 3),
-        HomeSectionConfig(type: HomeSectionType.nextUp, enabled: true, order: 4),
+        HomeSectionConfig(
+          type: HomeSectionType.resume,
+          enabled: true,
+          order: 3,
+        ),
+        HomeSectionConfig(
+          type: HomeSectionType.nextUp,
+          enabled: true,
+          order: 4,
+        ),
         HomeSectionConfig(
           type: HomeSectionType.rewatch,
           enabled: true,
@@ -510,43 +522,51 @@ void main() {
     List<String> idsOf(List<AggregatedLibrary> libs) =>
         libs.map((l) => l.id).toList();
 
-    test('keeps the library when the guide button is not standing in for it', () {
-      expect(
-        idsOf(librariesForNav(libraries, false)),
-        ['movies', 'guide', 'shows'],
-      );
-    });
+    test(
+      'keeps the library when the guide button is not standing in for it',
+      () {
+        expect(idsOf(librariesForNav(libraries, false)), [
+          'movies',
+          'guide',
+          'shows',
+        ]);
+      },
+    );
 
     test('drops the library when the guide button covers it', () {
       expect(idsOf(librariesForNav(libraries, true)), ['movies', 'shows']);
     });
 
-    test('drops the library in Kids Mode even with no button to replace it', () {
-      // The button being hidden is what makes this matter: without the flag
-      // the tile would quietly become the only way into the guide.
-      expect(
-        idsOf(librariesForNav(libraries, false, hideLiveTv: true)),
-        ['movies', 'shows'],
-      );
-    });
+    test(
+      'drops the library in Kids Mode even with no button to replace it',
+      () {
+        // The button being hidden is what makes this matter: without the flag
+        // the tile would quietly become the only way into the guide.
+        expect(idsOf(librariesForNav(libraries, false, hideLiveTv: true)), [
+          'movies',
+          'shows',
+        ]);
+      },
+    );
 
-    test('drops the library in Kids Mode however the server spells the type', () {
-      final shouty = [lib('movies', 'movies'), lib('guide', 'LiveTV')];
-      expect(
-        idsOf(librariesForNav(shouty, false, hideLiveTv: true)),
-        ['movies'],
-      );
-    });
+    test(
+      'drops the library in Kids Mode however the server spells the type',
+      () {
+        final shouty = [lib('movies', 'movies'), lib('guide', 'LiveTV')];
+        expect(idsOf(librariesForNav(shouty, false, hideLiveTv: true)), [
+          'movies',
+        ]);
+      },
+    );
 
     test('leaves a server with no Live TV library alone', () {
       final none = [lib('movies', 'movies'), lib('shows', 'tvshows')];
-      expect(
-        idsOf(librariesForNav(none, false, hideLiveTv: true)),
-        ['movies', 'shows'],
-      );
+      expect(idsOf(librariesForNav(none, false, hideLiveTv: true)), [
+        'movies',
+        'shows',
+      ]);
     });
   });
-
 
   group('the details screen style', () {
     Future<UserPreferences> withKidsMode(bool on) async {
@@ -571,7 +591,10 @@ void main() {
       // The profile push reads the raw preference, so a forced value written
       // into the store would follow the account to the parent's own devices.
       final prefs = await withKidsMode(true);
-      await prefs.set(UserPreferences.detailScreenStyle, DetailScreenStyle.nouveau);
+      await prefs.set(
+        UserPreferences.detailScreenStyle,
+        DetailScreenStyle.nouveau,
+      );
 
       expect(
         prefs.get(UserPreferences.detailScreenStyle),
@@ -606,7 +629,11 @@ void main() {
         false,
       );
 
-      expect(prefs.effectiveDetailExpandedTabs, isFalse, reason: 'expandedTabs');
+      expect(
+        prefs.effectiveDetailExpandedTabs,
+        isFalse,
+        reason: 'expandedTabs',
+      );
       expect(
         prefs.effectiveDetailShowTechnicalDetails,
         isFalse,
@@ -647,7 +674,10 @@ void main() {
 
     test('the toggles come back when the mode goes off', () async {
       final prefs = await _prefs();
-      await prefs.set(UserPreferences.detailScreenStyle, DetailScreenStyle.classic);
+      await prefs.set(
+        UserPreferences.detailScreenStyle,
+        DetailScreenStyle.classic,
+      );
       await prefs.set(UserPreferences.detailExpandedTabs, true);
       await prefs.set(UserPreferences.detailShowTechnicalDetails, true);
       await prefs.set(UserPreferences.detailTrailersExternal, true);
@@ -669,7 +699,10 @@ void main() {
       // syncedFields encodes through the raw getter, so Kids Mode must not be
       // able to reach the outgoing profile.
       final prefs = await withKidsMode(true);
-      await prefs.set(UserPreferences.detailScreenStyle, DetailScreenStyle.spotlight);
+      await prefs.set(
+        UserPreferences.detailScreenStyle,
+        DetailScreenStyle.spotlight,
+      );
 
       final field = syncedFields.firstWhere(
         (f) => f.pref == UserPreferences.detailScreenStyle,
@@ -695,7 +728,6 @@ void main() {
 
       for (final button in const [
         DetailButton.restart,
-        DetailButton.shuffle,
         DetailButton.favorite,
       ]) {
         expect(button.isOffered, isTrue, reason: button.id);
@@ -708,20 +740,18 @@ void main() {
       // whole set back.
       await withKidsMode(on: true);
 
-      const allowed = {
-        DetailButton.restart,
-        DetailButton.shuffle,
-        DetailButton.favorite,
-      };
+      const allowed = {DetailButton.restart, DetailButton.favorite};
       for (final button in DetailButton.values) {
-        if (allowed.contains(button)) continue;
+        if (allowed.contains(button)) {
+          continue;
+        }
         expect(button.isOffered, isFalse, reason: button.id);
       }
     });
 
-    test('the mode being on is what takes them away, not the device', () async {
+    test('product exclusions apply even when Kids Mode is off', () async {
       await withKidsMode(on: false);
-      expect(DetailButton.admin.isOffered, isTrue);
+      expect(DetailButton.admin.isOffered, isFalse);
     });
 
     test('the row is Restart, Shuffle, Favourite, in that order', () async {
@@ -743,12 +773,14 @@ void main() {
       expect(DetailButton.version.isOffered, isFalse);
     });
 
-    test('shrugs off preferences it cannot reach rather than hiding everything',
-        () async {
-      // Widgets can build before the preferences are registered, and a button
-      // that vanishes in that window would be worse than one that stays.
-      await GetIt.instance.reset();
-      expect(DetailButton.admin.isOffered, isTrue);
-    });
+    test(
+      'product exclusions do not depend on registered preferences',
+      () async {
+        // Widgets can build before the preferences are registered, and a button
+        // that vanishes in that window would be worse than one that stays.
+        await GetIt.instance.reset();
+        expect(DetailButton.admin.isOffered, isFalse);
+      },
+    );
   });
 }

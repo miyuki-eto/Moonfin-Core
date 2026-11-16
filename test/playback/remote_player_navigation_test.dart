@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:jellyfin_preference/jellyfin_preference.dart';
@@ -30,6 +33,10 @@ import 'package:moonfin/preference/user_preferences.dart';
 import 'package:moonfin/ui/screens/playback/video_player_screen.dart';
 import 'package:moonfin/ui/screensaver/screensaver_controller.dart';
 import 'package:moonfin/ui/widgets/playback/next_up_overlay.dart';
+import 'package:moonfin/ui/widgets/playback/tv_playback_failure.dart';
+import 'package:moonfin/ui/tv/tv26_button.dart';
+import 'package:moonfin/ui/tv/tv_player_button.dart';
+import 'package:moonfin/util/platform_detection.dart';
 
 class _AuthStore extends Fake implements AuthenticationStore {}
 
@@ -55,6 +62,31 @@ class _Manager extends PlaybackManager {
   Future<void> nextInQueue() async => advances++;
   @override
   Future<void> stop({bool userInitiated = true}) async {}
+}
+
+class _RecoveryManager extends _Manager {
+  final _changes = StreamController<PlaybackBringupState>.broadcast(sync: true);
+  var _bringup = const PlaybackBringupState(
+    phase: PlaybackBringupPhase.failed,
+    error: 'Playback failed.',
+  );
+  int retries = 0;
+  @override
+  PlaybackBringupState get bringupState => _bringup;
+  @override
+  Stream<PlaybackBringupState> get bringupStateStream => _changes.stream;
+  @override
+  Future<void> changeBitrate(int? mbps) async {
+    retries++;
+    _bringup = const PlaybackBringupState(phase: PlaybackBringupPhase.ready);
+    _changes.add(_bringup);
+  }
+
+  @override
+  void dispose() {
+    _changes.close();
+    super.dispose();
+  }
 }
 
 class _Client extends Fake implements MediaServerClient {
@@ -160,7 +192,53 @@ void main() {
     await tester.pump();
   }
 
-  Future<void> showNextUp(WidgetTester tester) async {
+  testWidgets(
+    'TV failed player offers Retry and returns focus to transport after recovery',
+    (tester) async {
+      PlatformDetection.setInterfaceLayout(InterfaceLayout.tv);
+      addTearDown(
+        () => PlatformDetection.setInterfaceLayout(InterfaceLayout.automatic),
+      );
+      await GetIt.instance.unregister<PlaybackManager>();
+      manager.dispose();
+      final recovery = _RecoveryManager();
+      manager = recovery;
+      GetIt.instance.registerSingleton<PlaybackManager>(manager);
+      await open(tester);
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(TvPlaybackFailure), findsOneWidget);
+      expect(
+        find.byTooltip('Playback speed'),
+        findsNothing,
+        reason:
+            'Hidden transport controls do not remain reachable under failure',
+      );
+      expect(
+        FocusManager.instance.primaryFocus?.context
+            ?.findAncestorWidgetOfExactType<Tv26Button>()
+            ?.label,
+        'Retry',
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(recovery.retries, 1);
+      expect(find.byType(TvPlaybackFailure), findsNothing);
+      final primary = FocusManager.instance.primaryFocus;
+      expect(
+        tester
+            .widgetList<TvPlayerButton>(find.byType(TvPlayerButton))
+            .where((button) => button.focusNode == primary),
+        hasLength(1),
+        reason: 'Recovery must land on a mounted TV transport control',
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  Future<void> showNextUp(WidgetTester tester, {bool playing = true}) async {
+    manager.state.setPlaying(playing);
     manager.queueService.setQueue([
       const AggregatedItem(
         id: 'one',
@@ -215,6 +293,18 @@ void main() {
       TargetPlatform.iOS,
       TargetPlatform.windows,
     }),
+  );
+
+  testWidgets(
+    'paused seeking near the end cannot start an auto-next countdown',
+    (tester) async {
+      await open(tester);
+      await showNextUp(tester, playing: false);
+      expect(find.byType(NextUpOverlay), findsNothing);
+      await tester.pump(const Duration(seconds: 20));
+      expect(manager.advances, 0);
+      await tester.pumpWidget(const SizedBox());
+    },
   );
 
   testWidgets(

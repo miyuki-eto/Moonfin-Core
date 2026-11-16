@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:moonfin_design/moonfin_design.dart';
 
+import '../../settings_visibility.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../preference/user_preferences.dart';
 import '../../../util/focus/dpad_keys.dart';
@@ -225,7 +226,7 @@ class ModernLibraryHeader extends StatelessWidget {
                                 onTap: m.onShuffle!,
                               ),
                             ],
-                            if (m.onDisplay != null) ...[
+                            if (showAppSettings && m.onDisplay != null) ...[
                               gap,
                               FocusableToolbarButton(
                                 icon: Icons.settings,
@@ -298,7 +299,7 @@ class CompactLibraryHeader extends StatelessWidget {
                   iconSize: 22,
                   onTap: m.onShuffle!,
                 ),
-              if (showControls && m.onDisplay != null)
+              if (showAppSettings && showControls && m.onDisplay != null)
                 FocusableToolbarButton(
                   icon: Icons.settings,
                   tooltip: l10n.display,
@@ -385,6 +386,12 @@ class DockedLibraryPanel extends StatelessWidget {
     if (!event.isActionable || !event.logicalKey.isRightKey) {
       return KeyEventResult.ignored;
     }
+    final inLetterGrid = FocusManager.instance.primaryFocus?.context
+        ?.findAncestorWidgetOfExactType<_LetterGrid>() != null;
+    if (PlatformDetection.isTV && !inLetterGrid) {
+      onExitRight();
+      return KeyEventResult.handled;
+    }
     final moved =
         FocusManager.instance.primaryFocus?.focusInDirection(
           TraversalDirection.right,
@@ -402,9 +409,10 @@ class DockedLibraryPanel extends StatelessWidget {
     final rowGap = SizedBox(height: 4 * scale);
 
     return Container(
-      width: kDockedPanelWidth * scale,
+      width: (PlatformDetection.isTV ? 232 : kDockedPanelWidth) * scale,
       decoration: BoxDecoration(
-        color: AppColorScheme.surface.withValues(alpha: 0.55),
+        color: PlatformDetection.isTV
+            ? AppColorScheme.background : AppColorScheme.surface.withValues(alpha: 0.55),
         border: Border(
           right: BorderSide(
             color: AppColorScheme.onSurface.withValues(alpha: 0.06),
@@ -481,7 +489,7 @@ class DockedLibraryPanel extends StatelessWidget {
                   onTap: m.onShuffle!,
                 ),
               ],
-              if (m.onDisplay != null) ...[
+              if (showAppSettings && m.onDisplay != null) ...[
                 rowGap,
                 _PanelRow(
                   icon: Icons.grid_view,
@@ -575,7 +583,7 @@ class DockedLibraryBar extends StatelessWidget {
               toggled: m.alphabetOn,
               onTap: m.onToggleAlphabet,
             ),
-          if (m.onDisplay != null)
+          if (showAppSettings && m.onDisplay != null)
             _BarButton(
               icon: Icons.grid_view,
               label: l10n.display,
@@ -982,6 +990,21 @@ class _PanelRow extends StatelessWidget {
             children: [
               Icon(icon, size: 20 * scale, color: fg.withValues(alpha: 0.7)),
               SizedBox(width: 12 * scale),
+              if (PlatformDetection.isTV)
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 14 * scale, fontWeight: FontWeight.w500, color: fg)),
+                      if (value?.isNotEmpty ?? false)
+                        Text(value!, maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12 * scale, color: fg.withValues(alpha: 0.6))),
+                    ],
+                  ),
+                )
+              else ...[
               Text(
                 label,
                 style: TextStyle(
@@ -1003,6 +1026,7 @@ class _PanelRow extends StatelessWidget {
                   ),
                 ),
               ),
+              ],
               if (trailing != null) ...[
                 SizedBox(width: 4 * scale),
                 Icon(trailing, size: 16 * scale, color: fg),

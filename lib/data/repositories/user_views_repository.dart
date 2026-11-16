@@ -1,3 +1,5 @@
+import '../../config/app_features.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:server_core/server_core.dart';
 
@@ -14,7 +16,11 @@ Future<List<AggregatedLibrary>> loadUserViews(
 );
 
 List<AggregatedLibrary> _parseUserViews(Map<String, dynamic> response) {
-  final items = response['Items'] as List? ?? [];
+  final items = (response['Items'] as List? ?? []).where(
+    (item) =>
+        item is Map &&
+        AppFeatures.allowsLibrary(item['CollectionType'] as String?),
+  );
 
   return items.whereType<Map>().map((item) {
     final data = item.cast<String, dynamic>();
@@ -55,7 +61,12 @@ Future<Map<String, dynamic>> loadVisibleUserViews(
   final excludes = await _excludesFrom(client.usersApi.getUserConfiguration());
   final response = await viewsFuture;
 
-  if (excludes == null) return client.userViewsApi.getUserViews();
+  if (excludes == null) {
+    return _filterExcludedViews(
+      await client.userViewsApi.getUserViews(),
+      const {},
+    );
+  }
   return _filterExcludedViews(response, excludes);
 }
 
@@ -63,7 +74,17 @@ Map<String, dynamic> _filterExcludedViews(
   Map<String, dynamic> response,
   Set<String> excludes,
 ) {
-  if (excludes.isEmpty) return response;
+  final supported = (response['Items'] as List? ?? [])
+      .where(
+        (item) =>
+            item is Map &&
+            AppFeatures.allowsLibrary(item['CollectionType'] as String?),
+      )
+      .toList();
+  response = {...response, 'Items': supported};
+  if (excludes.isEmpty) {
+    return response;
+  }
   final items = (response['Items'] as List? ?? [])
       .where(
         (item) => !excludes.contains(
@@ -88,9 +109,8 @@ class UserViewsRepository extends ChangeNotifier {
   UserViewsRepository(this._client);
 
   Future<List<AggregatedLibrary>> getAllViews() =>
-      _inFlightViews ??= loadUserViews(
-        _client,
-      ).whenComplete(() => _inFlightViews = null);
+      _inFlightViews ??= loadUserViews(_client)
+          .whenComplete(() => _inFlightViews = null);
 
   // Kept for the session, since every screen's nav chrome asks for the views
   // when it mounts. [invalidateViews] and a configuration change drop it.
@@ -98,7 +118,9 @@ class UserViewsRepository extends ChangeNotifier {
 
   Future<Map<String, dynamic>> _hiddenResponse() {
     final cached = _hiddenResponseCache;
-    if (cached != null) return Future.value(cached);
+    if (cached != null) {
+      return Future.value(cached);
+    }
     return _inFlightHiddenResponse ??= _client.userViewsApi
         .getUserViews(includeHidden: true)
         .then((response) => _hiddenResponseCache = response)
@@ -121,16 +143,25 @@ class UserViewsRepository extends ChangeNotifier {
     final responseFuture = _hiddenResponse();
     final excludes = await _excludesFrom(cachedUserConfiguration());
     final response = await responseFuture;
-    if (excludes == null) return _client.userViewsApi.getUserViews();
+    if (excludes == null) {
+      return _filterExcludedViews(
+        await _client.userViewsApi.getUserViews(),
+        const {},
+      );
+    }
     return _filterExcludedViews(response, excludes);
   }
 
   Future<List<AggregatedLibrary>> getUserViews() async {
     final excludes = await _excludesFrom(cachedUserConfiguration());
-    if (excludes == null) return getAllViews();
+    if (excludes == null) {
+      return getAllViews();
+    }
 
     final views = await getAllViewsIncludingHidden();
-    if (excludes.isEmpty) return views;
+    if (excludes.isEmpty) {
+      return views;
+    }
     return views.where((v) => !excludes.contains(v.id)).toList();
   }
 

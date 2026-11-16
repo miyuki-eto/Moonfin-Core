@@ -16,6 +16,7 @@ import 'package:moonfin/preference/seerr_preferences.dart';
 import 'package:moonfin/preference/user_preferences.dart';
 import 'package:moonfin/ui/widgets/expandable_icon_button.dart';
 import 'package:moonfin/ui/widgets/left_sidebar.dart';
+import 'package:moonfin/ui/tv/tv26_button.dart';
 import 'package:moonfin/ui/widgets/navigation_layout.dart';
 import 'package:moonfin/ui/widgets/top_toolbar.dart';
 import 'package:moonfin/util/game_library.dart';
@@ -92,7 +93,10 @@ const _libraries = [
 Widget _host(Widget chrome, {List<String>? opened}) {
   final router = GoRouter(
     routes: [
-      GoRoute(path: '/', builder: (_, _) => Scaffold(body: chrome)),
+      GoRoute(
+        path: '/',
+        builder: (_, _) => Scaffold(body: chrome),
+      ),
       GoRoute(
         path: '/library/:id',
         builder: (_, state) {
@@ -164,13 +168,10 @@ void main() {
     expect(find.byKey(const ValueKey('toolbar_libraries')), findsNothing);
     expect(_movies, findsOneWidget);
     expect(_shows, findsOneWidget);
-    expect(
-      tester.getCenter(_movies).dx,
-      lessThan(tester.getCenter(_shows).dx),
-    );
+    expect(tester.getCenter(_movies).dx, lessThan(tester.getCenter(_shows).dx));
     // The Live TV button already leads to the guide, so the library is dropped
     // just as it is from the menu.
-    expect(find.byIcon(Icons.live_tv_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.live_tv_rounded), findsNothing);
   });
 
   testWidgets('a library button opens that library on its own server', (
@@ -230,8 +231,21 @@ void main() {
     await tester.pumpWidget(_host(const LeftSidebar()));
     await tester.pumpAndSettle();
 
+    NavigationLayout.focusNavbar();
+    await tester.pumpAndSettle();
+
     expect(find.byKey(const ValueKey('sidebar-libraries')), findsNothing);
-    expect(_movies, findsOneWidget);
-    expect(_shows, findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is Tv26Button && widget.label == 'Movies',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is Tv26Button && widget.label == 'Shows',
+      ),
+      findsOneWidget,
+    );
   });
 }

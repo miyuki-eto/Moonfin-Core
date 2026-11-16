@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:get_it/get_it.dart';
 import 'package:server_core/server_core.dart';
 
@@ -212,14 +213,14 @@ class _EmulatorCoreSettingsScreenState
                 child: SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: LoadingThrobber(),
                 ),
               ),
             ),
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: LoadingThrobber())
           : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [

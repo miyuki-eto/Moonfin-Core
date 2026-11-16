@@ -63,7 +63,8 @@ class _VolumeBackend extends Fake implements PlayerBackend {
   }
 }
 
-class _NativeApplePlayerBackend extends Fake implements NativeApplePlayerBackend {
+class _NativeApplePlayerBackend extends Fake
+    implements NativeApplePlayerBackend {
   bool dismissed = false;
   final navigation = <String>[];
   @override
@@ -665,10 +666,7 @@ void main() {
       final router = GoRouter(
         initialLocation: startingPage,
         routes: [
-          GoRoute(
-            path: Destinations.home,
-            builder: (_, _) => const SizedBox(),
-          ),
+          GoRoute(path: Destinations.home, builder: (_, _) => const SizedBox()),
           GoRoute(
             path: Destinations.videoPlayer,
             builder: (_, _) => const SizedBox(),
@@ -1043,11 +1041,14 @@ void main() {
     expect(manager.reportedVolumes, [0, 40, 50, 1]);
   });
 
-  test('a message from another client is shown', () async {
-    await sendGeneral('DisplayMessage', args: {'Text': 'dinner is ready'});
+  test(
+    'server messages stay hidden even when sent directly by another client',
+    () async {
+      await sendGeneral('DisplayMessage', args: {'Text': 'dinner is ready'});
 
-    expect(notifications.messages, ['dinner is ready']);
-  });
+      expect(notifications.messages, isEmpty);
+    },
+  );
 
   test("an empty message isn't shown at all", () async {
     await sendGeneral('DisplayMessage', args: {'Text': '   '});

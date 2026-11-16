@@ -1,4 +1,10 @@
+import '../../l10n/app_localizations.dart';
+
 import 'package:flutter/material.dart';
+
+import '../../util/platform_detection.dart';
+import '../tv/tv_card_focus_frame.dart';
+
 import 'package:get_it/get_it.dart';
 import 'package:moonfin_design/moonfin_design.dart';
 
@@ -29,6 +35,9 @@ class GenreCardData {
 
 class GenreGridCard extends StatefulWidget {
   final GenreCardData genre;
+  final int index;
+  final int itemCount;
+  final int columns;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
   final ValueChanged<bool>? onHover;
@@ -39,6 +48,9 @@ class GenreGridCard extends StatefulWidget {
   const GenreGridCard({
     super.key,
     required this.genre,
+    required this.index,
+    required this.itemCount,
+    required this.columns,
     required this.onTap,
     this.onLongPress,
     this.onHover,
@@ -63,8 +75,7 @@ class _GenreGridCardState extends State<GenreGridCard> with FocusStateMixin {
   @override
   Widget build(BuildContext context) {
     final borders = ThemeRegistry.active.borders;
-    final borderColor =
-        widget.focusColor ?? borders.focusBorder.color;
+    final borderColor = widget.focusColor ?? borders.focusBorder.color;
     final showMarquee = hovered || focused;
     final imageUrl = widget.genre.imageUrl ?? widget.genre.backdropUrl;
     final desktopScale = GetIt.instance<UserPreferences>()
@@ -82,7 +93,8 @@ class _GenreGridCardState extends State<GenreGridCard> with FocusStateMixin {
       color: AppColorScheme.onSurface.withAlpha(178),
     );
     final titleMaxLines = widget.centerTitle ? 2 : 1;
-    return MouseRegion(
+    final legacyFocus = showFocusBorder && !PlatformDetection.isTV;
+    final content = MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) {
         setHovered(true);
@@ -93,8 +105,40 @@ class _GenreGridCardState extends State<GenreGridCard> with FocusStateMixin {
         widget.onHover?.call(false);
       },
       child: Focus(
-        onFocusChange: (focused) => setFocused(focused),
+        onFocusChange: (focused) {
+          setFocused(focused);
+          if (focused && PlatformDetection.isTV) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                Scrollable.ensureVisible(
+                  context,
+                  alignment: .5,
+                  duration: MediaQuery.disableAnimationsOf(context)
+                      ? Duration.zero
+                      : AppMotion.fast,
+                );
+              }
+            });
+          }
+        },
         onKeyEvent: (_, event) {
+          if (PlatformDetection.isTV && event.isActionable) {
+            final key = event.logicalKey;
+            final column = widget.index % widget.columns;
+            final lastRow =
+                widget.index ~/ widget.columns ==
+                (widget.itemCount - 1) ~/ widget.columns;
+            final rtl = Directionality.of(context) == TextDirection.rtl;
+            final forward = rtl ? key.isLeftKey : key.isRightKey;
+            final backward = rtl ? key.isRightKey : key.isLeftKey;
+            if ((forward &&
+                    (column == widget.columns - 1 ||
+                        widget.index == widget.itemCount - 1)) ||
+                (backward && column == 0) ||
+                (key.isDownKey && lastRow)) {
+              return KeyEventResult.handled;
+            }
+          }
           if (widget.onLongPress != null) {
             final handlerResult = _selectKeyHandler.handleKeyEvent(
               event,
@@ -118,12 +162,17 @@ class _GenreGridCardState extends State<GenreGridCard> with FocusStateMixin {
               : null,
           onSecondaryTap: widget.onLongPress,
           child: AnimatedScale(
-            scale: widget.cardFocusExpansion && showFocusBorder ? 1.05 : 1.0,
+            scale:
+                !PlatformDetection.isTV &&
+                    widget.cardFocusExpansion &&
+                    legacyFocus
+                ? 1.02
+                : 1.0,
             duration: const Duration(milliseconds: 150),
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                if (showFocusBorder && borders.focusGlow.isNotEmpty)
+                if (legacyFocus && borders.focusGlow.isNotEmpty)
                   Positioned(
                     top: -1.0,
                     bottom: -1.0,
@@ -132,13 +181,14 @@ class _GenreGridCardState extends State<GenreGridCard> with FocusStateMixin {
                     child: IgnorePointer(
                       child: Container(
                         decoration: BoxDecoration(
-                          borderRadius: borders.cardRadius + AppRadius.circular(1.0),
+                          borderRadius:
+                              borders.cardRadius + AppRadius.circular(1.0),
                           boxShadow: borders.focusGlow,
                         ),
                       ),
                     ),
                   )
-                else if (showFocusBorder)
+                else if (legacyFocus)
                   Positioned(
                     top: -1.0,
                     bottom: -1.0,
@@ -147,7 +197,8 @@ class _GenreGridCardState extends State<GenreGridCard> with FocusStateMixin {
                     child: IgnorePointer(
                       child: Container(
                         decoration: BoxDecoration(
-                          borderRadius: borders.cardRadius + AppRadius.circular(1.0),
+                          borderRadius:
+                              borders.cardRadius + AppRadius.circular(1.0),
                           boxShadow: [
                             BoxShadow(
                               color: AppColorScheme.accent.withAlpha(145),
@@ -169,7 +220,9 @@ class _GenreGridCardState extends State<GenreGridCard> with FocusStateMixin {
                           imageUrl: imageUrl,
                           fadeInDuration: Duration.zero,
                           errorBuilder: (_, _, _) => Container(
-                            color: AppColorScheme.surface.withValues(alpha: 0.35),
+                            color: AppColorScheme.surface.withValues(
+                              alpha: 0.35,
+                            ),
                           ),
                         )
                       else
@@ -216,11 +269,17 @@ class _GenreGridCardState extends State<GenreGridCard> with FocusStateMixin {
                               const SizedBox(height: 2),
                               showMarquee
                                   ? MarqueeText(
-                                      text: '${widget.genre.itemCount} items',
+                                      text: AppLocalizations.of(context)
+                                          .spotlightItemsCount(
+                                            widget.genre.itemCount,
+                                          ),
                                       style: subtitleStyle,
                                     )
                                   : Text(
-                                      '${widget.genre.itemCount} items',
+                                      AppLocalizations.of(context)
+                                          .spotlightItemsCount(
+                                            widget.genre.itemCount,
+                                          ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: subtitleStyle,
@@ -232,7 +291,7 @@ class _GenreGridCardState extends State<GenreGridCard> with FocusStateMixin {
                     ],
                   ),
                 ),
-                if (showFocusBorder)
+                if (legacyFocus)
                   Positioned(
                     top: -1.0,
                     bottom: -1.0,
@@ -241,7 +300,8 @@ class _GenreGridCardState extends State<GenreGridCard> with FocusStateMixin {
                     child: IgnorePointer(
                       child: Container(
                         decoration: BoxDecoration(
-                          borderRadius: borders.cardRadius + AppRadius.circular(1.0),
+                          borderRadius:
+                              borders.cardRadius + AppRadius.circular(1.0),
                           border: Border.fromBorderSide(
                             borders.focusBorder.copyWith(
                               color: borderColor,
@@ -258,5 +318,8 @@ class _GenreGridCardState extends State<GenreGridCard> with FocusStateMixin {
         ),
       ),
     );
+    return PlatformDetection.isTV
+        ? TvCardFocusFrame(focused: showFocusBorder, child: content)
+        : content;
   }
 }

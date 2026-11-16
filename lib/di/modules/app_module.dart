@@ -1,3 +1,5 @@
+import '../../config/app_features.dart';
+
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -136,7 +138,9 @@ Future<void> _stopPlaybackForAccessSchedule() async {
   // on screen.
   final matches = appRouter.routerDelegate.currentConfiguration.matches;
   final path = matches.isEmpty ? '' : matches.last.matchedLocation;
-  if (Destinations.isPlayerRoute(path)) appRouter.go(Destinations.home);
+  if (Destinations.isPlayerRoute(path)) {
+    appRouter.go(Destinations.home);
+  }
 }
 
 void registerAppModule() {
@@ -162,26 +166,31 @@ void registerAppModule() {
     ),
     dispose: (controller) => controller.dispose(),
   );
-  _getIt.registerLazySingleton(() {
-    final users = _getIt<UserRepository>();
-    final service = AccessScheduleService(
-      loadSchedules: _loadAccessSchedules,
-      onBlocked: _stopPlaybackForAccessSchedule,
-      serverRefuses: _serverRefusesUser,
-    );
-    // An administrator has no schedule to enforce.
-    String? watched(User? user) =>
-        user == null || user.isAdministrator ? null : user.id;
-    service.setUser(watched(users.currentUser));
-    _accessScheduleUserSubscription = users.currentUserStream.listen(
-      (user) => service.setUser(watched(user)),
-    );
-    return service;
-  }, dispose: (service) {
-    unawaited(_accessScheduleUserSubscription?.cancel());
-    service.dispose();
-  });
-  _getIt.registerLazySingleton(() => SetupWizardGate(_getIt<UserPreferences>()));
+  _getIt.registerLazySingleton(
+    () {
+      final users = _getIt<UserRepository>();
+      final service = AccessScheduleService(
+        loadSchedules: _loadAccessSchedules,
+        onBlocked: _stopPlaybackForAccessSchedule,
+        serverRefuses: _serverRefusesUser,
+      );
+      // An administrator has no schedule to enforce.
+      String? watched(User? user) =>
+          user == null || user.isAdministrator ? null : user.id;
+      service.setUser(watched(users.currentUser));
+      _accessScheduleUserSubscription = users.currentUserStream.listen(
+        (user) => service.setUser(watched(user)),
+      );
+      return service;
+    },
+    dispose: (service) {
+      unawaited(_accessScheduleUserSubscription?.cancel());
+      service.dispose();
+    },
+  );
+  _getIt.registerLazySingleton(
+    () => SetupWizardGate(_getIt<UserPreferences>()),
+  );
   _getIt.registerLazySingleton(() => const NativeCastChannel());
   _getIt.registerLazySingleton(() => const NativeDlnaChannel());
   _getIt.registerLazySingleton(() => const NativeAirPlayChannel());
@@ -193,27 +202,29 @@ void registerAppModule() {
     dispose: (bridge) => bridge.dispose(),
   );
   _getIt.registerLazySingleton(
-    () => CastService(
-      [
-        RemoteSessionCastProvider(_getIt<MediaServerClientFactory>()),
-        GoogleCastProvider(
-          _getIt<NativeCastChannel>(),
-          _getIt<MediaServerClientFactory>(),
-        ),
-        AirPlayProvider(
-          _getIt<NativeCastChannel>(),
-          _getIt<NativeAirPlayChannel>(),
-          _getIt<MediaServerClientFactory>(),
-        ),
-        DlnaProvider(
-          _getIt<NativeDlnaChannel>(),
-          _getIt<MediaServerClientFactory>(),
-        ),
-      ],
-      nativeCast: _getIt<NativeCastChannel>(),
-      nativeDlna: _getIt<NativeDlnaChannel>(),
-      nativeAirPlay: _getIt<NativeAirPlayChannel>(),
-    ),
+    () => !AppFeatures.has(AppFeature.casting)
+        ? CastService([])
+        : CastService(
+            [
+              RemoteSessionCastProvider(_getIt<MediaServerClientFactory>()),
+              GoogleCastProvider(
+                _getIt<NativeCastChannel>(),
+                _getIt<MediaServerClientFactory>(),
+              ),
+              AirPlayProvider(
+                _getIt<NativeCastChannel>(),
+                _getIt<NativeAirPlayChannel>(),
+                _getIt<MediaServerClientFactory>(),
+              ),
+              DlnaProvider(
+                _getIt<NativeDlnaChannel>(),
+                _getIt<MediaServerClientFactory>(),
+              ),
+            ],
+            nativeCast: _getIt<NativeCastChannel>(),
+            nativeDlna: _getIt<NativeDlnaChannel>(),
+            nativeAirPlay: _getIt<NativeAirPlayChannel>(),
+          ),
     dispose: (service) => service.dispose(),
   );
   _getIt.registerLazySingleton(
@@ -245,7 +256,8 @@ void registerAppModule() {
     ),
   );
   _getIt.registerLazySingleton<SyncService>(
-    () => SyncService(_getIt<OfflineRepository>(), _getIt<PendingRatingStore>()),
+    () =>
+        SyncService(_getIt<OfflineRepository>(), _getIt<PendingRatingStore>()),
   );
   _getIt.registerLazySingleton(
     () => RemoveWatchedService(
@@ -260,7 +272,9 @@ void registerAppModule() {
             serverId: serverId,
           ),
       signedInServer: () {
-        if (!_getIt.isRegistered<MediaServerClient>()) return null;
+        if (!_getIt.isRegistered<MediaServerClient>()) {
+          return null;
+        }
         if (_getIt.isRegistered<ConnectivityService>() &&
             !_getIt<ConnectivityService>().canReachServer) {
           return null;

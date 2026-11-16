@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:get_it/get_it.dart';
 import 'package:server_core/server_core.dart';
 
@@ -70,7 +71,7 @@ class _AdminResumeSettingsScreenState extends State<AdminResumeSettingsScreen>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Center(child: LoadingThrobber());
     if (_error != null || _config == null) {
       return Center(
         child: Column(

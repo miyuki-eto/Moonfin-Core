@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../util/platform_detection.dart';
+import '../../tv/tv_modal.dart';
+
 import '../adaptive/sf_symbol.dart';
 import 'focusable_wrapper.dart';
 
@@ -34,6 +37,15 @@ class _MenuActionRowState extends State<MenuActionRow> {
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformDetection.isTV) {
+      return TvMenuRow(
+        focusNode: _focusNode,
+        label: widget.label,
+        icon: widget.icon,
+        autofocus: widget.autofocus,
+        onPressed: widget.onPressed,
+      );
+    }
     final theme = Theme.of(context);
     final color = widget.color ?? theme.colorScheme.onSurface;
     return Padding(

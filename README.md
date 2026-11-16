@@ -1,8 +1,16 @@
 # Media client fork
 
-Personal Google TV client based on [Moonfin 3.0.0](https://github.com/Moonfin-Client/Moonfin-Core/releases/tag/3.0.0) (`eb43b626f`). Development lives on the `media` branch; `upstream` points to Moonfin-Client/Moonfin-Core.
+Personal Google TV and Samsung Tizen client based on [Moonfin 3.0.0](https://github.com/Moonfin-Client/Moonfin-Core/releases/tag/3.0.0) (`eb43b626f`). Development lives on the `media` branch; `upstream` points to Moonfin-Client/Moonfin-Core.
 
-The normal browsing experience takes its visual direction from the Media web app: colors, button styles, spacing, scroll-edge fades, prominent directors, and restrained focus scaling. A later TV mode will offer random themed surfing with a short history; revisiting an entry advances it by elapsed time. Media opens normal browsing, with TV available inside the client and through a separate launcher shortcut.
+This fork is a minimal video client. Its navigation is **Search, Home, Retro TV, Genres, Favourites and Libraries**. It retains movies, series, seasons, episodes, video collections, people, trailers, sign-in and connection recovery. Live TV/DVR, Seerr, SyncPlay, music, audiobooks, books/comics, photos, games, downloads, casting, achievements, friends/chat and server messages are omitted. Application Settings, administration and playlists are also hidden. Existing server data and saved preferences are preserved; they cannot re-enable omitted features.
+
+The Apple TV app’s tvOS 26 guide screens are the visual baseline, with Media’s styling references in `../media/web/src/style.css`, `scroll-fade.jsx` and `motion/motion.css`. Home uses full-bleed artwork and landscape rails; video Library uses a category panel and six-column poster grid; details put the synopsis and actions on the left and credits on the right. Purchasing and Family Sharing are omitted. TV browsing uses this presentation regardless of saved layout or theme preferences.
+
+Shared colours, spacing, radii and focus geometry live in `packages/design/lib/src/theme/tv_tokens.dart`; timing lives in `AppMotion`. The components in `lib/ui/tv/` own pill buttons, concentric focus frames, browse headers, status views, modal panels and menu rows, pause information and reveal transitions. Typography uses bundled Inter under the SIL Open Font License. Screen/content entrances, artwork and dialogs share fade/blur motion and respect reduced motion. The Windows native HDR player keeps its separate transparent composition path.
+
+Startup uses the shared animated CRT-style loading glow on black. Home reveals navigation and content together after its first rows, banner response and decoded artwork are ready; a five-second artwork timeout releases a stalled page. Refreshes preserve visible content. Scroll edges mask content to transparency. Detail pages expose Back from the action row, offer a remote-scrollable full synopsis, merge repeated cast credits and omit Chapters. Playback retains local transport, episode selection, audio/subtitle controls and quality/information menus. Feature policy lives in `lib/config/app_features.dart` and applies to navigation, catalogue queries, actions and startup services. Losing connectivity shows request recovery rather than switching to the omitted downloads catalogue. The TV screensaver uses library artwork and a clock, with shared reveal motion.
+
+The browser preview exercises the shared TV UI. Android/Google TV and native Samsung Tizen have had sampled hardware playback and Retro remote-control checks, not full platform certification. A viewer confirmed English subtitle timing in current Chromecast Retro playback and a Batman Begins preview-path seek/reopen test; the historical intermittent desynchronization was not reproduced. Native Mac and the separate native Apple player remain unverified; browser checks do not establish native playback, HDR or performance.
 
 ## Local TV preview on macOS
 
@@ -15,9 +23,44 @@ flutter pub get
 
 Once Flutter reports ready, open <http://127.0.0.1:8788/> in Chrome and sign into your Jellyfin server. The address stays fixed so browser-local login and preferences survive server restarts. Use arrow keys to navigate, Enter to select, and Escape to go back. In the running terminal, press `r` for hot reload, `R` for hot restart, and `q` to quit. The server listens on loopback only.
 
-For an optional native Mac preview, install full Xcode and CocoaPods, then run `./run-macos-tv.sh`. In Appearance, select **Material** interface style to match Android TV; automatic style follows the Mac host. The macOS Debug target is configured for ad-hoc signing and a separate preview bundle ID, but its native build has not been verified. Apple's direct Xcode downloads and the App Store currently require an Apple account.
+Run the full root suite with `flutter test --no-pub`. For a focused TV browsing regression, use:
 
-Browser preview validates the shared UI and navigation. Its player and renderer differ from Android; playback, HDR, remote behavior, and device performance still need Google TV checks.
+```sh
+flutter test --no-pub \
+  test/ui/flows/tv_browsing_flow_test.dart \
+  test/ui/screens/home/tv_home_content_test.dart \
+  test/ui/widgets/startup_loading_test.dart \
+  test/data/services/connectivity_service_test.dart
+```
+
+The journey uses the production router, screens, detail/library models, and Jellyfin API parser with controlled feed/HTTP/artwork inputs. It drives arrows and Enter through Home, movie actions, More cancellation, credits, Similar titles, library cards and categories, library switching, Search keyboard open/close, Genres → scoped results/return, delayed movie responses, Favorites add/remove and return, and absence of Settings in navigation and direct-route redirects. TV key tests reproduce browser scroll shortcuts and focus parked at the root; cast layout checks cover wrapped names and larger text. The Favorites flow holds a removal response until after the detail page closes, checks the empty-state exit, and verifies the Home heart updates. Model checks cover removal, shifted paging offsets, refilling an emptied page, and leaving before the first response. It checks focus restoration and fails on unexpected API calls or framework exceptions at each step. Separate cold-load tests cover both response orders, delayed/stalled artwork, background refresh, empty/error feeds, and loading-indicator geometry at multiple sizes and pixel densities. The connectivity regression checks that an initial network result leaves session services alone until an active client exists, then verifies that the client handoff still starts reconnect/sync. These checks do not cover sign-in, actual video playback or physical remotes.
+
+For an optional native Mac preview, install full Xcode and CocoaPods, then run `./run-macos-tv.sh`. TV mode uses the fixed shared presentation. The macOS Debug target is configured for ad-hoc signing and a separate preview bundle ID, but its native build has not been verified. Apple's direct Xcode downloads and the App Store currently require an Apple account.
+
+Browser preview validates shared UI and navigation. Its player and renderer differ from native TV backends; each release needs platform-specific playback and remote checks.
+
+## Native Samsung TV prototype
+
+The native Tizen 6.5 / ARM build reuses this client's TV interface and Retro TV
+logic with Samsung's native Media Player through `video_player_videohole`.
+Run `./build-tizen.sh` to produce
+`build/tizen/tpk/org.media.tizen-3.0.0.tpk`; the script only builds locally.
+The ignored `build-tizen.private.env` supplies local SDK paths and the signing
+profile through the build script's existing settings. Keep certificates and
+device addresses outside versioned source. This is a native Flutter/CAPI player,
+not a web/AVPlay wrapper. It uses one decoder and explicitly seeks before play.
+SRT/VTT and PGS overlays support subtitle delay; audio delay is unsupported.
+PGS loads asynchronously and cannot use text appearance controls. ASS and other
+unsupported subtitle formats use server rendering. Uncached PGS startup latency,
+HDR, surround routing, crop/stretch and sustained surfing need device-specific
+verification; a build or Flutter capture does not prove hardware picture quality.
+
+Retro TV reuses normal audio/subtitle controls while retaining scheduled channel
+positions and preview watch-history semantics. Open Options with OK or Right to
+choose Audio or Subtitles. Subtitle timing opens above the caption region and
+offers earlier/later steps and Reset; available controls follow the active backend.
+See
+[Retro TV programming](RETRO_TV_PROGRAMMING.md).
 
 ---
 
@@ -77,7 +120,10 @@ Moonfin is a media client for Jellyfin, Emby, and Plex servers, built with Flutt
 
 > Android TV, Fire TV, and Apple TV ship from this same codebase with a TV-tuned interface and D-pad navigation. Fire TV runs the same native backend as Android TV. Web runs as an installable PWA through the Moonbase server plugin.
 
-## Features
+## Upstream features
+
+The following documentation describes upstream Moonfin, including features omitted from this fork. Upstream store downloads do not contain this fork’s changes.
+
 
 - **One codebase, every screen.** Phones, tablets, desktop, Android TV, Apple TV, and web, with navigation tuned for touch, pointer, and remote.
 - **Playback that just works.** Wide codec support including AV1, HEVC, Dolby Vision, Dolby Atmos, HDR10+, and audio passthrough. Dolby Vision Profile 7 direct plays on Apple and Android TV, converted in real time instead of transcoded, with both layers of FEL files on Apple devices, and Windows can send HDR to the display untouched. Two subtitle tracks can show at once on every player. See [Playback and Codecs](https://github.com/Moonfin-Client/Moonfin-Core/wiki/Playback-and-Codecs).

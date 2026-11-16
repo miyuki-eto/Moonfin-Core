@@ -2,6 +2,9 @@ package org.moonfin.nativevideo
 
 import androidx.media3.common.Format
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.Timeline
+import androidx.media3.exoplayer.source.MediaSource.MediaPeriodId
+import com.google.common.primitives.ImmutableIntArray
 import androidx.media3.exoplayer.audio.AudioSink
 import java.io.ByteArrayOutputStream
 import java.lang.reflect.Proxy
@@ -90,6 +93,28 @@ class DtsCoreFallbackTest {
         assertSame(refused, sink.offered.last())
     }
 
+    @Test fun coreFallbackPreservesTheRestOfTheAudioConfiguration() {
+        val sink = RecordingSink()
+        val policySink = PassthroughPolicyAudioSink(sink.proxy, manual("dts"))
+        val channels = ImmutableIntArray.of(0, 1)
+        val period = MediaPeriodId("movie")
+        val configuration = AudioSink.AudioSinkConfig.Builder(dtsHd)
+            .setPreferredBufferSizeOverride(4096)
+            .setOutputChannelMapping(channels)
+            .setTimeline(Timeline.EMPTY)
+            .setMediaPeriodId(period)
+            .build()
+
+        policySink.configure(configuration)
+
+        val forwarded = requireNotNull(sink.lastConfiguration)
+        assertEquals(MimeTypes.AUDIO_DTS, forwarded.format.sampleMimeType)
+        assertEquals(4096, forwarded.preferredBufferSizeOverride)
+        assertEquals(channels, forwarded.outputChannelMapping)
+        assertSame(configuration.timeline, forwarded.timeline)
+        assertSame(period, forwarded.mediaPeriodId)
+    }
+
     @Test fun bytesThatAreNotDtsDoNotExtract() {
         assertNull(DtsCoreExtractor().extract(direct(ByteArray(64) { 0x11 })))
     }
@@ -125,6 +150,7 @@ class DtsCoreFallbackTest {
     /** A sink that answers every format as directly supported and keeps what it's handed. */
     private class RecordingSink {
         var lastFormat: Format? = null
+        var lastConfiguration: AudioSink.AudioSinkConfig? = null
         var acceptWrites = true
         val offered = mutableListOf<ByteBuffer>()
         val written = mutableListOf<ByteArray>()
@@ -139,7 +165,9 @@ class DtsCoreFallbackTest {
                     AudioSink.SINK_FORMAT_SUPPORTED_DIRECTLY
                 }
                 "configure" -> {
-                    lastFormat = args[0] as Format
+                    val configuration = args[0] as AudioSink.AudioSinkConfig
+                    lastConfiguration = configuration
+                    lastFormat = configuration.format
                     null
                 }
                 "handleBuffer" -> {

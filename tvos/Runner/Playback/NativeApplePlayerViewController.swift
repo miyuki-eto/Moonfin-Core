@@ -344,18 +344,18 @@ final class NativeApplePlayerViewController: UIViewController {
     private let programLabel = UILabel()
     private let upNextLabel = UILabel()
 
-    private let defaultAccent = UIColor(red: 0.9, green: 0.1, blue: 0.55, alpha: 1)
+    private let defaultAccent = UIColor.white
     private var glassActive = false
     private var hasThemeConfig = false
-    private var glassAccent = UIColor(red: 0.04, green: 0.52, blue: 1.0, alpha: 1)
-    private var glassRangeProgress = UIColor(red: 0.04, green: 0.52, blue: 1.0, alpha: 1)
+    private var glassAccent = UIColor.white
+    private var glassRangeProgress = UIColor.white
     private var glassRangeTrack = UIColor(white: 1, alpha: 0.2)
     private var glassSurface = UIColor(white: 1, alpha: 0.12)
     private var glassSurfaceVariant = UIColor(red: 0.145, green: 0.145, blue: 0.145, alpha: 1)
     private var glassOnSurface = UIColor.white
     // Dart pushes the accent for every theme, not only glass ones, so this is
-    // the accent every prompt surface renders with. The pink constant only
-    // covers the window before the first theme config arrives.
+    // the accent every prompt surface renders with. White also covers the
+    // window before the first theme config arrives.
     private var themeAccent: UIColor { hasThemeConfig ? glassAccent : defaultAccent }
     private var promptStrings = PromptStrings()
     private let statsStack = UIStackView()
@@ -612,7 +612,7 @@ final class NativeApplePlayerViewController: UIViewController {
         tooltipView.addSubview(tooltipLabel)
 
         scrubber.translatesAutoresizingMaskIntoConstraints = false
-        scrubber.progressTintColor = UIColor(red: 0.9, green: 0.1, blue: 0.55, alpha: 1)
+        scrubber.progressTintColor = UIColor.white
         scrubber.trackTintColor = UIColor(white: 1, alpha: 0.25)
         scrubber.layer.cornerRadius = 3
         scrubber.clipsToBounds = true
@@ -926,7 +926,7 @@ final class NativeApplePlayerViewController: UIViewController {
         channelBadge.translatesAutoresizingMaskIntoConstraints = false
         channelBadge.font = .systemFont(ofSize: 26, weight: .bold)
         channelBadge.textColor = .white
-        channelBadge.backgroundColor = UIColor(red: 0.9, green: 0.1, blue: 0.55, alpha: 1)
+        channelBadge.backgroundColor = UIColor.white
         channelBadge.layer.cornerRadius = 6
         channelBadge.clipsToBounds = true
         channelBadge.setContentHuggingPriority(.required, for: .horizontal)
@@ -2530,8 +2530,7 @@ final class NativeApplePlayerViewController: UIViewController {
                 isFocused ? .white : UIColor(white: 1, alpha: 0)
             controlIcons[id]?.tintColor =
                 isFocused ? .black : (id == .record ? recordTint : UIColor(white: 1, alpha: 0.85))
-            container.transform =
-                isFocused ? CGAffineTransform(scaleX: 1.12, y: 1.12) : .identity
+            container.transform = .identity
         }
         let scrubFocused = focusedZone == .scrubber
         scrubber.transform =
@@ -3836,13 +3835,6 @@ extension NativeApplePlayerViewController {
             for: .primaryActionTriggered)
         topContainer.addSubview(close)
 
-        let airPlay = AVRoutePickerView()
-        airPlay.translatesAutoresizingMaskIntoConstraints = false
-        airPlay.tintColor = .white
-        airPlay.activeTintColor = themeAccent
-        airPlay.prioritizesVideoDevices = true
-        topContainer.addSubview(airPlay)
-
         NSLayoutConstraint.activate([
             close.trailingAnchor.constraint(equalTo: topContainer.trailingAnchor, constant: -90),
             close.topAnchor.constraint(
@@ -3850,10 +3842,7 @@ extension NativeApplePlayerViewController {
             close.widthAnchor.constraint(equalToConstant: 96),
             close.heightAnchor.constraint(equalToConstant: 96),
 
-            airPlay.trailingAnchor.constraint(equalTo: close.leadingAnchor, constant: -24),
-            airPlay.centerYAnchor.constraint(equalTo: close.centerYAnchor),
-            airPlay.widthAnchor.constraint(equalToConstant: 96),
-            airPlay.heightAnchor.constraint(equalToConstant: 96),
+
         ])
     }
 
@@ -4121,10 +4110,10 @@ private final class InfoPanelViewController: UIViewController, RemotePlayerNavig
 
         panel.translatesAutoresizingMaskIntoConstraints = false
         panel.backgroundColor = UIColor(white: 26.0 / 255.0, alpha: 0.9)
-        panel.layer.cornerRadius = 33
+        panel.layer.cornerRadius = 24
         panel.layer.borderWidth = Self.border
         panel.layer.borderColor =
-            UIColor(red: 142.0 / 255.0, green: 200.0 / 255.0, blue: 240.0 / 255.0, alpha: 0.33)
+            UIColor(white: 1, alpha: 0.16)
             .cgColor
         panel.clipsToBounds = true
         view.addSubview(panel)
@@ -4578,7 +4567,7 @@ private final class CastCell: UICollectionViewCell {
         coordinator.addCoordinatedAnimations {
             let focused = self.isFocused
             self.imageView.transform =
-                focused ? CGAffineTransform(scaleX: 1.1, y: 1.1) : .identity
+                .identity
             self.imageView.layer.borderWidth = focused ? 4 : 0
             self.imageView.layer.borderColor = UIColor.white.cgColor
         }

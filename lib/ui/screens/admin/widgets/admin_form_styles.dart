@@ -359,7 +359,7 @@ Widget adminSaveButton({
           ? const SizedBox(
               width: 20,
               height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: LoadingThrobber(),
             )
           : Text(label,
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),

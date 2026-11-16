@@ -188,18 +188,27 @@ void main() {
 
   test('a library scoped search never asks for people', () {
     fakeAsync((async) {
-      itemsFor('dune', [('b1', 'Book')]);
+      itemsFor('dune', [('m1', 'Movie')]);
       final vm = SearchViewModel(
         SearchRepository(client),
         client,
-        scopedParentId: 'books',
+        scopedParentId: 'movies',
       );
 
       vm.searchImmediate('dune');
       async.flushMicrotasks();
 
       expect(vm.state, SearchState.ready);
-      expect(groupTypes(vm), ['Book', 'AudioBook']);
+      expect(groupTypes(vm), [
+        'Movie',
+        'Series',
+        'Season',
+        'Episode',
+        'Video',
+        'Trailer',
+        'BoxSet',
+        'Folder',
+      ]);
       verifyNever(
         () => itemsApi.getPersons(
           searchTerm: any(named: 'searchTerm'),

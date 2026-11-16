@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:moonfin/util/platform_detection.dart';
+import 'package:moonfin/ui/tv/tv_modal.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:jellyfin_preference/jellyfin_preference.dart';
@@ -20,7 +23,10 @@ void main() {
     GetIt.instance.registerSingleton<UserPreferences>(UserPreferences(store));
   });
 
-  tearDown(() => GetIt.instance.reset());
+  tearDown(() async {
+    PlatformDetection.setTvMode(false);
+    await GetIt.instance.reset();
+  });
 
   Future<void> openSelector(WidgetTester tester, int trackCount) async {
     await tester.pumpWidget(
@@ -50,6 +56,45 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
   }
+
+  testWidgets(
+    'TV selected track owns attached focus and arrows move between rows',
+    (tester) async {
+      PlatformDetection.setTvMode(true);
+      await openSelector(tester, 3);
+      final panel = tester.getRect(find.byType(TvModalPanel));
+      final cancel = tester.getRect(
+        find.ancestor(
+          of: find.text('Cancel'),
+          matching: find.byType(TvMenuRow),
+        ),
+      );
+      expect(cancel.left - panel.left, closeTo(8, .01));
+      expect(panel.right - cancel.right, closeTo(8, .01));
+      expect(panel.bottom - cancel.bottom, closeTo(8, .01));
+      final row = find.ancestor(
+        of: find.text('Track 0'),
+        matching: find.byType(TvMenuRow),
+      );
+      final focus = tester.widget<Focus>(
+        find.descendant(of: row, matching: find.byType(Focus)).first,
+      );
+      expect(focus.focusNode?.hasFocus, isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+      final next = find.ancestor(
+        of: find.text('Track 1'),
+        matching: find.byType(TvMenuRow),
+      );
+      final nextFocus = tester.widget<Focus>(
+        find.descendant(of: next, matching: find.byType(Focus)).first,
+      );
+      expect(nextFocus.focusNode?.hasFocus, isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.byType(Dialog), findsNothing);
+    },
+  );
 
   testWidgets('a long list keeps the footer past its last track', (
     tester,

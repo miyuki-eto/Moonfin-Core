@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart';
 
 import '../../../../../data/models/aggregated_item.dart';
 import '../../../../../util/platform_detection.dart';
 import '../../../../widgets/focus/locked_focus_row.dart';
+import '../../../../widgets/media_card.dart';
 import '../shared/nouveau_spacing.dart';
 
 class NouveauDiscoveryRail extends StatelessWidget {
@@ -73,7 +75,9 @@ class NouveauDiscoveryRail extends StatelessWidget {
           children: [
             Text(
               title,
-              style: compact
+              style: PlatformDetection.isTV
+                  ? Tv26Style.sectionTitle
+                  : compact
                   ? textTheme.titleLarge?.copyWith(
                       fontSize: 22,
                       fontWeight: FontWeight.w700,
@@ -130,7 +134,9 @@ class NouveauDiscoveryRail extends StatelessWidget {
       );
     }
 
-    final cardSpacing = NouveauSpacing.railItemGap;
+    final cardSpacing = PlatformDetection.isTV
+        ? Tv26Style.railItemGap
+        : NouveauSpacing.railItemGap;
 
     final visibleItemCount = NouveauSpacing.discoveryVisibleItemCount;
 
@@ -167,6 +173,10 @@ class NouveauDiscoveryRail extends StatelessWidget {
           controller: controller,
           height: layout.cardHeight,
           itemExtent: layout.itemExtent,
+          viewportInsets: PlatformDetection.isTV
+              ? Tv26Style.railPadding
+              : EdgeInsets.zero,
+          paintOutset: PlatformDetection.isTV ? MediaCard.focusRingOutset : 0,
           clipBehavior: Clip.none,
           onLeftEdge: onLeftEdge,
           onVerticalNavigation: (isUp) {
@@ -247,9 +257,15 @@ class _DiscoveryPlaceholderCard extends StatelessWidget {
         width: width,
         height: posterHeight,
         decoration: BoxDecoration(
-          color: foreground.withValues(alpha: 0.035),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: foreground.withValues(alpha: 0.08)),
+          color: PlatformDetection.isTV
+              ? Tv26Style.cardPlaceholder
+              : foreground.withValues(alpha: 0.035),
+          borderRadius: BorderRadius.circular(
+            PlatformDetection.isTV ? Tv26Style.cardRadius : 16,
+          ),
+          border: PlatformDetection.isTV
+              ? Tv26Style.surfaceBorder
+              : Border.all(color: foreground.withValues(alpha: 0.08)),
         ),
       );
     }
@@ -264,9 +280,15 @@ class _DiscoveryPlaceholderCard extends StatelessWidget {
             width: width,
             height: posterHeight,
             decoration: BoxDecoration(
-              color: foreground.withValues(alpha: 0.035),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: foreground.withValues(alpha: 0.08)),
+              color: PlatformDetection.isTV
+                  ? Tv26Style.cardPlaceholder
+                  : foreground.withValues(alpha: 0.035),
+              borderRadius: BorderRadius.circular(
+                PlatformDetection.isTV ? Tv26Style.cardRadius : 16,
+              ),
+              border: PlatformDetection.isTV
+                  ? Tv26Style.surfaceBorder
+                  : Border.all(color: foreground.withValues(alpha: 0.08)),
             ),
           ),
 

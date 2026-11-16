@@ -106,6 +106,15 @@ class ScreensaverController {
   }
 
   bool handleKeyEvent(KeyEvent event) {
+    // The dismissal press belongs to the screensaver until its release, even
+    // after the overlay starts fading out. A held Select must not activate the
+    // movie underneath on repeat or key-up.
+    if (_consumedKeys.contains(event.logicalKey)) {
+      if (event is KeyUpEvent) {
+        _consumedKeys.remove(event.logicalKey);
+      }
+      return true;
+    }
     if (!visible.value) {
       if (event is KeyDownEvent) {
         notifyInteraction();
@@ -117,7 +126,7 @@ class ScreensaverController {
       dismiss();
       return true;
     }
-    return _consumedKeys.remove(event.logicalKey);
+    return false;
   }
 
   void _onPlayingChanged(bool playing) {

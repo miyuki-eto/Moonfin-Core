@@ -94,6 +94,10 @@ class NouveauChaptersSectionState extends State<NouveauChaptersSection> {
   }
 
   _ChaptersLayout _layoutFor(BuildContext context, double availableWidth) {
+    if (PlatformDetection.isTV) {
+      return const _ChaptersLayout(cardWidth: 244, cardGap: 23,
+        artworkHeight: 137.25, railHeight: 172, compact: false);
+    }
     final compact = _isCompactMobile(context);
 
     if (compact) {
@@ -153,6 +157,7 @@ class NouveauChaptersSectionState extends State<NouveauChaptersSection> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (!PlatformDetection.isTV) ...[
             Text(
               l10n.chapters,
               style: layout.compact
@@ -169,6 +174,7 @@ class NouveauChaptersSectionState extends State<NouveauChaptersSection> {
                   ? NouveauSpacing.mobileTitleToContent
                   : NouveauSpacing.titleToContent,
             ),
+            ],
 
             SizedBox(
               width: double.infinity,

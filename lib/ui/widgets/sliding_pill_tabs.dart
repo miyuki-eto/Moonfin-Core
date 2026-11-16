@@ -6,6 +6,9 @@ import 'package:moonfin_design/moonfin_design.dart';
 import '../../util/focus/dpad_keys.dart';
 import '../../util/idiom/glass_capability.dart';
 import 'focus/glass_focus_halo.dart';
+import '../../util/platform_detection.dart';
+import '../tv/tv26_button.dart';
+import '../tv/tv_segmented_surface.dart';
 
 /// Release velocity, in track widths per second, beyond which the pill flicks
 /// to the next segment even if it hasn't crossed the halfway point.
@@ -218,13 +221,16 @@ class _SlidingPillTabsState extends State<SlidingPillTabs> {
   void _onDragEnd(DragEndDetails details) {
     final track = _trackWidth;
     final centre = _dragLeft + _widths[_dragIndex] / 2;
-    final velocity =
-        track > 0 ? details.velocity.pixelsPerSecond.dx / track : 0.0;
+    final velocity = track > 0
+        ? details.velocity.pixelsPerSecond.dx / track
+        : 0.0;
     final current = _indexAt(centre);
     var target = current;
     if (velocity.abs() > _kFlickVelocity) {
-      final projected =
-          (centre + velocity * track * _kFlickProjection).clamp(0.0, track);
+      final projected = (centre + velocity * track * _kFlickProjection).clamp(
+        0.0,
+        track,
+      );
       target = _indexAt(projected);
       // A flick always moves at least one segment in its direction.
       final last = _widths.length - 1;
@@ -342,6 +348,42 @@ class _SlidingPillTabsState extends State<SlidingPillTabs> {
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformDetection.isTV) {
+      return Focus(
+        focusNode: _node,
+        onKeyEvent: _onKeyEvent,
+        onFocusChange: (has) => setState(() => _focused = has),
+        child: Align(
+          alignment: widget.alignment,
+          child: TvSegmentedSurface(
+            height: SlidingPillTabs.height,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var index = 0; index < widget.labels.length; index++)
+                    ExcludeFocus(
+                      child: Tv26Button(
+                        key: _segmentKeys[index],
+                        label: widget.labels[index],
+                        height:
+                            SlidingPillTabs.height - Tv26Style.segmentInset * 2,
+                        fontSize: 14,
+                        selected: index == widget.selectedIndex,
+                        onPressed: () {
+                          _node.requestFocus();
+                          widget.onChanged(index);
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     final glass = GlassCapability.glassLookActive;
     final jelly = glass && GlassSettings.usePackageRenderer;
     final onSurface = AppColorScheme.onSurface;
@@ -365,10 +407,7 @@ class _SlidingPillTabsState extends State<SlidingPillTabs> {
             behavior: HitTestBehavior.opaque,
             onTap: () => widget.onChanged(i),
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 15,
-                vertical: 7,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 7),
               child: Text(
                 widget.labels[i],
                 textAlign: TextAlign.center,
@@ -408,8 +447,9 @@ class _SlidingPillTabsState extends State<SlidingPillTabs> {
           Widget stack;
           if (hasThumb && jelly) {
             final targetLeft = _dragging ? _dragLeft : _leftOf(_restIndex);
-            final targetWidth =
-                _dragging ? _widths[_dragIndex] : _widths[_restIndex];
+            final targetWidth = _dragging
+                ? _widths[_dragIndex]
+                : _widths[_restIndex];
             stack = _jellyThumb(
               labels: labels,
               color: thumbColor,

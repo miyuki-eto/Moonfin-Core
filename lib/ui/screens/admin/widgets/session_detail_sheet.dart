@@ -249,7 +249,7 @@ class _SessionDetailSheetState extends ConsumerState<SessionDetailSheet> {
                         const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: LoadingThrobber(),
                         ),
                     ],
                   ),

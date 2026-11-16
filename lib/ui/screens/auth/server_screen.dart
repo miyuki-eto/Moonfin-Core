@@ -1,3 +1,5 @@
+import '../../widgets/startup_loading.dart';
+
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
@@ -58,7 +60,9 @@ class _ServerScreenState extends State<ServerScreen> {
       await _serverRepo.loadStoredServers();
       final server = _serverRepo.getServer(widget.serverId);
       if (server == null) {
-        if (mounted) context.go(Destinations.serverSelect);
+        if (mounted) {
+          context.go(Destinations.serverSelect);
+        }
         return;
       }
 
@@ -95,7 +99,9 @@ class _ServerScreenState extends State<ServerScreen> {
         return;
       }
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       for (final node in _userFocusNodes) {
         node.dispose();
       }
@@ -119,7 +125,9 @@ class _ServerScreenState extends State<ServerScreen> {
         });
       }
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _isLoading = false;
         _errorMessage = AppLocalizations.of(context).unableToConnectToServer;
@@ -148,7 +156,9 @@ class _ServerScreenState extends State<ServerScreen> {
   bool _handlingUserTap = false;
 
   Future<void> _onUserTap(_MergedUser user) async {
-    if (_handlingUserTap) return;
+    if (_handlingUserTap) {
+      return;
+    }
     _handlingUserTap = true;
     try {
       await _handleUserTap(user);
@@ -159,7 +169,9 @@ class _ServerScreenState extends State<ServerScreen> {
 
   Future<void> _handleUserTap(_MergedUser user) async {
     final server = _server;
-    if (server == null) return;
+    if (server == null) {
+      return;
+    }
 
     final guard = PinGuard.forAccount(
       store: GetIt.instance<PreferenceStore>(),
@@ -173,7 +185,9 @@ class _ServerScreenState extends State<ServerScreen> {
           .firstOrNull,
     );
     await guard.refresh();
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
     if (guard.pin.isPinEnabled) {
       final verified = await PinEntryDialog.show(
@@ -186,7 +200,9 @@ class _ServerScreenState extends State<ServerScreen> {
           }
         },
       );
-      if (!verified) return;
+      if (!verified) {
+        return;
+      }
     }
 
     final alwaysAuthenticate =
@@ -252,7 +268,9 @@ class _ServerScreenState extends State<ServerScreen> {
                 : const PinAccepted();
           },
         );
-        if (!verified) return;
+        if (!verified) {
+          return;
+        }
       } else {
         plexToken = await _plexRepo.homeUserToken(server.id, user.id);
       }
@@ -314,9 +332,10 @@ class _ServerScreenState extends State<ServerScreen> {
 
   Widget _buildContent(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: StartupLoading());
     }
 
+    finishWebStartupSplashAfterFrame(context);
     final server = _server;
     if (server == null) {
       return Scaffold(
@@ -332,34 +351,27 @@ class _ServerScreenState extends State<ServerScreen> {
 
     final l10n = AppLocalizations.of(context);
     return LoginScaffold(
-      header: Padding(
-        padding: const EdgeInsets.only(bottom: 24),
-        child: Image.asset('assets/images/logo_and_text.png', height: 80),
-      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             server.name,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Colors.white.withValues(alpha: 0.5),
-            ),
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: Colors.white.withValues(alpha: 0.5)),
           ),
           const SizedBox(height: 16),
           Text(
             l10n.whosWatching,
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            style: Theme.of(context).textTheme.headlineSmall
+                ?.copyWith(fontWeight: FontWeight.bold),
           ),
           if (server.loginDisclaimer != null &&
               server.loginDisclaimer!.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
               server.loginDisclaimer!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.7),
-              ),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: Colors.white.withValues(alpha: 0.7)),
               textAlign: TextAlign.center,
             ),
           ],
@@ -430,6 +442,7 @@ class _ServerScreenState extends State<ServerScreen> {
   }
 
   ButtonStyle _focusableButtonStyle(BuildContext context) {
+    if (PlatformDetection.isTV) return const ButtonStyle();
     final accent = Theme.of(context).colorScheme.primary;
     final focusBorder = ThemeRegistry.active.borders.focusBorder;
     return ButtonStyle(
@@ -514,7 +527,9 @@ class _ServerScreenState extends State<ServerScreen> {
     if (server.serverType == ServerType.plex) {
       return 'https://plex.tv/users/${user.id}/avatar';
     }
-    if (user.imageTag == null) return null;
+    if (user.imageTag == null) {
+      return null;
+    }
     return '${server.address}/Users/${user.id}/Images/Primary?tag=${user.imageTag}';
   }
 
@@ -560,14 +575,18 @@ class _ServerScreenState extends State<ServerScreen> {
                             shape: BoxShape.circle,
                             border: focused
                                 ? Border.all(
-                                    color: Theme.of(context).colorScheme.primary,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primary,
                                     width: 3,
                                   )
                                 : null,
                           ),
                           child: CircleAvatar(
                             radius: 36,
-                            backgroundColor: Colors.white.withValues(alpha: 0.1),
+                            backgroundColor: Colors.white.withValues(
+                              alpha: 0.1,
+                            ),
                             backgroundImage: imageUrl != null
                                 ? NetworkImage(
                                     imageUrl,
@@ -589,11 +608,12 @@ class _ServerScreenState extends State<ServerScreen> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: focused
-                                ? Theme.of(context).colorScheme.primary
-                                : null,
-                          ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: focused
+                                    ? Theme.of(context).colorScheme.primary
+                                    : null,
+                              ),
                         ),
                       ],
                     ),

@@ -25,6 +25,7 @@ class WebYouTubeTrailer extends StatefulWidget {
   final bool suspended;
   final VoidCallback? onPlaybackStarted;
   final VoidCallback? onCompleted;
+  final ValueChanged<bool>? onPausedChanged;
   final VoidCallback? onAutoplayFailed;
   final VoidCallback? onEmbeddedUnavailable;
   final Duration autoplayTimeout;
@@ -40,16 +41,17 @@ class WebYouTubeTrailer extends StatefulWidget {
     this.suspended = false,
     this.onPlaybackStarted,
     this.onCompleted,
+    this.onPausedChanged,
     this.onAutoplayFailed,
     this.onEmbeddedUnavailable,
     this.autoplayTimeout = const Duration(seconds: 3),
   });
 
   @override
-  State<WebYouTubeTrailer> createState() => _WebYouTubeTrailerState();
+  State<WebYouTubeTrailer> createState() => WebYouTubeTrailerState();
 }
 
-class _WebYouTubeTrailerState extends State<WebYouTubeTrailer> {
+class WebYouTubeTrailerState extends State<WebYouTubeTrailer> {
   static const _jsChannelName = 'MoonfinYt';
   static const _bridgeName = '__moonfinYtBridge';
   static const _origin = 'https://www.youtube-nocookie.com';
@@ -69,6 +71,14 @@ class _WebYouTubeTrailerState extends State<WebYouTubeTrailer> {
   bool _autoplayFailureReported = false;
   bool _embeddedUnavailableReported = false;
   bool _startupChromeMaskVisible = false;
+
+  void setPaused(bool paused) {
+    unawaited(_controller?.runJavaScript('window.$_bridgeName?.setPaused($paused);'));
+  }
+
+  void seekRelative(Duration offset) {
+    unawaited(_controller?.runJavaScript('window.$_bridgeName?.seekRelative(${offset.inMilliseconds / 1000});'));
+  }
 
   _EmbeddedPlayerMode get _playerMode {
     // Any platform with a system WebView renders through our own HTML; those
@@ -308,6 +318,9 @@ class _WebYouTubeTrailerState extends State<WebYouTubeTrailer> {
 
       case 'StateChange':
         final state = _parseInt(data);
+        if (state == 1 || state == 2 || state == 0) {
+          widget.onPausedChanged?.call(state != 1);
+        }
         // 1 == YT.PlayerState.PLAYING, 0 == YT.PlayerState.ENDED
         if (state == 1) {
           _reportPlaybackStarted();
@@ -617,6 +630,8 @@ class _WebYouTubeTrailerState extends State<WebYouTubeTrailer> {
         'translate(' + tx + 'px, ' + ty + 'px) scale(' + scale + ')';
   };
 
+  let seekTarget = null;
+  let seekTargetTimer = null;
   window[bridgeName] = {
     loadVideoById: function(videoId) {
       if (!videoId) {
@@ -631,6 +646,16 @@ class _WebYouTubeTrailerState extends State<WebYouTubeTrailer> {
     setMuted: function(muted) {
       playerVars.mute = muted ? 1 : 0;
       applyMute();
+    },
+    setPaused: function(paused) {
+      if (player) paused ? player.pauseVideo() : player.playVideo();
+    },
+    seekRelative: function(seconds) {
+      if (!player) return;
+      seekTarget = Math.max(0, (seekTarget ?? player.getCurrentTime()) + seconds);
+      clearTimeout(seekTargetTimer);
+      seekTargetTimer = setTimeout(() => { seekTarget = null; }, 1000);
+      player.seekTo(seekTarget, true);
     },
     stop: function() {
       if (player) {

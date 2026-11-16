@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:get_it/get_it.dart';
@@ -1407,7 +1408,7 @@ class _GameEmulatorScreenState extends State<GameEmulatorScreen>
                 ),
               )
             else if (_playerUrl == null)
-              const Center(child: CircularProgressIndicator())
+              const Center(child: LoadingThrobber())
             else
               // Inset the game surface from the side notches so EmulatorJS's
               // on-screen controls aren't eaten by the cutout in landscape,

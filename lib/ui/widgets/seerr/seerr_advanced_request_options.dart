@@ -263,7 +263,7 @@ class _SeerrAdvancedRequestOptionsState
             if (controller.loading)
               const Padding(
                 padding: EdgeInsets.all(16),
-                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                child: Center(child: LoadingThrobber()),
               )
             else if (controller.servers != null &&
                 controller.servers!.isNotEmpty) ...[

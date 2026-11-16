@@ -110,13 +110,42 @@ void main() {
       final upper = KeyboardLayouts.upperFor(KeyboardLayoutVariant.azerty);
       expect(upper[0].first, 'A');
       expect(upper[1].last, 'M');
-      final qwertyUpper = KeyboardLayouts.upperFor(KeyboardLayoutVariant.qwerty);
+      final qwertyUpper = KeyboardLayouts.upperFor(
+        KeyboardLayoutVariant.qwerty,
+      );
       expect(qwertyUpper[1].last, '"');
       expect(qwertyUpper[2], contains('BACKSPACE'));
     });
   });
 
   group('CustomKeyboard widget', () {
+    testWidgets('held remote Select opens accents without repeat events', (
+      tester,
+    ) async {
+      final controller = KeyboardController()..show();
+      await tester.pumpWidget(
+        _keyboardApp(controller, style: KeyboardStyle.docked),
+      );
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.enter);
+      await tester.pump(const Duration(milliseconds: 550));
+      expect(find.text('á'), findsOneWidget);
+      expect(controller.text, '');
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(
+        find.text('á'),
+        findsOneWidget,
+        reason: 'Opening release cannot select an accent',
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(controller.text, 'a');
+      expect(find.text('á'), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
     testWidgets('caret keys let a character land mid-word', (tester) async {
       final controller = KeyboardController()..show();
       await tester.pumpWidget(_keyboardApp(controller));
@@ -157,8 +186,9 @@ void main() {
       expect(controller.text, 'https://demo.moonfin.org');
     });
 
-    testWidgets('long pressing backspace clears the whole field',
-        (tester) async {
+    testWidgets('long pressing backspace clears the whole field', (
+      tester,
+    ) async {
       final controller = KeyboardController()
         ..setText('a long server address')
         ..show();
@@ -204,8 +234,9 @@ void main() {
       expect(find.text('m'), findsOneWidget);
     });
 
-    testWidgets('username field offers remembered names as chips',
-        (tester) async {
+    testWidgets('username field offers remembered names as chips', (
+      tester,
+    ) async {
       final controller = KeyboardController()..show();
       await tester.pumpWidget(
         _keyboardApp(
@@ -224,8 +255,9 @@ void main() {
       expect(controller.isVisible, isFalse);
     });
 
-    testWidgets('url field lists recent servers before the static helpers',
-        (tester) async {
+    testWidgets('url field lists recent servers before the static helpers', (
+      tester,
+    ) async {
       final controller = KeyboardController()..show();
       await tester.pumpWidget(
         _keyboardApp(
@@ -257,11 +289,15 @@ void main() {
           expect(rows[2], isNot(contains('SHIFT')));
         }
       }
-      expect(KeyboardLayouts.dockedNumeric.map((row) => row.length),
-          everyElement(12));
       expect(
-        KeyboardLayouts.dockedFor(KeyboardLayoutVariant.qwerty, shifted: true)
-            [1][10],
+        KeyboardLayouts.dockedNumeric.map((row) => row.length),
+        everyElement(12),
+      );
+      expect(
+        KeyboardLayouts.dockedFor(
+          KeyboardLayoutVariant.qwerty,
+          shifted: true,
+        )[1][10],
         '"',
       );
     });
@@ -333,8 +369,9 @@ void main() {
       expect(controller.text, '-');
     });
 
-    testWidgets('echo shows a ghost of the matching suggestion',
-        (tester) async {
+    testWidgets('echo shows a ghost of the matching suggestion', (
+      tester,
+    ) async {
       final controller = KeyboardController()
         ..setText('ali')
         ..show();
@@ -348,9 +385,9 @@ void main() {
       );
       await tester.pump();
 
-      final echo = tester.widgetList<RichText>(find.byType(RichText)).firstWhere(
-        (text) => text.text.toPlainText().startsWith('ali'),
-      );
+      final echo = tester
+          .widgetList<RichText>(find.byType(RichText))
+          .firstWhere((text) => text.text.toPlainText().startsWith('ali'));
       expect(echo.text.toPlainText(), contains('ce'));
     });
 
@@ -367,9 +404,11 @@ void main() {
       );
       await tester.pump();
 
-      final echo = tester.widgetList<RichText>(find.byType(RichText)).firstWhere(
-        (text) => text.text.toPlainText().startsWith('ht\u{FFFC}'),
-      );
+      final echo = tester
+          .widgetList<RichText>(find.byType(RichText))
+          .firstWhere(
+            (text) => text.text.toPlainText().startsWith('ht\u{FFFC}'),
+          );
       expect(echo.text.toPlainText(), 'ht\u{FFFC}');
     });
   });
@@ -404,7 +443,10 @@ void main() {
     });
     tearDown(() => CustomKeyboard.onStylePicked = null);
 
-    Future<void> press(WidgetTester tester, List<LogicalKeyboardKey> keys) async {
+    Future<void> press(
+      WidgetTester tester,
+      List<LogicalKeyboardKey> keys,
+    ) async {
       for (final key in keys) {
         await tester.sendKeyEvent(key);
         await tester.pump();
@@ -419,8 +461,9 @@ void main() {
       LogicalKeyboardKey.arrowDown,
     ];
 
-    testWidgets('the keyboard key picks a style and switches to it',
-        (tester) async {
+    testWidgets('the keyboard key picks a style and switches to it', (
+      tester,
+    ) async {
       final controller = KeyboardController()..show();
       await tester.pumpWidget(
         _keyboardApp(controller, style: KeyboardStyle.docked),
@@ -442,8 +485,9 @@ void main() {
       expect(find.text('space'), findsOneWidget);
     });
 
-    testWidgets('Native hands the field to the system keyboard',
-        (tester) async {
+    testWidgets('Native hands the field to the system keyboard', (
+      tester,
+    ) async {
       var requested = false;
       final controller = KeyboardController()
         ..onRequestSystemKeyboard = (() => requested = true)
@@ -482,8 +526,9 @@ void main() {
       expect(picked, isEmpty);
     });
 
-    testWidgets('one Back closes only the picker beside the app handler',
-        (tester) async {
+    testWidgets('one Back closes only the picker beside the app handler', (
+      tester,
+    ) async {
       final controller = KeyboardController()..show();
       // Stands in for the app's own handler, which sees each key first.
       bool appBack(KeyEvent event) {
@@ -511,8 +556,9 @@ void main() {
       expect(controller.isVisible, isFalse);
     });
 
-    testWidgets('Classic opens the picker from its keyboard key',
-        (tester) async {
+    testWidgets('Classic opens the picker from its keyboard key', (
+      tester,
+    ) async {
       final controller = KeyboardController()..show();
       await tester.pumpWidget(_keyboardApp(controller));
       await tester.pump();

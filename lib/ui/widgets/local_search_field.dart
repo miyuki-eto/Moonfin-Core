@@ -84,7 +84,9 @@ class _LocalSearchFieldState extends State<LocalSearchField> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final effectiveHint = widget.hint ?? l10n.searchThisLibrary;
-    final focusColor = Color(_prefs.get(UserPreferences.focusColor).colorValue);
+    final focusColor = PlatformDetection.isTV
+        ? Tv26Style.foreground
+        : Color(_prefs.get(UserPreferences.focusColor).colorValue);
 
     final fillColor = AppColorScheme.surface.withValues(alpha: 0.72);
     final foreground = AppColorScheme.onSurface;

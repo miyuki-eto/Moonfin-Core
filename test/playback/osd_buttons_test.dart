@@ -25,10 +25,8 @@ void main() {
 
   test('offers every button a TV can draw and no others', () async {
     expect(visibleOsdButtonIds(prefs), [
-      OsdButton.syncPlay.id,
       OsdButton.favorite.id,
       OsdButton.speed.id,
-      OsdButton.chapters.id,
       OsdButton.episodes.id,
       OsdButton.subtitles.id,
       OsdButton.audio.id,
@@ -62,8 +60,6 @@ void main() {
 
       expect(visibleOsdButtonIds(prefs), [
         // Never placed and declared before anything that was, so they stay put.
-        OsdButton.syncPlay.id,
-        OsdButton.chapters.id,
         OsdButton.episodes.id,
         OsdButton.info.id,
         OsdButton.subtitles.id,

@@ -1,3 +1,5 @@
+import '../../config/app_features.dart';
+
 import 'package:flutter/widgets.dart';
 import 'package:get_it/get_it.dart';
 import 'package:server_core/server_core.dart';
@@ -40,8 +42,14 @@ class MediaBarViewModel extends ChangeNotifier {
   PluginSyncService? _sync;
   bool _lastPluginAvailable = false;
 
-  List<MediaBarSlideItem> get items =>
-      _state is MediaBarReady ? (_state as MediaBarReady).items : const [];
+  List<MediaBarSlideItem> get items => _state is MediaBarReady
+      ? (_state as MediaBarReady).items
+            .where(
+              (item) =>
+                  !item.isExternal && AppFeatures.allowsItem(item.itemType),
+            )
+            .toList()
+      : const [];
 
   Map<String, double> ratingsFor(String itemId) => _ratings[itemId] ?? const {};
 
@@ -50,13 +58,23 @@ class MediaBarViewModel extends ChangeNotifier {
       items.any((item) => item.itemId == itemId && item.isExternal);
 
   Future<void> ensureRatings(String itemId) async {
-    if (itemId.isEmpty) return;
-    if (!_prefs.get(UserPreferences.mediaBarEnableAdditionalRatings)) return;
-    if (_ratings.containsKey(itemId)) return;
-    if (!_ratingsInFlight.add(itemId)) return;
+    if (itemId.isEmpty) {
+      return;
+    }
+    if (!_prefs.get(UserPreferences.mediaBarEnableAdditionalRatings)) {
+      return;
+    }
+    if (_ratings.containsKey(itemId)) {
+      return;
+    }
+    if (!_ratingsInFlight.add(itemId)) {
+      return;
+    }
     try {
       final item = items.where((i) => i.itemId == itemId).firstOrNull;
-      if (item == null) return;
+      if (item == null) {
+        return;
+      }
       await _loadItemRatings(item);
       if (_ratings.containsKey(itemId)) {
         notifyListeners();
@@ -70,14 +88,24 @@ class MediaBarViewModel extends ChangeNotifier {
       _bookshelfDetails[itemId];
 
   Future<void> ensureBookshelfDetail(String itemId) async {
-    if (itemId.isEmpty) return;
-    if (_bookshelfDetails.containsKey(itemId)) return;
-    if (_isExternal(itemId)) return;
-    if (!_bookshelfDetailInFlight.add(itemId)) return;
+    if (itemId.isEmpty) {
+      return;
+    }
+    if (_bookshelfDetails.containsKey(itemId)) {
+      return;
+    }
+    if (_isExternal(itemId)) {
+      return;
+    }
+    if (!_bookshelfDetailInFlight.add(itemId)) {
+      return;
+    }
 
     try {
       final raw = await _client.itemsApi.getItem(itemId);
-      if (raw.isEmpty) return;
+      if (raw.isEmpty) {
+        return;
+      }
       final aggregated = AggregatedItem(
         id: itemId,
         serverId: raw['ServerId']?.toString() ?? '',
@@ -95,14 +123,24 @@ class MediaBarViewModel extends ChangeNotifier {
   GalleryDetail? galleryDetailFor(String itemId) => _galleryDetails[itemId];
 
   Future<void> ensureGalleryDetail(String itemId) async {
-    if (itemId.isEmpty) return;
-    if (_galleryDetails.containsKey(itemId)) return;
-    if (_isExternal(itemId)) return;
-    if (!_galleryDetailInFlight.add(itemId)) return;
+    if (itemId.isEmpty) {
+      return;
+    }
+    if (_galleryDetails.containsKey(itemId)) {
+      return;
+    }
+    if (_isExternal(itemId)) {
+      return;
+    }
+    if (!_galleryDetailInFlight.add(itemId)) {
+      return;
+    }
 
     try {
       final raw = await _client.itemsApi.getItem(itemId);
-      if (raw.isEmpty) return;
+      if (raw.isEmpty) {
+        return;
+      }
       final aggregated = AggregatedItem(
         id: itemId,
         serverId: raw['ServerId']?.toString() ?? '',
@@ -140,7 +178,9 @@ class MediaBarViewModel extends ChangeNotifier {
   // lists need Moonbase, so they get another go once it does.
   void _onPluginChanged() {
     final available = _sync!.pluginAvailable;
-    if (available == _lastPluginAvailable) return;
+    if (available == _lastPluginAvailable) {
+      return;
+    }
     _lastPluginAvailable = available;
     if (available &&
         _prefs.get(UserPreferences.mediaBarExternalLists).isNotEmpty) {
@@ -189,7 +229,9 @@ class MediaBarViewModel extends ChangeNotifier {
     bool preserveCurrent = true,
     bool force = false,
   }) async {
-    if (_state is! MediaBarLoading && !force) return;
+    if (_state is! MediaBarLoading && !force) {
+      return;
+    }
     if (_isLoading) {
       // A forced load asks for different titles than the one running, so it
       // runs once that one is done rather than being dropped.
@@ -214,7 +256,9 @@ class MediaBarViewModel extends ChangeNotifier {
 
     try {
       final nextState = await _repository.loadItems();
-      if (loadGeneration != _loadGeneration) return;
+      if (loadGeneration != _loadGeneration) {
+        return;
+      }
 
       if (nextState is MediaBarError &&
           previousReady != null &&
@@ -239,11 +283,15 @@ class MediaBarViewModel extends ChangeNotifier {
   }
 
   Future<void> _loadRatings(List<MediaBarSlideItem> items) async {
-    if (!_prefs.get(UserPreferences.mediaBarEnableAdditionalRatings)) return;
+    if (!_prefs.get(UserPreferences.mediaBarEnableAdditionalRatings)) {
+      return;
+    }
 
     await Future.wait(
       items.map((item) async {
-        if (item.tmdbId == null) return;
+        if (item.tmdbId == null) {
+          return;
+        }
         await _loadItemRatings(item);
         if (_ratings.containsKey(item.itemId)) {
           notifyListeners();
@@ -259,7 +307,9 @@ class MediaBarViewModel extends ChangeNotifier {
         serverId: null,
         knownTmdbId: item.tmdbId,
       );
-      if (tmdbId == null) return;
+      if (tmdbId == null) {
+        return;
+      }
       final result = await _mdbListRepository.getRatings(
         tmdbId: tmdbId,
         mediaType: item.itemType,

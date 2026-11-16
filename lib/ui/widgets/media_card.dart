@@ -9,9 +9,9 @@ import '../../preference/preference_constants.dart';
 import '../../util/platform_detection.dart';
 import '../../util/tv_ui_scale.dart';
 import '../../util/focus/dpad_keys.dart';
+import '../../util/focus/input_mode_tracker.dart';
 import '../../util/focus/key_event_utils.dart';
 import '../../util/item_watch_state.dart';
-import '../../util/focus/scroll_utils.dart';
 import 'anime_marker_badge.dart';
 import 'bounded_network_image.dart';
 import 'focus/glass_focus_halo.dart';
@@ -20,6 +20,7 @@ import 'live_tv/incomplete_recording.dart';
 import 'media_badge.dart';
 import 'seerr/seerr_status_dot.dart';
 import '../mixins/focus_state_mixin.dart';
+import '../tv/tv_card_focus_frame.dart';
 
 class MediaCard extends StatefulWidget {
   /// How much a focused card grows. A card with a title grows from the bottom
@@ -28,10 +29,8 @@ class MediaCard extends StatefulWidget {
   /// A layout that packs cards against a clip boundary or each other has to
   /// leave that much room or the focused card loses its edges.
   ///
-  /// A television gets the larger pop because it's read from across a room.
-  /// Every television lays out on the same canvas, so which television it is
-  /// doesn't come into it.
-  static double get focusScale => PlatformDetection.isTV ? 1.12 : 1.05;
+  /// Keep artwork steady; the focus ring carries the selection.
+  static double get focusScale => Tv26Style.cardFocusScale;
 
   /// How much room to leave beside a card of [extent] so a focused one keeps
   /// its edges.
@@ -52,7 +51,9 @@ class MediaCard extends StatefulWidget {
 
   /// How far a focused card's ring reaches past its artwork. A grid that clips
   /// at its top edge needs this on top of [focusHeadroom].
-  static double get focusRingOutset => PlatformDetection.useMobileUi
+  static double get focusRingOutset => PlatformDetection.isTV
+      ? Tv26Style.focusOutset
+      : PlatformDetection.useMobileUi
       ? 0
       : _CardImage._focusRingInset * focusScale;
 
@@ -93,7 +94,9 @@ class MediaCard extends StatefulWidget {
       scaler,
       base.copyWith(fontSize: _titleFontSize(base)),
     );
-    if (hasSubtitle) height += _lineHeight(scaler, base);
+    if (hasSubtitle) {
+      height += _lineHeight(scaler, base);
+    }
     return height;
   }
 
@@ -390,10 +393,12 @@ class _MediaCardState extends State<MediaCard> with FocusStateMixin {
       color:
           widget.titleColor ??
           (isNeon ? AppColorScheme.accent : AppColorScheme.onSurface),
-      fontWeight: classic ? FontWeight.w600 : FontWeight.bold,
-      fontSize: classic
-          ? tvPx(22)
-          : MediaCard._titleFontSize(baseTextStyle),
+      fontWeight: PlatformDetection.isTV
+          ? FontWeight.w500
+          : classic
+          ? FontWeight.w600
+          : FontWeight.bold,
+      fontSize: classic ? tvPx(22) : MediaCard._titleFontSize(baseTextStyle),
       height: classic ? 30 / 22 : null,
       shadows: const [Shadow(blurRadius: 4, color: Colors.black54)],
     );
@@ -414,10 +419,13 @@ class _MediaCardState extends State<MediaCard> with FocusStateMixin {
     final labelGap = classic ? tvPx(16) : MediaCard._labelGap;
     final externallyDriven = widget.externalIsFocused != null;
     final hasNodeFocus = widget.focusNode?.hasFocus ?? false;
+    final liveHover =
+        hovered &&
+        (!PlatformDetection.isTV || InputModeTracker.pointerIsLive(context));
     final effectiveFocused = externallyDriven
-        ? (widget.externalIsFocused! || hovered)
+        ? (widget.externalIsFocused! || liveHover)
         : (focused || hasNodeFocus);
-    final showMarquee = hovered || effectiveFocused;
+    final showMarquee = liveHover || effectiveFocused;
     final cardActive =
         widget.cardFocusExpansion &&
         (externallyDriven ? effectiveFocused : showFocusBorder);
@@ -447,39 +455,44 @@ class _MediaCardState extends State<MediaCard> with FocusStateMixin {
                 _withTvParallax(
                   active: cardActive,
                   child: AnimatedScale(
-                    scale: cardActive ? MediaCard.focusScale : 1.0,
-                    duration: navigationAnimationDuration,
-                    curve: PlatformDetection.isAppleTV
-                        ? Curves.easeOutCubic
-                        : Curves.linear,
+                    scale: cardActive && !PlatformDetection.isTV
+                        ? MediaCard.focusScale
+                        : 1.0,
+                    duration: MediaQuery.disableAnimationsOf(context)
+                        ? Duration.zero
+                        : AppMotion.fast,
+                    curve: AppMotion.ease,
                     alignment: widget.showLabel && widget.title != null
                         ? Alignment.bottomCenter
                         : Alignment.center,
-                    child: _CardImage(
-                      imageUrl: widget.imageUrl,
-                      title: widget.title,
-                      aspectRatio: widget.aspectRatio,
-                      isFavorite: widget.isFavorite,
-                      isPlayed: widget.isPlayed,
-                      unplayedCount: widget.unplayedCount,
-                      playedPercentage: widget.playedPercentage,
-                      watchedBehavior: widget.watchedBehavior,
-                      focused: effectiveFocused,
-                      hovered: hovered,
-                      focusColor: widget.focusColor,
-                      suppressFocusBorder: widget.suppressImageFocusBorder,
-                      suppressFocusGlow: widget.suppressFocusGlow,
-                      isCircular: widget.itemType == 'Person',
-                      itemType: widget.itemType,
-                      seerrMediaType: widget.seerrMediaType,
-                      seerrStatus: widget.seerrStatus,
-                      imageOverlays: widget.imageOverlays,
-                      imageUnderlays: widget.imageUnderlays,
-                      imageSourceAspectRatio: widget.imageSourceAspectRatio,
-                      overlayOccupiesTopLeft: widget.overlayOccupiesTopLeft,
-                      animeMarkerItemId: widget.animeMarkerItemId,
-                      recordingItemId: widget.recordingItemId,
-                      isGenreFallback: widget.isGenreFallback,
+                    child: ExcludeSemantics(
+                      excluding: !widget.showLabel,
+                      child: _CardImage(
+                        imageUrl: widget.imageUrl,
+                        title: widget.title,
+                        aspectRatio: widget.aspectRatio,
+                        isFavorite: widget.isFavorite,
+                        isPlayed: widget.isPlayed,
+                        unplayedCount: widget.unplayedCount,
+                        playedPercentage: widget.playedPercentage,
+                        watchedBehavior: widget.watchedBehavior,
+                        focused: effectiveFocused,
+                        hovered: liveHover,
+                        focusColor: widget.focusColor,
+                        suppressFocusBorder: widget.suppressImageFocusBorder,
+                        suppressFocusGlow: widget.suppressFocusGlow,
+                        isCircular: widget.itemType == 'Person',
+                        itemType: widget.itemType,
+                        seerrMediaType: widget.seerrMediaType,
+                        seerrStatus: widget.seerrStatus,
+                        imageOverlays: widget.imageOverlays,
+                        imageUnderlays: widget.imageUnderlays,
+                        imageSourceAspectRatio: widget.imageSourceAspectRatio,
+                        overlayOccupiesTopLeft: widget.overlayOccupiesTopLeft,
+                        animeMarkerItemId: widget.animeMarkerItemId,
+                        recordingItemId: widget.recordingItemId,
+                        isGenreFallback: widget.isGenreFallback,
+                      ),
                     ),
                   ),
                 ),
@@ -507,10 +520,7 @@ class _MediaCardState extends State<MediaCard> with FocusStateMixin {
                       height: titleLineHeight,
                       width: cardWidth,
                       child: showMarquee
-                          ? MarqueeText(
-                              text: widget.title!,
-                              style: titleStyle,
-                            )
+                          ? MarqueeText(text: widget.title!, style: titleStyle)
                           : Text(
                               widget.title!,
                               maxLines: 1,
@@ -592,11 +602,24 @@ class _MediaCardState extends State<MediaCard> with FocusStateMixin {
             ),
     );
 
-    return SizedBox(width: widget.width, child: mouseRegion);
+    return SizedBox(
+      width: widget.width,
+      child: widget.showLabel
+          ? mouseRegion
+          : Semantics(
+              label: [
+                widget.title,
+                widget.subtitle,
+              ].whereType<String>().where((text) => text.isNotEmpty).join(' '),
+              child: mouseRegion,
+            ),
+    );
   }
 
   Widget _withTvParallax({required bool active, required Widget child}) {
-    if (!PlatformDetection.isAppleTV) return child;
+    if (!PlatformDetection.isAppleTV) {
+      return child;
+    }
     return _TvFocusParallax(active: active, child: child);
   }
 }
@@ -624,7 +647,9 @@ class _TvFocusParallaxState extends State<_TvFocusParallax>
   @override
   void initState() {
     super.initState();
-    if (widget.active) _attach();
+    if (widget.active) {
+      _attach();
+    }
   }
 
   @override
@@ -646,7 +671,9 @@ class _TvFocusParallaxState extends State<_TvFocusParallax>
   }
 
   void _attach() {
-    if (_listening) return;
+    if (_listening) {
+      return;
+    }
     _listening = true;
     TvRemoteController.instance.addRawListener(_onTouch);
   }
@@ -661,7 +688,9 @@ class _TvFocusParallaxState extends State<_TvFocusParallax>
   }
 
   void _onTouch(TvRemoteTouchEvent event) {
-    if (!widget.active) return;
+    if (!widget.active) {
+      return;
+    }
     switch (event.phase) {
       case TvRemoteTouchPhase.started:
       case TvRemoteTouchPhase.move:
@@ -679,7 +708,9 @@ class _TvFocusParallaxState extends State<_TvFocusParallax>
   }
 
   void _startTicker() {
-    if (!_ticker.isActive) _ticker.start();
+    if (!_ticker.isActive) {
+      _ticker.start();
+    }
   }
 
   void _onTick(Duration _) {
@@ -698,7 +729,9 @@ class _TvFocusParallaxState extends State<_TvFocusParallax>
       valueListenable: _tilt,
       child: widget.child,
       builder: (context, tilt, child) {
-        if (tilt == Offset.zero) return child!;
+        if (tilt == Offset.zero) {
+          return child!;
+        }
         return Transform(
           alignment: Alignment.center,
           transform: Matrix4.identity()
@@ -775,218 +808,221 @@ class _CardImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final radius = isCircular ? 999.0 : 8.0;
     final showBorder = !suppressFocusBorder && (focused || hovered);
-    final borderColor =
-        focusColor ??
-        (GlassFocusHalo.appleStyleActive
-            ? Colors.white
-            : Theme.of(context).colorScheme.primary);
+    final borderColor = PlatformDetection.isTV
+        ? Tv26Style.foreground
+        : focusColor ??
+              (GlassFocusHalo.appleStyleActive
+                  ? Colors.white
+                  : Theme.of(context).colorScheme.primary);
     final borders = ThemeRegistry.active.borders;
+    final cardRadius = PlatformDetection.isTV
+        ? BorderRadius.circular(Tv26Style.cardRadius)
+        : borders.cardRadius;
     final showGlow =
         showBorder && !suppressFocusGlow && borders.focusGlow.isNotEmpty;
 
-    return AspectRatio(
-      aspectRatio: aspectRatio,
-      child: Stack(
-        fit: StackFit.expand,
-        clipBehavior: Clip.none,
-        children: [
-          if (showGlow)
-            Positioned(
-              top: -_focusRingInset,
-              bottom: -_focusRingInset,
-              left: -_focusRingInset,
-              right: -_focusRingInset,
-              child: IgnorePointer(
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: isCircular
-                        ? AppRadius.circular(radius + _focusRingInset)
-                        : borders.cardRadius +
-                              AppRadius.circular(_focusRingInset),
-                    boxShadow: borders.focusGlow,
-                  ),
+    final artwork = Stack(
+      fit: StackFit.expand,
+      clipBehavior: Clip.none,
+      children: [
+        if (showGlow && !PlatformDetection.isTV)
+          Positioned(
+            top: -_focusRingInset,
+            bottom: -_focusRingInset,
+            left: -_focusRingInset,
+            right: -_focusRingInset,
+            child: IgnorePointer(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: isCircular
+                      ? AppRadius.circular(radius + _focusRingInset)
+                      : cardRadius + AppRadius.circular(_focusRingInset),
+                  boxShadow: borders.focusGlow,
                 ),
               ),
             ),
-          ClipRRect(
-            borderRadius: isCircular
-                ? AppRadius.circular(radius)
-                : borders.cardRadius,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Container(
-                  color: (itemType == 'Network' || itemType == 'Studio')
-                      ? Theme.of(context).colorScheme.surfaceContainerHighest
-                      : (imageUrl != null
-                            ? Theme.of(context)
-                                  .colorScheme
-                                  .surfaceContainerHighest
-                                  .withValues(alpha: 0.2)
-                            : Colors.transparent),
-                  padding: (itemType == 'Network' || itemType == 'Studio')
-                      ? const EdgeInsets.all(8.0)
-                      : EdgeInsets.zero,
-                  child: imageUrl != null
-                      ? Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            BoundedNetworkImage(
-                              imageUrl: imageUrl!,
-                              fit:
-                                  (itemType == 'Network' ||
-                                      itemType == 'Studio')
-                                  ? BoxFit.contain
-                                  : BoxFit.cover,
-                              fadeInDuration: Duration.zero,
-                              maxWidth: MediaCard.decodeMaxWidthFor(
-                                imageSourceAspectRatio ?? aspectRatio,
-                              ),
-                              sourceAspectRatio: imageSourceAspectRatio,
-                              errorBuilder: (_, _, _) => _PlaceholderIcon(
-                                itemType: itemType,
-                                title: title,
-                              ),
+          ),
+        ClipRRect(
+          borderRadius: isCircular ? AppRadius.circular(radius) : cardRadius,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Container(
+                color: (itemType == 'Network' || itemType == 'Studio')
+                    ? Theme.of(context).colorScheme.surfaceContainerHighest
+                    : (imageUrl != null
+                          ? Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest
+                                .withValues(alpha: 0.2)
+                          : Colors.transparent),
+                padding: (itemType == 'Network' || itemType == 'Studio')
+                    ? const EdgeInsets.all(8.0)
+                    : EdgeInsets.zero,
+                child: imageUrl != null
+                    ? Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          BoundedNetworkImage(
+                            imageUrl: imageUrl!,
+                            fit: (itemType == 'Network' || itemType == 'Studio')
+                                ? BoxFit.contain
+                                : BoxFit.cover,
+                            fadeInDuration: Duration.zero,
+                            maxWidth: MediaCard.decodeMaxWidthFor(
+                              imageSourceAspectRatio ?? aspectRatio,
                             ),
-                            ...imageUnderlays,
-                            if (isGenreFallback) ...[
-                              Container(
-                                color: Colors.black.withValues(alpha: 0.45),
-                              ),
-                              if (title != null && title!.isNotEmpty)
-                                LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    final fontSize =
-                                        MediaCard.genreLabelFontSize(
-                                          constraints.maxWidth,
-                                        );
-                                    return Center(
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(12.0),
-                                        child: FittedBox(
-                                          fit: BoxFit.scaleDown,
-                                          child: Text(
-                                            title!.toUpperCase(),
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(
-                                              fontSize: fontSize,
-                                              fontWeight: FontWeight.bold,
-                                              letterSpacing:
-                                                  MediaCard.genreLabelLetterSpacing(
-                                                    fontSize,
-                                                  ),
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .onSurface
-                                                  .withValues(alpha: 0.9),
-                                            ),
+                            sourceAspectRatio: imageSourceAspectRatio,
+                            errorBuilder: (_, _, _) => _PlaceholderIcon(
+                              itemType: itemType,
+                              title: title,
+                            ),
+                          ),
+                          ...imageUnderlays,
+                          if (isGenreFallback) ...[
+                            Container(
+                              color: Colors.black.withValues(alpha: 0.45),
+                            ),
+                            if (title != null && title!.isNotEmpty)
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final fontSize = MediaCard.genreLabelFontSize(
+                                    constraints.maxWidth,
+                                  );
+                                  return Center(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(12.0),
+                                      child: FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        child: Text(
+                                          title!.toUpperCase(),
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            fontSize: fontSize,
+                                            fontWeight: FontWeight.bold,
+                                            letterSpacing:
+                                                MediaCard.genreLabelLetterSpacing(
+                                                  fontSize,
+                                                ),
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurface
+                                                .withValues(alpha: 0.9),
                                           ),
                                         ),
                                       ),
-                                    );
-                                  },
-                                ),
-                            ],
+                                    ),
+                                  );
+                                },
+                              ),
                           ],
-                        )
-                      : _PlaceholderIcon(itemType: itemType, title: title),
-                ),
-                if (isFavorite ||
-                    _showSeerrMediaTypeBadge ||
-                    animeMarkerItemId != null ||
-                    recordingItemId != null)
-                  Positioned(
-                    top: overlayOccupiesTopLeft ? 32 : 6,
-                    left: 6,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (_showSeerrMediaTypeBadge) ...[
-                          SeerrMediaTypeBadge(mediaType: seerrMediaType),
-                          if (animeMarkerItemId != null || isFavorite)
-                            const SizedBox(height: 4),
                         ],
-                        // The gap sits inside the pill rather than in a sibling
-                        // box, because the pill draws nothing until an audio
-                        // verdict resolves and an empty one must take no space.
-                        if (animeMarkerItemId != null)
-                          AnimeItemAudioBadge(
-                            itemId: animeMarkerItemId!,
-                            scale: 0.85,
-                            padding: isFavorite || recordingItemId != null
-                                ? const EdgeInsets.only(bottom: 4)
-                                : EdgeInsets.zero,
-                          ),
-                        // Takes no space until the item turns out incomplete.
-                        if (recordingItemId != null)
-                          IncompleteRecordingBadge(
-                            itemId: recordingItemId,
-                            padding: isFavorite
-                                ? const EdgeInsets.only(bottom: 4)
-                                : EdgeInsets.zero,
-                          ),
-                        if (isFavorite)
-                          const MediaFavoriteBadge(size: 22),
+                      )
+                    : _PlaceholderIcon(itemType: itemType, title: title),
+              ),
+              if (isFavorite ||
+                  _showSeerrMediaTypeBadge ||
+                  animeMarkerItemId != null ||
+                  recordingItemId != null)
+                Positioned(
+                  top: overlayOccupiesTopLeft ? 32 : 6,
+                  left: 6,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (_showSeerrMediaTypeBadge) ...[
+                        SeerrMediaTypeBadge(mediaType: seerrMediaType),
+                        if (animeMarkerItemId != null || isFavorite)
+                          const SizedBox(height: 4),
                       ],
-                    ),
+                      // The gap sits inside the pill rather than in a sibling
+                      // box, because the pill draws nothing until an audio
+                      // verdict resolves and an empty one must take no space.
+                      if (animeMarkerItemId != null)
+                        AnimeItemAudioBadge(
+                          itemId: animeMarkerItemId!,
+                          scale: 0.85,
+                          padding: isFavorite || recordingItemId != null
+                              ? const EdgeInsets.only(bottom: 4)
+                              : EdgeInsets.zero,
+                        ),
+                      // Takes no space until the item turns out incomplete.
+                      if (recordingItemId != null)
+                        IncompleteRecordingBadge(
+                          itemId: recordingItemId,
+                          padding: isFavorite
+                              ? const EdgeInsets.only(bottom: 4)
+                              : EdgeInsets.zero,
+                        ),
+                      if (isFavorite) const MediaFavoriteBadge(size: 22),
+                    ],
                   ),
-                if (_showSeerrStatusIndicator)
-                  Positioned(
-                    top: 6,
-                    right: 6,
-                    child: SeerrStatusDot(status: seerrStatus),
-                  )
-                else if (_showWatchedIndicator)
-                  Positioned(top: 6, right: 6, child: _buildWatchedIndicator()),
-                if (playedPercentage != null && playedPercentage! > 0)
-                  Positioned(
-                    left: 6,
-                    right: 6,
-                    bottom: 6,
-                    child: ClipRRect(
-                      borderRadius: AppRadius.circular(3),
-                      child: LinearProgressIndicator(
-                        value: playedPercentage! / 100,
-                        minHeight: 6,
-                        backgroundColor: AppColorScheme.scrim.withValues(
-                          alpha: 0.54,
-                        ),
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          AppColorScheme.accent,
-                        ),
+                ),
+              if (_showSeerrStatusIndicator)
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: SeerrStatusDot(status: seerrStatus),
+                )
+              else if (_showWatchedIndicator)
+                Positioned(top: 6, right: 6, child: _buildWatchedIndicator()),
+              if (playedPercentage != null && playedPercentage! > 0)
+                Positioned(
+                  left: 6,
+                  right: 6,
+                  bottom: 6,
+                  child: ClipRRect(
+                    borderRadius: AppRadius.circular(3),
+                    child: LinearProgressIndicator(
+                      value: playedPercentage! / 100,
+                      minHeight: 6,
+                      backgroundColor: AppColorScheme.scrim.withValues(
+                        alpha: 0.54,
+                      ),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColorScheme.accent,
                       ),
                     ),
                   ),
-                ...imageOverlays,
-              ],
-            ),
+                ),
+              ...imageOverlays,
+            ],
           ),
-          if (showBorder)
-            Positioned(
-              top: -_focusRingInset,
-              bottom: -_focusRingInset,
-              left: -_focusRingInset,
-              right: -_focusRingInset,
-              child: IgnorePointer(
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: isCircular
-                        ? AppRadius.circular(radius + _focusRingInset)
-                        : borders.cardRadius +
-                              AppRadius.circular(_focusRingInset),
-                    border: Border.fromBorderSide(
-                      borders.focusBorder.copyWith(
-                        color: borderColor,
-                        width: 3.0,
-                      ),
+        ),
+        if (showBorder && !PlatformDetection.isTV)
+          Positioned(
+            top: -_focusRingInset,
+            bottom: -_focusRingInset,
+            left: -_focusRingInset,
+            right: -_focusRingInset,
+            child: IgnorePointer(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: isCircular
+                      ? AppRadius.circular(radius + _focusRingInset)
+                      : cardRadius + AppRadius.circular(_focusRingInset),
+                  border: Border.fromBorderSide(
+                    borders.focusBorder.copyWith(
+                      color: borderColor,
+                      width: 3.0,
                     ),
                   ),
                 ),
               ),
             ),
-        ],
-      ),
+          ),
+      ],
+    );
+    return AspectRatio(
+      aspectRatio: aspectRatio,
+      child: PlatformDetection.isTV
+          ? TvCardFocusFrame(
+              focused: showBorder,
+              borderRadius: isCircular ? BorderRadius.circular(radius) : null,
+              child: artwork,
+            )
+          : artwork,
     );
   }
 
@@ -1050,9 +1086,8 @@ class _PlaceholderIcon extends StatelessWidget {
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 2.5,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.5),
+                        color: Theme.of(context).colorScheme.onSurface
+                            .withValues(alpha: 0.5),
                       ),
                     ),
                   ),

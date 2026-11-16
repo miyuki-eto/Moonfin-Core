@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:moonfin/util/platform_detection.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moonfin/l10n/app_localizations.dart';
 import 'package:moonfin/preference/preference_constants.dart';
@@ -37,6 +39,37 @@ Widget _app({
 }
 
 void main() {
+  testWidgets('TV rating uses arrows, submits once and restores its opener', (
+    tester,
+  ) async {
+    PlatformDetection.setInterfaceLayout(InterfaceLayout.tv);
+    addTearDown(
+      () => PlatformDetection.setInterfaceLayout(InterfaceLayout.automatic),
+    );
+    final focusNode = FocusNode();
+    addTearDown(focusNode.dispose);
+    final values = <bool>[];
+    await tester.pumpWidget(
+      _app(
+        focusNode: focusNode,
+        style: PersonalRatingStyle.thumbs,
+        onThumb: (value) async => values.add(value),
+        onNumeric: (_) async {},
+        onClear: () async {},
+      ),
+    );
+    focusNode.requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.text('Like'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(values, [false]);
+    expect(focusNode.hasFocus, isTrue);
+  });
   testWidgets('thumbs mode saves a like and restores focus', (tester) async {
     final focusNode = FocusNode();
     addTearDown(focusNode.dispose);
@@ -84,7 +117,10 @@ void main() {
     final thirdStar = find.byKey(const ValueKey('personal_rating_star_2'));
     final thirdStarBounds = tester.getRect(thirdStar);
     await tester.tapAt(
-      Offset(thirdStarBounds.left + thirdStarBounds.width * 0.25, thirdStarBounds.center.dy),
+      Offset(
+        thirdStarBounds.left + thirdStarBounds.width * 0.25,
+        thirdStarBounds.center.dy,
+      ),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Save'));
@@ -119,7 +155,9 @@ void main() {
     expect(cleared, isTrue);
   });
 
-  testWidgets('numeric mode steps down to the previous integer', (tester) async {
+  testWidgets('numeric mode steps down to the previous integer', (
+    tester,
+  ) async {
     final focusNode = FocusNode();
     addTearDown(focusNode.dispose);
 

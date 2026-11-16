@@ -2,6 +2,7 @@ class MediaBarSlideItem {
   final String itemId;
   final String serverId;
   final String title;
+  final bool isFavorite;
   final String? overview;
   final String? backdropUrl;
 
@@ -27,6 +28,7 @@ class MediaBarSlideItem {
     required this.itemId,
     required this.serverId,
     required this.title,
+    this.isFavorite = false,
     this.overview,
     this.backdropUrl,
     this.bannerUrl,

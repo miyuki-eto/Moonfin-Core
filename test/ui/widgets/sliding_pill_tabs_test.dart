@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:moonfin/util/platform_detection.dart';
+import 'package:moonfin/ui/tv/tv_segmented_surface.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moonfin/ui/widgets/sliding_pill_tabs.dart';
 import 'package:moonfin_design/moonfin_design.dart';
@@ -18,6 +20,50 @@ void main() {
   setUp(reset);
   tearDown(reset);
 
+  testWidgets(
+    'TV search tabs use the shared pane and reveal remote selection',
+    (tester) async {
+      PlatformDetection.setTvMode(true);
+      addTearDown(() => PlatformDetection.setTvMode(false));
+      final node = FocusNode();
+      addTearDown(node.dispose);
+      var selected = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 300,
+                child: StatefulBuilder(
+                  builder: (context, setState) => SlidingPillTabs(
+                    labels: List.generate(12, (index) => 'Category $index'),
+                    selectedIndex: selected,
+                    focusNode: node,
+                    onChanged: (index) => setState(() => selected = index),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      node.requestFocus();
+      await tester.pump();
+      for (var index = 0; index < 10; index++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await tester.pumpAndSettle();
+      }
+      expect(selected, 10);
+      expect(node.hasFocus, isTrue);
+      final pane = tester.getRect(find.byType(TvSegmentedSurface));
+      final label = tester.getRect(find.text('Category 10'));
+      expect(label.left, greaterThanOrEqualTo(pane.left));
+      expect(label.right, lessThanOrEqualTo(pane.right));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   void useJelly() {
     ThemeRegistry.setActiveById(ThemeRegistry.glassId);
     GlassSettings.tier = GlassTier.frost;
@@ -26,15 +72,17 @@ void main() {
 
   Future<List<int>> pumpPill(WidgetTester tester) async {
     final changes = <int>[];
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: SlidingPillTabs(
-          labels: const ['Movies', 'Shows', 'Music'],
-          selectedIndex: 0,
-          onChanged: changes.add,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SlidingPillTabs(
+            labels: const ['Movies', 'Shows', 'Music'],
+            selectedIndex: 0,
+            onChanged: changes.add,
+          ),
         ),
       ),
-    ));
+    );
     // Segments measure on a post-frame callback and the thumb only appears
     // once they have.
     await tester.pump();
@@ -48,8 +96,9 @@ void main() {
     expect(find.byType(AnimatedGlassIndicator), findsNothing);
   });
 
-  testWidgets('glass without the package renderer keeps the plain thumb',
-      (tester) async {
+  testWidgets('glass without the package renderer keeps the plain thumb', (
+    tester,
+  ) async {
     ThemeRegistry.setActiveById(ThemeRegistry.glassId);
     GlassSettings.tier = GlassTier.sheen;
     await pumpPill(tester);
@@ -57,16 +106,18 @@ void main() {
     expect(find.byType(AnimatedGlassIndicator), findsNothing);
   });
 
-  testWidgets('glass on the package renderer draws the jelly thumb',
-      (tester) async {
+  testWidgets('glass on the package renderer draws the jelly thumb', (
+    tester,
+  ) async {
     useJelly();
     await pumpPill(tester);
     expect(find.byType(AnimatedGlassIndicator), findsOneWidget);
     expect(find.byType(AnimatedPositioned), findsNothing);
   });
 
-  testWidgets('a tap on a segment still selects it under the jelly thumb',
-      (tester) async {
+  testWidgets('a tap on a segment still selects it under the jelly thumb', (
+    tester,
+  ) async {
     useJelly();
     final changes = await pumpPill(tester);
     await tester.tap(find.text('Shows'));
@@ -78,10 +129,12 @@ void main() {
     useJelly();
     await pumpPill(tester);
     final stack = tester.widget<Stack>(
-      find.ancestor(
-        of: find.byType(AnimatedGlassIndicator),
-        matching: find.byType(Stack),
-      ).first,
+      find
+          .ancestor(
+            of: find.byType(AnimatedGlassIndicator),
+            matching: find.byType(Stack),
+          )
+          .first,
     );
     expect(stack.clipBehavior, Clip.none);
   });
@@ -91,20 +144,22 @@ void main() {
     addTearDown(node.dispose);
     final exits = <String>[];
     var selected = 0;
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: StatefulBuilder(
-          builder: (context, setState) => SlidingPillTabs(
-            labels: const ['Library', 'Discover'],
-            selectedIndex: selected,
-            onChanged: (i) => setState(() => selected = i),
-            focusNode: node,
-            onExitLeft: () => exits.add('left'),
-            onExitRight: () => exits.add('right'),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) => SlidingPillTabs(
+              labels: const ['Library', 'Discover'],
+              selectedIndex: selected,
+              onChanged: (i) => setState(() => selected = i),
+              focusNode: node,
+              onExitLeft: () => exits.add('left'),
+              onExitRight: () => exits.add('right'),
+            ),
           ),
         ),
       ),
-    ));
+    );
     node.requestFocus();
     await tester.pump();
 
@@ -117,8 +172,9 @@ void main() {
     expect(exits, ['left', 'right']);
   });
 
-  testWidgets('a drag across the pill lands on the segment under the finger',
-      (tester) async {
+  testWidgets('a drag across the pill lands on the segment under the finger', (
+    tester,
+  ) async {
     useJelly();
     final changes = await pumpPill(tester);
     final from = tester.getCenter(find.text('Movies'));

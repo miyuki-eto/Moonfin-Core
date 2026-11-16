@@ -80,7 +80,7 @@ void main() {
     );
 
     expect(profile.guideWindow, const Duration(minutes: 150));
-    expect(30 * profile.pixelsPerMinute, closeTo(185.1, 0.5));
+    expect(30 * profile.pixelsPerMinute, closeTo(184.3, 0.5));
     expect(
       30 * profile.pixelsPerMinute * kTvTargetScale,
       greaterThan(240),

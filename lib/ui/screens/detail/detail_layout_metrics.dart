@@ -172,7 +172,7 @@ double nouveauHeroMinHeight(Size size) {
 
 /// The horizontal inset either side of the Nouveau landscape hero.
 double nouveauHorizontalInset(Size size) => PlatformDetection.isTV
-    ? 56.0
+    ? 48.0
     : (size.width * 0.046).clamp(56.0, 96.0);
 
 /// The Minimalist episode rail.

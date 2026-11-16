@@ -27,26 +27,36 @@ extension type _MoonfinHlsBridge._(JSObject _) implements JSObject {
     web.HTMLVideoElement video,
     JSString url,
     JSBoolean forceHls,
+    JSNumber startPosition,
+    JSBoolean standby,
+    JSBoolean preview,
   );
 
+  external JSBoolean isViable(JSAny? controller);
+  external JSPromise<JSAny?> playPreview(
+    web.HTMLVideoElement video,
+    JSAny? controller,
+  );
+  external void park(JSAny? controller);
+  external void promote(JSAny? controller);
   external void destroy(JSAny? controller);
+}
+
+class _StandbyVideo {
+  const _StandbyVideo(this.element, this.hls, {this.requestedPosition});
+
+  final web.HTMLVideoElement element;
+  final Duration? requestedPosition;
+  final JSAny? hls;
 }
 
 class HtmlVideoBackend extends PlayerBackend
     with SubtitleDelayState
-    implements SecondarySubtitleBackend {
+    implements SecondarySubtitleBackend, PreviewStreamPreloader {
   HtmlVideoBackend(this._prefs)
     : _viewType = 'moonfin-html-video-${_nextViewId++}' {
     _videoElement = _createVideoElement();
-    _videoElement.addEventListener(
-      'seeked',
-      ((web.Event _) {
-        if (_disposed) return;
-        // A seek starts a new placement context, unlike a dialogue gap.
-        _primaryReferenceCues = const [];
-        _positionSecondaryCues();
-      }).toJS,
-    );
+    _installVideoElement(_videoElement);
     _registerViewFactory();
   }
 
@@ -56,7 +66,28 @@ class HtmlVideoBackend extends PlayerBackend
   final UserPreferences _prefs;
   final String _viewType;
 
-  late final web.HTMLVideoElement _videoElement;
+  final _videoHost = web.HTMLDivElement()
+    ..style.width = '100%'
+    ..style.height = '100%';
+  late web.HTMLVideoElement _videoElement;
+  final _standbys = <String, _StandbyVideo>{};
+  String? _activeUrl;
+  bool _previewSource = false;
+
+  void _installVideoElement(web.HTMLVideoElement element) {
+    element.id = _viewType;
+    _videoHost.appendChild(element);
+  }
+
+  void _replaceVideoElement(web.HTMLVideoElement element) {
+    _subtitleOverlay?.dispose();
+    _subtitleOverlay = null;
+    element.style.objectFit = _videoElement.style.objectFit;
+    _videoElement.remove();
+    _videoElement = element;
+    _installVideoElement(element);
+  }
+
   final List<({String url, web.HTMLTrackElement element})> _externalTracks = [];
   JSAny? _hlsController;
 
@@ -201,9 +232,6 @@ class HtmlVideoBackend extends PlayerBackend
 
   web.HTMLVideoElement _createVideoElement() {
     final element = web.HTMLVideoElement()
-      // The id is what the cue stylesheet selects on, so a second player on
-      // the page keeps its own look.
-      ..id = _viewType
       ..autoplay = false
       ..controls = false
       ..preload = 'auto'
@@ -214,6 +242,14 @@ class HtmlVideoBackend extends PlayerBackend
       ..style.pointerEvents = 'none'
       ..style.backgroundColor = 'black';
     element.setAttribute('playsinline', '');
+    element.addEventListener(
+      'seeked',
+      ((web.Event _) {
+        if (_disposed || !identical(element, _videoElement)) return;
+        _primaryReferenceCues = const [];
+        _positionSecondaryCues();
+      }).toJS,
+    );
     return element;
   }
 
@@ -221,7 +257,7 @@ class HtmlVideoBackend extends PlayerBackend
     if (_registeredViewTypes.add(_viewType)) {
       ui_web.platformViewRegistry.registerViewFactory(
         _viewType,
-        (int _) => _videoElement,
+        (int _) => _videoHost,
       );
     }
   }
@@ -240,6 +276,21 @@ class HtmlVideoBackend extends PlayerBackend
 
   void _pollState() {
     if (_disposed) return;
+    if (_previewSource &&
+        (_videoElement.error != null ||
+            (_hlsController != null &&
+                !(_resolveHlsBridge()?.isViable(_hlsController).toDart ??
+                    false)))) {
+      _videoElement.pause();
+      _setPlaying(false);
+      _setBuffering(false);
+      _stopStatePolling();
+      _errorStream.add({
+        'event': 'playerError',
+        'message': 'Browser preview stream failed',
+      });
+      return;
+    }
     final viewport = (_videoElement.clientWidth, _videoElement.clientHeight);
     if (_lastCueViewport != viewport) {
       _lastCueViewport = viewport;
@@ -375,49 +426,16 @@ class HtmlVideoBackend extends PlayerBackend
     return normalized.contains('hls') || normalized.contains('m3u8');
   }
 
-  bool _canUseHlsJs(String url, {required bool forceHls}) {
-    final bridge = _resolveHlsBridge();
-    if (bridge == null) {
-      return false;
-    }
-
+  void _destroyHls(JSAny? controller) {
+    if (controller == null) return;
     try {
-      return bridge.canUseHlsJs(_videoElement, url.toJS, forceHls.toJS).toDart;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  bool _attachHlsJsSource(String url, {required bool forceHls}) {
-    final bridge = _resolveHlsBridge();
-    if (bridge == null) {
-      return false;
-    }
-
-    try {
-      _hlsController = bridge.attach(_videoElement, url.toJS, forceHls.toJS);
-      return _hlsController != null;
-    } catch (_) {
-      _hlsController = null;
-      return false;
-    }
+      _resolveHlsBridge()?.destroy(controller);
+    } catch (_) {}
   }
 
   void _detachHlsJsSource() {
-    final controller = _hlsController;
+    _destroyHls(_hlsController);
     _hlsController = null;
-    if (controller == null) {
-      return;
-    }
-
-    final bridge = _resolveHlsBridge();
-    if (bridge == null) {
-      return;
-    }
-
-    try {
-      bridge.destroy(controller);
-    } catch (_) {}
   }
 
   static bool _isCrossOrigin(String url) {
@@ -429,42 +447,156 @@ class HtmlVideoBackend extends PlayerBackend
         target.port != page.port;
   }
 
-  void _applyNativeSource(String url) {
-    _videoElement.src = url;
-    _videoElement.load();
-  }
-
-  Future<void> _applySource(
+  JSAny? _loadSource(
+    web.HTMLVideoElement element,
     String url, {
     String? container,
     required Duration startPosition,
-  }) async {
-    _clearExternalTracks();
-
-    // Subtitle tracks are fetched in whatever CORS mode the video element is
-    // in, so a remote server needs this, and hls.js never touches the src
-    // attribute, so it has to be set here rather than on the native path.
-    // Asking for CORS on a same origin stream only gives playback another way
-    // to fail, and the element outlives the source, so it comes back off again.
+    bool standby = false,
+    bool preview = false,
+  }) {
     if (_isCrossOrigin(url)) {
-      _videoElement.crossOrigin = 'anonymous';
+      element.crossOrigin = 'anonymous';
     } else {
-      _videoElement.removeAttribute('crossorigin');
+      element.removeAttribute('crossorigin');
     }
+    final seconds = startPosition.inMilliseconds / 1000;
+    final forceHls = _isLikelyHlsContainer(container).toJS;
+    JSAny? hls;
+    try {
+      final bridge = _resolveHlsBridge();
+      if (bridge != null &&
+          bridge.canUseHlsJs(element, url.toJS, forceHls).toDart) {
+        hls = bridge.attach(
+          element,
+          url.toJS,
+          forceHls,
+          seconds.toJS,
+          standby.toJS,
+          preview.toJS,
+        );
+      }
+    } catch (_) {
+      // A browser with native HLS can still use the normal source path.
+    }
+    if (hls == null) {
+      element.src = url;
+      element.load();
+      if (seconds > 0) element.currentTime = seconds;
+    }
+    return hls;
+  }
 
-    final forceHls = _isLikelyHlsContainer(container);
+  @override
+  void preloadPreviewSource(
+    String url, {
+    String? container,
+    required Duration startPosition,
+  }) {
+    if (_disposed) return;
+    discardPreviewSource(url);
+    final element = _createVideoElement();
+    final hls = _loadSource(
+      element,
+      url,
+      container: container,
+      startPosition: startPosition,
+      standby: true,
+      preview: true,
+    );
+    _standbys[url] = _StandbyVideo(element, hls, requestedPosition: startPosition);
+  }
+
+  @override
+  bool parkPreviewSource(String url) {
+    final video = _videoElement;
+    if (_disposed ||
+        _activeUrl != url ||
+        video.error != null ||
+        video.readyState < web.HTMLMediaElement.HAVE_CURRENT_DATA) {
+      return false;
+    }
+    discardPreviewSource(url);
+    video.pause();
+    _clearExternalTracks();
+    final hls = _hlsController;
+    if (hls != null) _resolveHlsBridge()?.park(hls);
+    _standbys[url] = _StandbyVideo(video, hls);
+    _hlsController = null;
+    _activeUrl = null;
+    _replaceVideoElement(_createVideoElement());
+    return true;
+  }
+
+  @override
+  bool hasPreviewFrame(String url, Duration position) {
+    final standby = _standbys[url];
+    if (standby == null) return false;
+    final video = standby.element;
+    if ((standby.hls != null &&
+            !(_resolveHlsBridge()?.isViable(standby.hls).toDart ?? false)) ||
+        video.error != null ||
+        video.seeking ||
+        video.readyState < web.HTMLMediaElement.HAVE_CURRENT_DATA) {
+      return false;
+    }
+    final time = position.inMicroseconds / Duration.microsecondsPerSecond;
+    if ((video.currentTime - time).abs() < .035) return true;
+    final ranges = video.buffered;
+    for (var i = 0; i < ranges.length; i++) {
+      if (ranges.start(i) <= time && time + .15 < ranges.end(i)) return true;
+    }
+    return false;
+  }
+
+  @override
+  void discardPreviewSource(String url) {
+    final standby = _standbys.remove(url);
+    if (standby == null) return;
+    _destroyHls(standby.hls);
+    standby.element.removeAttribute('src');
+    standby.element.load();
+  }
+
+  void _applySource(
+    String url, {
+    String? container,
+    required Duration startPosition,
+    required bool preview,
+  }) {
+    _clearExternalTracks();
     _detachHlsJsSource();
-    final attachedWithHlsJs = _canUseHlsJs(url, forceHls: forceHls)
-        ? _attachHlsJsSource(url, forceHls: forceHls)
-        : false;
-
-    if (!attachedWithHlsJs) {
-      _applyNativeSource(url);
+    final standby = _standbys[url];
+    final ready = hasPreviewFrame(url, startPosition);
+    // An unchanged target can take over an in-flight open as well as a
+    // finished one. A failed speculative HLS load must be opened afresh.
+    final loading = standby != null &&
+        standby.requestedPosition == startPosition &&
+        standby.element.error == null &&
+        (standby.hls == null ||
+            (_resolveHlsBridge()?.isViable(standby.hls).toDart ?? false));
+    if (standby != null && (ready || loading)) {
+      _standbys.remove(url);
+      _replaceVideoElement(standby.element);
+      _hlsController = standby.hls;
+      if (_hlsController != null) {
+        _resolveHlsBridge()?.promote(_hlsController);
+      }
+      final time = startPosition.inMicroseconds / Duration.microsecondsPerSecond;
+      if (ready && (_videoElement.currentTime - time).abs() >= .035) {
+        _videoElement.currentTime = time;
+      }
+    } else {
+      discardPreviewSource(url);
+      _hlsController = _loadSource(
+        _videoElement,
+        url,
+        container: container,
+        startPosition: startPosition,
+        preview: preview,
+      );
     }
-
-    if (startPosition > Duration.zero) {
-      _videoElement.currentTime = startPosition.inMilliseconds / 1000;
-    }
+    _activeUrl = url;
 
     _videoElement.playbackRate = _playbackSpeed;
     _videoElement.volume = (_volume / 100).clamp(0.0, 1.0);
@@ -475,6 +607,9 @@ class HtmlVideoBackend extends PlayerBackend
     _primaryReferenceCues = const [];
     _primaryUsesOverlay = false;
     for (final track in _externalTracks) {
+      // Chromium can retain the last cue box after a showing track is
+      // detached, even across a new source. Disable it before removal.
+      track.element.track.mode = 'disabled';
       track.element.remove();
     }
     _externalTracks.clear();
@@ -490,6 +625,7 @@ class HtmlVideoBackend extends PlayerBackend
 
     final payload = mediaItem is Map ? mediaItem : const <String, dynamic>{};
     final autoPlay = payload['autoPlay'] != false;
+    final preview = payload['preview'] == true;
     final url = mediaItem is String
         ? mediaItem
         : payload['url']?.toString() ?? '';
@@ -497,6 +633,7 @@ class HtmlVideoBackend extends PlayerBackend
     if (url.isEmpty) return;
     final source = ++_sourceGeneration;
     final generation = ++_playbackGeneration;
+    _previewSource = preview;
     updateSubtitleDelaySession(payload['subtitleDelaySessionId'] as int?);
 
     _tracksKnown = false;
@@ -505,7 +642,12 @@ class HtmlVideoBackend extends PlayerBackend
     _completed = false;
     _completedStream.add(false);
 
-    await _applySource(url, container: container, startPosition: startPosition);
+    _applySource(
+      url,
+      container: container,
+      startPosition: startPosition,
+      preview: preview,
+    );
     if (!_isCurrentSource(source)) return;
     // Style the first cue even if it arrives before the initial viewport poll.
     _applySubtitleAppearance();
@@ -534,11 +676,22 @@ class HtmlVideoBackend extends PlayerBackend
       if (autoPlay) {
         _setBuffering(true);
         try {
-          await _videoElement.play().toDart;
+          if (preview) {
+            final play = _resolveHlsBridge()?.playPreview(
+              _videoElement,
+              _hlsController,
+            ) ?? _videoElement.play();
+            await play.toDart.timeout(
+              Duration(seconds: _hlsController == null ? 8 : 10),
+            );
+          } else {
+            await _videoElement.play().toDart;
+          }
           if (_isCurrentPlaybackRequest(generation)) _setPlaying(true);
         } catch (error) {
           if (_isCurrentPlaybackRequest(generation)) {
             _setPlaying(false);
+            if (preview) rethrow;
             _errorStream.add(<String, dynamic>{
               'event': 'playerError',
               'message': error.toString(),
@@ -589,6 +742,8 @@ class HtmlVideoBackend extends PlayerBackend
     if (_disposed) return;
     ++_sourceGeneration;
     ++_playbackGeneration;
+    _activeUrl = null;
+    _previewSource = false;
     _videoElement.pause();
     _detachHlsJsSource();
     _videoElement.removeAttribute('src');
@@ -1622,6 +1777,9 @@ class HtmlVideoBackend extends PlayerBackend
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    for (final url in _standbys.keys.toList()) {
+      discardPreviewSource(url);
+    }
     _stopStatePolling();
     _clearExternalTracks();
     _subtitleOverlay?.dispose();

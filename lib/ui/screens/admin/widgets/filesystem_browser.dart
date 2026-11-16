@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:get_it/get_it.dart';
 import 'package:server_core/server_core.dart';
 
@@ -192,7 +193,7 @@ class _FilesystemBrowserState extends State<FilesystemBrowser> {
         if (_loading)
           const Padding(
             padding: EdgeInsets.all(32),
-            child: Center(child: CircularProgressIndicator()),
+            child: Center(child: LoadingThrobber()),
           )
         else if (_error != null)
           Padding(

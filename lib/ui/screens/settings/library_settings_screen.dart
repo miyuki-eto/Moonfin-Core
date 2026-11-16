@@ -141,7 +141,7 @@ class _LibraryVisibilityScreenState extends State<LibraryVisibilityScreen> {
             if (_isLoading)
               const Padding(
                 padding: EdgeInsets.all(16),
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(child: LoadingThrobber()),
               )
             else if (_loadFailed)
               _buildMessage(l10n.failedToLoadLibraries, onRetry: _retry)

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../widgets/bottom_nav/bottom_navbar.dart';
+import '../../../widgets/scroll_edge_fade.dart';
 
 class NouveauPortraitLayout extends StatelessWidget {
   final Widget backdrop;
@@ -43,43 +44,45 @@ class NouveauPortraitLayout extends StatelessWidget {
       children: [
         Positioned.fill(child: backdrop),
 
-        CustomScrollView(
-          controller: scrollController,
-          physics: const ClampingScrollPhysics(),
-          slivers: [
-            SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    constraints: BoxConstraints(minHeight: heroMinHeight),
-                    padding: heroPadding,
-                    alignment: Alignment.bottomLeft,
-                    child: hero,
-                  ),
-
-                  if (heroToSectionSpacing > 0)
-                    SizedBox(height: heroToSectionSpacing),
-
-                  Padding(padding: firstSectionPadding, child: firstSection),
-                ],
-              ),
-            ),
-
-            if (remainingSections.isNotEmpty)
+        ScrollEdgeFade(
+          child: CustomScrollView(
+            controller: scrollController,
+            physics: const ClampingScrollPhysics(),
+            slivers: [
               SliverToBoxAdapter(
-                child: Padding(
-                  padding: remainingSectionsPadding,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: remainingSections,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      constraints: BoxConstraints(minHeight: heroMinHeight),
+                      padding: heroPadding,
+                      alignment: Alignment.bottomLeft,
+                      child: hero,
+                    ),
+
+                    if (heroToSectionSpacing > 0)
+                      SizedBox(height: heroToSectionSpacing),
+
+                    Padding(padding: firstSectionPadding, child: firstSection),
+                  ],
                 ),
               ),
-            SliverToBoxAdapter(
-              child: SizedBox(height: bottomContentInset(context)),
-            ),
-          ],
+
+              if (remainingSections.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: remainingSectionsPadding,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: remainingSections,
+                    ),
+                  ),
+                ),
+              SliverToBoxAdapter(
+                child: SizedBox(height: bottomContentInset(context)),
+              ),
+            ],
+          ),
         ),
       ],
     );

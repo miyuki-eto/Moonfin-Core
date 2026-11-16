@@ -1439,7 +1439,7 @@ class _SeerrLoginCardState extends State<_SeerrLoginCard> {
           leading: const SizedBox(
             width: 20,
             height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
+            child: LoadingThrobber(),
           ),
           title: Text(l10n.seerrAccountType),
           subtitle: Text(l10n.signIn),
@@ -1578,9 +1578,7 @@ class _SeerrLoginCardState extends State<_SeerrLoginCard> {
                                     ? const SizedBox(
                                         width: 18,
                                         height: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
+                                        child: LoadingThrobber(),
                                       )
                                     : Text(l10n.signOut),
                               ),
@@ -1729,9 +1727,7 @@ class _SeerrLoginCardState extends State<_SeerrLoginCard> {
                                   ? const SizedBox(
                                       width: 18,
                                       height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
+                                      child: LoadingThrobber(),
                                     )
                                   : Text(l10n.signIn),
                             ),

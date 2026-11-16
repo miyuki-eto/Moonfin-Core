@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:get_it/get_it.dart';
+import 'package:moonfin_design/moonfin_design.dart';
 
 import '../../../../data/models/aggregated_item.dart';
 import '../../../../data/repositories/seerr_repository.dart';
@@ -16,6 +17,7 @@ import '../../../../util/platform_detection.dart';
 import '../../../../util/seerr_credits.dart';
 import '../../../widgets/fullscreen_backdrop_switcher.dart';
 import '../../../widgets/navigation_layout.dart';
+import '../../../widgets/logo_view.dart';
 import '../detail_layout_metrics.dart';
 import '../item_detail_screen.dart';
 import 'chapters/nouveau_chapters_section.dart';
@@ -71,8 +73,7 @@ class NouveauDetailContentState extends State<NouveauDetailContent> {
   final GlobalKey<DetailActionButtonsState> _actionButtonsKey =
       GlobalKey<DetailActionButtonsState>();
 
-  final GlobalKey<NouveauHeroState> _heroKey =
-      GlobalKey<NouveauHeroState>();
+  final GlobalKey<NouveauHeroState> _heroKey = GlobalKey<NouveauHeroState>();
 
   final GlobalKey<NouveauEpisodesSectionState> _episodesSectionKey =
       GlobalKey<NouveauEpisodesSectionState>();
@@ -154,7 +155,9 @@ class NouveauDetailContentState extends State<NouveauDetailContent> {
       _ when key == _collectionSectionKey =>
         NouveauCollectionSection.shouldInclude(_vm, _visibility),
       _ when key == _chaptersSectionKey =>
-        _visibility.shows(DetailSection.chapters) && item.chapters.isNotEmpty,
+        !PlatformDetection.isTV &&
+            _visibility.shows(DetailSection.chapters) &&
+            item.chapters.isNotEmpty,
       _ when key == _extrasSectionKey =>
         _visibility.shows(DetailSection.extras) && _vm.features.isNotEmpty,
       _ when key == _discoverySectionKey =>
@@ -625,7 +628,8 @@ class NouveauDetailContentState extends State<NouveauDetailContent> {
 
       final position = _scrollController.position;
 
-      final revealTarget = target == _episodesSectionKey
+      final revealTarget =
+          target == _episodesSectionKey && !PlatformDetection.isTV
           ? _episodesSectionKey.currentState?.artworkRailAnchorKey ?? target
           : target;
 
@@ -664,10 +668,16 @@ class NouveauDetailContentState extends State<NouveauDetailContent> {
 
     final revealed = viewport.getOffsetToReveal(targetObject, alignment);
 
-    return revealed.offset.clamp(
-      position.minScrollExtent,
-      position.maxScrollExtent,
-    );
+    var offset = revealed.offset;
+    if (PlatformDetection.isTV && target == _episodesSectionKey) {
+      // Anchor the seasons below the centered logo, independently of the
+      // episode rail's height and the viewport's remaining space.
+      offset =
+          viewport.getOffsetToReveal(targetObject, 0).offset -
+          NouveauLandscapeLayout.tvSeasonTabsTop;
+    }
+
+    return offset.clamp(position.minScrollExtent, position.maxScrollExtent);
   }
 
   bool restoreBackdropAfterResume() {
@@ -1050,6 +1060,11 @@ class NouveauDetailContentState extends State<NouveauDetailContent> {
     return NouveauLandscapeLayout(
       backdrop: backdrop,
       hero: hero,
+      scrolledTitle:
+          PlatformDetection.isTV &&
+              (item.type == 'Series' || item.type == 'Season')
+          ? _buildScrolledSeriesTitle(item)
+          : null,
       sections: sections,
       scrollController: _scrollController,
       heroPadding: landscapeContentInsets,
@@ -1074,6 +1089,40 @@ class NouveauDetailContentState extends State<NouveauDetailContent> {
               0,
             )
           : EdgeInsets.zero,
+    );
+  }
+
+  Widget _buildScrolledSeriesTitle(AggregatedItem item) {
+    final ownLogo = item.logoImageTag;
+    final logoTag = ownLogo ?? item.seriesLogoImageTag;
+    final logoId = ownLogo != null ? item.id : item.seriesId;
+    final title = item.type == 'Season'
+        ? item.seriesName ?? item.name
+        : item.name;
+    return SizedBox(
+      key: const ValueKey('tv-scrolled-series-title'),
+      width: Tv26Style.detailTitleWidth,
+      height: Tv26Style.detailTitleHeight,
+      child: Center(
+        child: LogoView(
+          imageUrl: logoTag != null && logoId != null
+              ? _vm.imageApi.getLogoImageUrl(
+                  logoId,
+                  maxWidth: Tv26Style.detailTitleWidth.round(),
+                  tag: logoTag,
+                )
+              : null,
+          maxWidth: Tv26Style.detailTitleWidth,
+          maxHeight: Tv26Style.detailTitleHeight,
+          fallback: Text(
+            title,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Tv26Style.text(20, weight: FontWeight.w600),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1118,6 +1167,8 @@ class NouveauDetailContentState extends State<NouveauDetailContent> {
 
     final sectionGap = isPhonePortrait
         ? NouveauSpacing.mobileSectionGap
+        : PlatformDetection.isTV
+        ? Tv26Style.sectionGap
         : NouveauSpacing.sectionGap;
 
     final detailsSectionGap = isPhonePortrait
@@ -1293,6 +1344,50 @@ class NouveauDetailContentState extends State<NouveauDetailContent> {
     String? backdropUrl,
     AggregatedItem item,
   ) {
+    if (PlatformDetection.isTV && item.type != 'Person') {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          const ColoredBox(color: Colors.black),
+          FullscreenBackdropSwitcher(
+            imageUrl: backdropUrl,
+            duration: AppMotion.slow,
+            animateInitialImage: true,
+            softenTransition: true,
+            fadeInDuration: Duration.zero,
+          ),
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Color(0x99000000),
+                  Color(0x26000000),
+                  Colors.transparent,
+                ],
+                stops: [0, .45, 1],
+              ),
+            ),
+          ),
+          if (_usePortraitLayout(context))
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.transparent,
+                    Color(0x80000000),
+                    Colors.black,
+                  ],
+                  stops: [0, .5, .84, 1],
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
     final base = Theme.of(context).scaffoldBackgroundColor;
 
     final portrait = _usePortraitLayout(context);

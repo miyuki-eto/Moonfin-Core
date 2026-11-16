@@ -3,14 +3,20 @@ import 'package:moonfin/playback/aether_backend.dart';
 import 'package:moonfin/playback/delay_limits.dart';
 import 'package:moonfin/playback/media3_player_backend.dart';
 import 'package:moonfin/playback/media_kit_player_backend.dart';
+import 'package:moonfin/playback/tizen_player_backend.dart';
 
 class _Media3 extends Fake implements Media3PlayerBackend {}
 
 class _MediaKit extends Fake implements MediaKitPlayerBackend {}
 
 class _Aether extends Fake implements AetherBackend {}
+class _Tizen extends Fake implements TizenPlayerBackend {}
 
 void main() {
+  test('Tizen offers subtitle delay without unsupported audio delay', () {
+    expect(delayLimitsFor(_Tizen(), audio: false), (-5.0, 5.0));
+    expect(delayLimitsFor(_Tizen(), audio: true), isNull);
+  });
   test('Media3 subtitles can go five seconds either way', () {
     expect(delayLimitsFor(_Media3(), audio: false), (-5.0, 5.0));
     expect(delayLimitsFor(_Media3(), audio: true), (-2.0, 2.0));

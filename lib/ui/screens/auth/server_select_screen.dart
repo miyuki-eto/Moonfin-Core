@@ -31,6 +31,7 @@ import '../../widgets/login_scaffold.dart';
 import '../../widgets/overlay_sheet.dart';
 import '../../widgets/server_type_icon.dart';
 import 'add_server_dialog.dart';
+import '../../tv/tv26_button.dart';
 
 final _kAccent = AppColorScheme.accent;
 
@@ -67,7 +68,9 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
       PlatformDetection.isWeb && webRuntimeConfig.pluginMode;
 
   String? get _webDefaultServerUrl {
-    if (!PlatformDetection.isWeb) return null;
+    if (!PlatformDetection.isWeb) {
+      return null;
+    }
     final normalized = normalizeServerBaseUrl(
       webRuntimeConfig.defaultServerUrl?.trim() ?? '',
     );
@@ -75,16 +78,22 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
   }
 
   String? get _webAutoConnectServerUrl {
-    if (!PlatformDetection.isWeb) return null;
+    if (!PlatformDetection.isWeb) {
+      return null;
+    }
 
     final forced = normalizeServerBaseUrl(
       webRuntimeConfig.forcedServerUrl?.trim() ?? '',
     );
-    if (forced.isNotEmpty) return forced;
+    if (forced.isNotEmpty) {
+      return forced;
+    }
 
     if (_isWebPluginMode) {
       final origin = normalizeServerBaseUrl(Uri.base.origin);
-      if (origin.isNotEmpty) return origin;
+      if (origin.isNotEmpty) {
+        return origin;
+      }
     }
 
     return null;
@@ -108,7 +117,7 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
     int? statusCode,
     String? message,
   }) {
-    if (!PlatformDetection.isWeb || !mounted) {
+    if (!PlatformDetection.isWeb || PlatformDetection.isTV || !mounted) {
       return false;
     }
 
@@ -158,10 +167,14 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
   }
 
   Future<void> _autoConnectConfiguredServer() async {
-    if (!mounted || _attemptedAutoConnect) return;
+    if (!mounted || _attemptedAutoConnect) {
+      return;
+    }
 
     final configuredAddress = _webAutoConnectServerUrl;
-    if (configuredAddress == null) return;
+    if (configuredAddress == null) {
+      return;
+    }
 
     _attemptedAutoConnect = true;
 
@@ -187,7 +200,9 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
     try {
       await _addServerWithoutAutoNavigation(configuredAddress);
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       _maybeOpenWebDiagnosticsForFailure(targetUrl: configuredAddress);
       setState(() {
         _isConnecting = false;
@@ -230,8 +245,9 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
 
     try {
       final currentUser = await client.usersApi.getCurrentUser();
-      final resolvedUserId =
-          currentUser.id.trim().isNotEmpty ? currentUser.id : credentials.userId;
+      final resolvedUserId = currentUser.id.trim().isNotEmpty
+          ? currentUser.id
+          : credentials.userId;
       if (resolvedUserId.trim().isEmpty) {
         return false;
       }
@@ -246,12 +262,11 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
         imageTag: currentUser.primaryImageTag,
         isAdministrator: currentUser.policy?.isAdministrator ?? false,
         canDownload: currentUser.policy?.enableContentDownloading ?? false,
-        canManageSubtitles: currentUser.policy?.canFetchRemoteSubtitles ??
-            false,
+        canManageSubtitles:
+            currentUser.policy?.canFetchRemoteSubtitles ?? false,
         canManageCollections:
-          currentUser.policy?.enableCollectionManagement ?? false,
-        canManageLiveTv:
-          currentUser.policy?.enableLiveTvManagement ?? false,
+            currentUser.policy?.enableCollectionManagement ?? false,
+        canManageLiveTv: currentUser.policy?.enableLiveTvManagement ?? false,
       );
 
       await _authStore.putUser(user);
@@ -331,30 +346,44 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
         }
       },
       onDone: () {
-        if (mounted) setState(() => _isDiscovering = false);
+        if (mounted) {
+          setState(() => _isDiscovering = false);
+        }
       },
       onError: (_) {
-        if (mounted) setState(() => _isDiscovering = false);
+        if (mounted) {
+          setState(() => _isDiscovering = false);
+        }
       },
     );
   }
 
   void _onAdditionState(ServerAdditionState state) {
-    if (!mounted) return;
-    final shouldHandleAdditionState = _isConnecting || _isAddDialogOpen;
+    // The address dialog owns its result, error and retry UI. Navigating from
+    // this background listener would dismiss it before that UI can appear.
+    if (!mounted || _isAddDialogOpen) {
+      return;
+    }
+    final shouldHandleAdditionState = _isConnecting;
     switch (state) {
       case ServerConnecting():
-        if (!shouldHandleAdditionState) return;
+        if (!shouldHandleAdditionState) {
+          return;
+        }
         setState(() {
           _isConnecting = true;
           _errorMessage = null;
           _untrustedAddress = null;
         });
       case ServerConnected(:final id):
-        if (!shouldHandleAdditionState) return;
+        if (!shouldHandleAdditionState) {
+          return;
+        }
         setState(() => _isConnecting = false);
         // The dialog shows the server it found and says where to go next.
-        if (_isAddDialogOpen) return;
+        if (_isAddDialogOpen) {
+          return;
+        }
         _addressController.clear();
         if (_suppressAutoNavigationOnServerConnected) {
           return;
@@ -368,7 +397,9 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
         :final lastErrorMessage,
         :final untrustedCandidate,
       ):
-        if (!shouldHandleAdditionState) return;
+        if (!shouldHandleAdditionState) {
+          return;
+        }
         final targetUrl = (lastCandidate != null && lastCandidate.isNotEmpty)
             ? lastCandidate
             : (candidatesTried.isNotEmpty ? candidatesTried.first : null);
@@ -394,7 +425,9 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
     if (address == null || !await confirmAllowSelfSignedCertificates(context)) {
       return;
     }
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _isConnecting = true;
       _errorMessage = null;
@@ -404,7 +437,9 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
   }
 
   Future<void> _connectToDiscovered(DiscoveredServer discovered) async {
-    if (_isConnecting) return;
+    if (_isConnecting) {
+      return;
+    }
     // A Plex server is saved from its plex.tv sign-in.
     if (discovered.serverType == ServerType.plex) {
       context.go(Destinations.plexSignIn);
@@ -420,7 +455,9 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
     try {
       await _serverRepo.addServer(discovered.address);
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       _maybeOpenWebDiagnosticsForFailure(
         targetUrl: discovered.address,
         message: e.toString(),
@@ -440,14 +477,23 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
         title: Text(l10n.removeServer),
         content: Text(l10n.removeServerConfirmation(server.name)),
         actions: [
-          adaptiveDialogAction(onPressed: () => ctx.pop(false), child: Text(l10n.cancel)),
-          adaptiveDialogAction(onPressed: () => ctx.pop(true), isDestructive: true, child: Text(l10n.remove)),
+          adaptiveDialogAction(
+            onPressed: () => ctx.pop(false),
+            child: Text(l10n.cancel),
+          ),
+          adaptiveDialogAction(
+            onPressed: () => ctx.pop(true),
+            isDestructive: true,
+            child: Text(l10n.remove),
+          ),
         ],
       ),
     );
     if (confirmed == true) {
       await _serverRepo.deleteServer(server.id);
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+      }
     }
   }
 
@@ -456,6 +502,9 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
     required Widget icon,
     required String label,
   }) {
+    if (PlatformDetection.isTV && onPressed != null) {
+      return Tv26Button(label: label, leading: icon, onPressed: onPressed);
+    }
     return OutlinedButton.icon(
       onPressed: onPressed,
       icon: icon,
@@ -494,17 +543,12 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
     final l10n = AppLocalizations.of(context);
 
     return LoginScaffold(
-      header: Padding(
-        padding: const EdgeInsets.only(bottom: 24),
-        child: Image.asset('assets/images/logo_and_text.png', height: 80),
-      ),
       footer: Padding(
         padding: const EdgeInsets.only(top: 16),
         child: Text(
           l10n.appVersionFooter(AppBeta.label(_deviceInfo.appVersion)),
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: _loginForeground(0.4)),
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: _loginForeground(0.4)),
           textAlign: TextAlign.center,
         ),
       ),
@@ -515,9 +559,8 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
           if (servers.isNotEmpty) ...[
             Text(
               l10n.savedServers,
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(context).textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             ...servers.map((server) => _buildSavedServerTile(server)),
@@ -525,9 +568,8 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
           ],
           Text(
             l10n.discoveredServers,
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+            style: Theme.of(context).textTheme.titleSmall
+                ?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           if (_discoveredServers.isNotEmpty)
@@ -541,7 +583,7 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
                 child: SizedBox(
                   height: 24,
                   width: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: LoadingThrobber(),
                 ),
               ),
             )
@@ -560,7 +602,7 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
                 child: SizedBox(
                   height: 16,
                   width: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: LoadingThrobber(),
                 ),
               ),
             ),
@@ -596,7 +638,7 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
                 );
               }
 
-              if (PlatformDetection.isWeb) {
+              if (PlatformDetection.isWeb && !PlatformDetection.isTV) {
                 actions.add(
                   _buildFooterActionButton(
                     onPressed: () => context.go(Destinations.webDiagnostics),
@@ -721,7 +763,9 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
   bool _isAddDialogOpen = false;
 
   Future<void> _showAddServerDialog() async {
-    if (_isAddDialogOpen) return;
+    if (_isAddDialogOpen) {
+      return;
+    }
     _isAddDialogOpen = true;
     final defaultAddress = _webDefaultServerUrl;
     _addressController.text = defaultAddress ?? '';
@@ -738,7 +782,9 @@ class _ServerSelectScreenState extends State<ServerSelectScreen> {
     } finally {
       _isAddDialogOpen = false;
     }
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     switch (outcome) {
       case AddServerSaved(:final serverId):
         _addressController.clear();
@@ -801,7 +847,9 @@ class _FocusableTileState extends State<_FocusableTile> {
   }
 
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
-    if (widget.onTap == null) return KeyEventResult.ignored;
+    if (widget.onTap == null) {
+      return KeyEventResult.ignored;
+    }
 
     if (!event.logicalKey.isSelectKey) {
       return KeyEventResult.ignored;
@@ -850,9 +898,15 @@ class _FocusableTileState extends State<_FocusableTile> {
 
   @override
   Widget build(BuildContext context) {
-    final radius = AppRadius.circular(12);
+    final radius = AppRadius.circular(
+      PlatformDetection.isTV ? Tv26Style.radius : 12,
+    );
     return Material(
-      color: _focused ? _kAccent.withValues(alpha: 0.18) : _tileIdleColor(),
+      color: _focused && PlatformDetection.isTV
+          ? Tv26Style.foreground
+          : _focused
+          ? _kAccent.withValues(alpha: 0.18)
+          : _tileIdleColor(),
       borderRadius: radius,
       child: Focus(
         onFocusChange: (f) {
@@ -879,7 +933,15 @@ class _FocusableTileState extends State<_FocusableTile> {
               ),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: widget.child,
+            child: _focused && PlatformDetection.isTV
+                ? ColorFiltered(
+                    colorFilter: const ColorFilter.mode(
+                      Tv26Style.canvas,
+                      BlendMode.srcIn,
+                    ),
+                    child: widget.child,
+                  )
+                : widget.child,
           ),
         ),
       ),

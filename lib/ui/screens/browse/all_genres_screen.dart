@@ -1,4 +1,11 @@
+import '../../util/error_message.dart';
+import '../../tv/tv_status_view.dart';
+import '../../settings_visibility.dart';
+
 import 'dart:async';
+
+import '../../tv/tv_browse_header.dart';
+import '../../tv/tv_async_content.dart';
 
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
@@ -58,13 +65,16 @@ class _AllGenresScreenState extends State<AllGenresScreen> {
   String? _backdropUrl;
   bool _disposed = false;
 
-  ImageType get _imageType => _prefs.get(UserPreferences.allGenresImageType);
+  ImageType get _imageType => PlatformDetection.isTV
+      ? ImageType.thumb
+      : _prefs.get(UserPreferences.allGenresImageType);
 
   PosterSize get _posterSize =>
       _prefs.resolveScreenPosterSize(UserPreferences.allGenresPosterSize);
 
   List<GenreCardData> _genres = [];
   bool _isLoading = true;
+  Object? _error;
   bool _lastGroupCollections = false;
   final Set<String> _usedArtworkIds = {};
 
@@ -72,9 +82,10 @@ class _AllGenresScreenState extends State<AllGenresScreen> {
   int _loadToken = 0;
 
   void _onChanged() {
-    if (!mounted) return;
-    final currentGroup =
-        _prefs.get(UserPreferences.groupItemsIntoCollections);
+    if (!mounted) {
+      return;
+    }
+    final currentGroup = _prefs.get(UserPreferences.groupItemsIntoCollections);
     if (_lastGroupCollections != currentGroup) {
       _lastGroupCollections = currentGroup;
       _load();
@@ -86,10 +97,13 @@ class _AllGenresScreenState extends State<AllGenresScreen> {
   @override
   void initState() {
     super.initState();
-    _lastGroupCollections =
-        _prefs.get(UserPreferences.groupItemsIntoCollections);
+    _lastGroupCollections = _prefs.get(
+      UserPreferences.groupItemsIntoCollections,
+    );
     _backgroundSub = _backgroundService.backgroundStream.listen((url) {
-      if (mounted) setState(() => _backdropUrl = url);
+      if (mounted) {
+        setState(() => _backdropUrl = url);
+      }
     });
     _backdropUrl = _backgroundService.currentUrl;
     _prefs.addListener(_onChanged);
@@ -107,6 +121,10 @@ class _AllGenresScreenState extends State<AllGenresScreen> {
 
   Future<void> _load() async {
     final token = ++_loadToken;
+    _error = null;
+    if (mounted) {
+      setState(() => _isLoading = true);
+    }
     try {
       _usedArtworkIds.clear();
       final items = <dynamic>[];
@@ -126,12 +144,18 @@ class _AllGenresScreenState extends State<AllGenresScreen> {
 
         total ??= response['TotalRecordCount'] as int?;
         final pageItems = (response['Items'] as List?) ?? const [];
-        if (pageItems.isEmpty) break;
+        if (pageItems.isEmpty) {
+          break;
+        }
         items.addAll(pageItems);
 
         startIndex += pageItems.length;
-        if (pageItems.length < _genresPageSize) break;
-        if (total != null && startIndex >= total) break;
+        if (pageItems.length < _genresPageSize) {
+          break;
+        }
+        if (total != null && startIndex >= total) {
+          break;
+        }
       }
 
       final temp = items
@@ -141,10 +165,7 @@ class _AllGenresScreenState extends State<AllGenresScreen> {
               data,
               normalizedItemTypes: _videoGenreItemTypes,
             );
-            return (
-              data: data,
-              itemCount: itemCount,
-            );
+            return (data: data, itemCount: itemCount);
           })
           .where((x) => x.itemCount > 0 || !genreReportsCounts(x.data))
           .toList();
@@ -167,6 +188,9 @@ class _AllGenresScreenState extends State<AllGenresScreen> {
         );
       }).toList();
     } catch (e) {
+      if (token == _loadToken) {
+        _error = e;
+      }
       // The screen shows the same empty state either way, so without this a
       // server that refuses the request looks like a library with no genres.
       if (GetIt.instance.isRegistered<LogService>()) {
@@ -179,9 +203,13 @@ class _AllGenresScreenState extends State<AllGenresScreen> {
       }
     }
 
-    if (token != _loadToken) return;
+    if (token != _loadToken) {
+      return;
+    }
     _isLoading = false;
-    if (!_disposed && mounted) setState(() {});
+    if (!_disposed && mounted) {
+      setState(() {});
+    }
 
     _loadGenreArtwork(token);
   }
@@ -194,13 +222,13 @@ class _AllGenresScreenState extends State<AllGenresScreen> {
     final needsWork = _genres
         .where(
           (genre) =>
-              genre.isGenreFallback ||
-              groupCollections ||
-              genre.itemCount == 0,
+              genre.isGenreFallback || groupCollections || genre.itemCount == 0,
         )
         .toList();
 
-    if (needsWork.isEmpty) return;
+    if (needsWork.isEmpty) {
+      return;
+    }
 
     final toLoad = needsWork.take(_initialArtworkBatch).toList();
     await Future.wait(toLoad.map((genre) => _loadGenreItems(genre, token)));
@@ -230,7 +258,9 @@ class _AllGenresScreenState extends State<AllGenresScreen> {
   }
 
   Future<void> _loadGenreItems(GenreCardData genre, int token) async {
-    if (_disposed || token != _loadToken) return;
+    if (_disposed || token != _loadToken) {
+      return;
+    }
     try {
       final groupCollections = _lastGroupCollections;
       final includeItemTypes = groupCollections
@@ -250,9 +280,7 @@ class _AllGenresScreenState extends State<AllGenresScreen> {
         );
 
         final rawTotalCount = response['TotalRecordCount'];
-        final totalCount = rawTotalCount is num
-            ? rawTotalCount.toInt()
-            : 0;
+        final totalCount = rawTotalCount is num ? rawTotalCount.toInt() : 0;
         if (totalCount <= 0) {
           if (_genres.remove(genre) && !_disposed && mounted) {
             setState(() {});
@@ -261,7 +289,9 @@ class _AllGenresScreenState extends State<AllGenresScreen> {
         }
 
         genre.itemCount = totalCount;
-        if (!_disposed && mounted) setState(() {});
+        if (!_disposed && mounted) {
+          setState(() {});
+        }
         return;
       }
 
@@ -308,17 +338,25 @@ class _AllGenresScreenState extends State<AllGenresScreen> {
 
       genre.imageUrl = imageUrl;
       genre.backdropUrl = backdropUrl;
-      if (usedId != null) _usedArtworkIds.add(usedId);
+      if (usedId != null) {
+        _usedArtworkIds.add(usedId);
+      }
 
-      if (!_disposed && mounted) setState(() {});
+      if (!_disposed && mounted) {
+        setState(() {});
+      }
     } catch (_) {}
   }
 
   int _genreCardRequestMaxWidth() {
     final requestScale = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 2.0);
     final widthPx = (_cardWidth() * requestScale).round();
-    if (widthPx < 160) return 160;
-    if (widthPx > 720) return 720;
+    if (widthPx < 160) {
+      return 160;
+    }
+    if (widthPx > 720) {
+      return 720;
+    }
     return widthPx;
   }
 
@@ -341,7 +379,9 @@ class _AllGenresScreenState extends State<AllGenresScreen> {
   }
 
   double _desktopUiScaleFactor() {
-    return _prefs.get(UserPreferences.desktopUiScale).scaleFactor;
+    return PlatformDetection.isTV
+        ? 1.0
+        : _prefs.get(UserPreferences.desktopUiScale).scaleFactor;
   }
 
   Future<void> _showSettingsDialog() async {
@@ -373,13 +413,14 @@ class _AllGenresScreenState extends State<AllGenresScreen> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      RequestInitialFocus(
-        child: QuickReturnWrapper(
-          scrollController: _scrollController,
-          child: _buildContent(context),
-        ),
-      );
+  Widget build(BuildContext context) => RequestInitialFocus(
+    child: QuickReturnWrapper(
+      scrollController: _scrollController,
+      child: PlatformDetection.isTV
+          ? TvAsyncContent(ready: !_isLoading, child: _buildContent(context))
+          : _buildContent(context),
+    ),
+  );
 
   Widget _buildContent(BuildContext context) {
     final isMobile = _isCompact(context);
@@ -404,43 +445,51 @@ class _AllGenresScreenState extends State<AllGenresScreen> {
           ),
           Column(
             children: [
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                  isMobile ? 16.0 : _horizontalPadding,
-                  isMobile ? MediaQuery.of(context).padding.top + 8 : 20.0,
-                  isMobile ? 16.0 : _horizontalPadding,
-                  8,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    FocusableToolbarButton(
-                      icon: Icons.home,
-                      size: 42 * desktopScale,
-                      iconSize: 24 * desktopScale,
-                      tooltip: AppLocalizations.of(context).home,
-                      onTap: () => context.go(Destinations.home),
-                    ),
-                    SizedBox(width: 4 * desktopScale),
-                    FocusableToolbarButton(
-                      icon: Icons.settings,
-                      size: 42 * desktopScale,
-                      iconSize: 24 * desktopScale,
-                      tooltip: AppLocalizations.of(context).displaySettings,
-                      onTap: _showSettingsDialog,
-                    ),
-                    SizedBox(width: 12 * desktopScale),
-                    Text(
-                      AppLocalizations.of(context).allGenres,
-                      style: TextStyle(
-                        fontSize: 26 * desktopScale,
-                        fontWeight: FontWeight.w300,
-                        color: AppColorScheme.onSurface,
+              if (PlatformDetection.isTV)
+                TvBrowseHeader(
+                  title: AppLocalizations.of(context).allGenres,
+                  onHome: () => context.go(Destinations.home),
+                )
+              else
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    isMobile ? 16.0 : _horizontalPadding,
+                    isMobile ? MediaQuery.of(context).padding.top + 8 : 20.0,
+                    isMobile ? 16.0 : _horizontalPadding,
+                    8,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      FocusableToolbarButton(
+                        icon: Icons.home,
+                        size: 42 * desktopScale,
+                        iconSize: 24 * desktopScale,
+                        tooltip: AppLocalizations.of(context).home,
+                        onTap: () => context.go(Destinations.home),
                       ),
-                    ),
-                  ],
+                      if (showAppSettings) ...[
+                        SizedBox(width: 4 * desktopScale),
+                        FocusableToolbarButton(
+                          icon: Icons.settings,
+                          size: 42 * desktopScale,
+                          iconSize: 24 * desktopScale,
+                          tooltip: AppLocalizations.of(context).displaySettings,
+                          onTap: _showSettingsDialog,
+                        ),
+                      ],
+                      SizedBox(width: 12 * desktopScale),
+                      Text(
+                        AppLocalizations.of(context).allGenres,
+                        style: TextStyle(
+                          fontSize: 26 * desktopScale,
+                          fontWeight: FontWeight.w300,
+                          color: AppColorScheme.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
               Expanded(child: _buildBody()),
             ],
           ),
@@ -454,7 +503,18 @@ class _AllGenresScreenState extends State<AllGenresScreen> {
       return const SkeletonLibraryGrid(aspectRatio: 16 / 9);
     }
 
+    if (_error != null && _genres.isEmpty) {
+      return TvStatusView(
+        message: describeError(_error!, AppLocalizations.of(context)),
+        onRetry: _load,
+      );
+    }
     if (_genres.isEmpty) {
+      if (PlatformDetection.isTV) {
+        return TvStatusView(
+          message: AppLocalizations.of(context).noGenresFound,
+        );
+      }
       return Center(
         child: Text(
           AppLocalizations.of(context).noGenresFound,
@@ -469,17 +529,22 @@ class _AllGenresScreenState extends State<AllGenresScreen> {
       builder: (context, constraints) {
         final isMobile = _isCompact(context);
         final desktopScale = _desktopUiScaleFactor();
-        final hPad = isMobile ? 16.0 : _horizontalPadding * desktopScale;
-        final spacing = 16.0 * desktopScale;
+        final hPad = PlatformDetection.isTV
+            ? Tv26Style.inset
+            : isMobile
+            ? 16.0
+            : _horizontalPadding * desktopScale;
+        final spacing = PlatformDetection.isTV ? 24.0 : 16.0 * desktopScale;
         final minColumns = _imageType == ImageType.banner
             ? (constraints.maxWidth < 600 ? 1 : 2)
             : (isMobile ? 1 : 2);
         final maxColumns = isMobile ? 4 : 8;
-        final crossAxisCount =
-            ((constraints.maxWidth - hPad * 2 + spacing) /
-                    (_cardWidth() + spacing))
-                .floor()
-                .clamp(minColumns, maxColumns);
+        final crossAxisCount = PlatformDetection.isTV
+            ? 4
+            : ((constraints.maxWidth - hPad * 2 + spacing) /
+                      (_cardWidth() + spacing))
+                  .floor()
+                  .clamp(minColumns, maxColumns);
 
         return GridView.builder(
           controller: _scrollController,
@@ -495,6 +560,9 @@ class _AllGenresScreenState extends State<AllGenresScreen> {
             final genre = _genres[index];
             return GenreGridCard(
               genre: genre,
+              index: index,
+              itemCount: _genres.length,
+              columns: crossAxisCount,
               cardFocusExpansion: _prefs.get(
                 UserPreferences.cardFocusExpansion,
               ),
@@ -502,7 +570,9 @@ class _AllGenresScreenState extends State<AllGenresScreen> {
                 Destinations.genre(genre.name, genreId: genre.id),
               ),
               onLongPress: () {
-                final serverId = GetIt.instance<UserRepository>().currentUser?.serverId ?? '';
+                final serverId =
+                    GetIt.instance<UserRepository>().currentUser?.serverId ??
+                    '';
                 final aggregatedItem = AggregatedItem(
                   id: genre.id,
                   serverId: serverId,
@@ -512,7 +582,11 @@ class _AllGenresScreenState extends State<AllGenresScreen> {
                     'Id': genre.id,
                   },
                 );
-                showContextMenu(context, aggregatedItem, onChanged: () => setState(() {}));
+                showContextMenu(
+                  context,
+                  aggregatedItem,
+                  onChanged: () => setState(() {}),
+                );
               },
               onHover: isMobile
                   ? null

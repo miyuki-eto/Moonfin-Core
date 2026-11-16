@@ -1,6 +1,15 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+
+import 'package:get_it/get_it.dart';
+
+import '../../../data/repositories/item_mutation_repository.dart';
+import '../../../data/services/media_server_client_factory.dart';
+import '../../../data/services/user_data_sync.dart';
+
 import '../offline_aware_image.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:moonfin_design/moonfin_design.dart';
@@ -17,11 +26,18 @@ import '../bounded_network_image.dart';
 import '../rating_display.dart';
 import '../../util/error_message.dart';
 import 'media_bar_status_focus.dart';
+import 'tv_featured_hero.dart';
 
 class BannerMediaBar extends StatefulWidget {
   final MediaBarViewModel viewModel;
   final UserPreferences prefs;
   final double height;
+  final bool showArtwork;
+  final ValueChanged<MediaBarSlideItem>? onCurrentItem;
+
+  /// When artwork is rendered by the page, commit its text and actions only
+  /// when that backdrop has decoded (or failed).
+  final ValueListenable<String?>? artworkReady;
   final bool externallyPaused;
   final FocusNode? focusNode;
   final void Function(MediaBarSlideItem item) onOpen;
@@ -35,6 +51,9 @@ class BannerMediaBar extends StatefulWidget {
     required this.viewModel,
     required this.prefs,
     required this.height,
+    this.showArtwork = true,
+    this.onCurrentItem,
+    this.artworkReady,
     required this.onOpen,
     required this.onPlay,
     this.externallyPaused = false,
@@ -52,7 +71,12 @@ class _BannerMediaBarState extends State<BannerMediaBar> {
   static const _keyLongPressThreshold = Duration(milliseconds: 500);
   Timer? _autoAdvance;
   int _index = 0;
+  int _presentedIndex = 0;
+  MediaBarSlideItem? _presentedItem;
+  MediaBarSlideItem? _requestedItem;
   bool _focused = false;
+  bool _hovered = false;
+  bool _savingFavorite = false;
   DateTime? _keyDownTime;
 
   @override
@@ -60,6 +84,8 @@ class _BannerMediaBarState extends State<BannerMediaBar> {
     super.initState();
     widget.viewModel.addListener(_onChanged);
     widget.prefs.addListener(_onChanged);
+    widget.artworkReady?.addListener(_onChanged);
+    userDataSync.addListener(_onChanged);
     _startAutoAdvance();
     _ensureRatingsForCurrent();
   }
@@ -67,6 +93,10 @@ class _BannerMediaBarState extends State<BannerMediaBar> {
   @override
   void didUpdateWidget(BannerMediaBar oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.artworkReady != oldWidget.artworkReady) {
+      oldWidget.artworkReady?.removeListener(_onChanged);
+      widget.artworkReady?.addListener(_onChanged);
+    }
     if (widget.externallyPaused != oldWidget.externallyPaused) {
       _startAutoAdvance();
     }
@@ -77,6 +107,8 @@ class _BannerMediaBarState extends State<BannerMediaBar> {
     _autoAdvance?.cancel();
     widget.viewModel.removeListener(_onChanged);
     widget.prefs.removeListener(_onChanged);
+    widget.artworkReady?.removeListener(_onChanged);
+    userDataSync.removeListener(_onChanged);
     super.dispose();
   }
 
@@ -91,9 +123,34 @@ class _BannerMediaBarState extends State<BannerMediaBar> {
     }
   }
 
+  Future<void> _toggleFavorite(MediaBarSlideItem item) async {
+    if (_savingFavorite) return;
+    _savingFavorite = true;
+    final selected =
+        !(userDataSync.favoriteState(item.itemId) ?? item.isFavorite);
+    try {
+      final client = GetIt.instance<MediaServerClientFactory>()
+          .clientForServerOrActive(item.serverId);
+      await ItemMutationRepository(client)
+          .setFavorite(item.itemId, isFavorite: selected);
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(describeError(error, AppLocalizations.of(context))),
+          ),
+        );
+    } finally {
+      _savingFavorite = false;
+    }
+  }
+
   void _startAutoAdvance() {
     _autoAdvance?.cancel();
-    if (widget.externallyPaused) return;
+    if (widget.externallyPaused ||
+        (PlatformDetection.isTV && (_focused || _hovered))) {
+      return;
+    }
     if (!widget.prefs.get(UserPreferences.mediaBarAutoAdvance)) return;
     final intervalMs = widget.prefs.get(UserPreferences.mediaBarIntervalMs);
     _autoAdvance = Timer.periodic(Duration(milliseconds: intervalMs), (_) {
@@ -122,7 +179,8 @@ class _BannerMediaBarState extends State<BannerMediaBar> {
       if (event is KeyUpEvent) {
         final downTime = _keyDownTime;
         _keyDownTime = null;
-        final longPress = downTime != null &&
+        final longPress =
+            downTime != null &&
             DateTime.now().difference(downTime) >= _keyLongPressThreshold;
         if (longPress) {
           widget.onPlay(item);
@@ -202,7 +260,9 @@ class _BannerMediaBarState extends State<BannerMediaBar> {
             SizedBox(
               height: loadingHeight,
               width: double.infinity,
-              child: const Center(child: CircularProgressIndicator()),
+              child: PlatformDetection.isTV
+                  ? const SizedBox.expand()
+                  : const Center(child: LoadingThrobber()),
             ),
           ),
         );
@@ -227,9 +287,8 @@ class _BannerMediaBarState extends State<BannerMediaBar> {
                     message,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColorScheme.onSurface,
-                    ),
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: AppColorScheme.onSurface),
                   ),
                 ),
                 TextButton(
@@ -245,8 +304,62 @@ class _BannerMediaBarState extends State<BannerMediaBar> {
       );
     }
     final index = _index.clamp(0, items.length - 1);
-    final item = items[index];
+    final requested = items[index];
+    if (widget.onCurrentItem != null && !identical(_requestedItem, requested)) {
+      _requestedItem = requested;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onCurrentItem?.call(requested);
+      });
+    }
 
+    if (PlatformDetection.isTV) {
+      if (_presentedItem == null ||
+          widget.artworkReady == null ||
+          requested.backdropUrl == null ||
+          widget.artworkReady!.value == requested.backdropUrl) {
+        _presentedItem = requested;
+        _presentedIndex = index;
+      }
+      final item = _presentedItem!;
+      return TvFeaturedHero(
+        item: item,
+        showArtwork: widget.showArtwork,
+        isFavorite: userDataSync.favoriteState(item.itemId) ?? item.isFavorite,
+        onFavorite: item.isExternal
+            ? null
+            : () => unawaited(_toggleFavorite(item)),
+        height: widget.height,
+        index: _presentedIndex,
+        count: items.length,
+        focusNode: widget.focusNode,
+        onOpen: () => widget.onOpen(item),
+        onPlay: () => widget.onPlay(item),
+        onPrevious: () {
+          if (widget.onNavigateLeft != null) {
+            widget.onNavigateLeft!();
+          } else if (index > 0) {
+            _setIndex(index - 1);
+          }
+        },
+        onNext: () {
+          if (items.length > 1) _setIndex(index + 1);
+        },
+        onNavigateUp: widget.onNavigateUp,
+        onNavigateDown: () => unawaited(widget.onNavigateDown?.call()),
+        onFocusChange: (focused) {
+          if (!mounted) return;
+          _focused = focused;
+          _startAutoAdvance();
+        },
+        onHoverChange: (hovered) {
+          if (!mounted) return;
+          _hovered = hovered;
+          _startAutoAdvance();
+        },
+      );
+    }
+
+    final item = requested;
     final isMobile = PlatformDetection.useMobileUi;
     // A phone's bar is about 2:1, where a banner would be a thin strip.
     final bannerUrl = isMobile ? null : item.bannerUrl;
@@ -270,9 +383,7 @@ class _BannerMediaBarState extends State<BannerMediaBar> {
           decoration: BoxDecoration(
             borderRadius: AppRadius.circular(16),
             border: Border.all(
-              color: _focused
-                  ? AppColorScheme.accent
-                  : Colors.transparent,
+              color: _focused ? AppColorScheme.accent : Colors.transparent,
               width: 2.5,
             ),
             boxShadow: _focused
@@ -296,7 +407,9 @@ class _BannerMediaBarState extends State<BannerMediaBar> {
                         if (v < -300) {
                           _setIndex(_index + 1);
                         } else if (v > 300) {
-                          _setIndex(_index == 0 ? items.length - 1 : _index - 1);
+                          _setIndex(
+                            _index == 0 ? items.length - 1 : _index - 1,
+                          );
                         }
                       }
                     : null,
@@ -385,7 +498,10 @@ class _BannerMediaBarState extends State<BannerMediaBar> {
   }) {
     final theme = Theme.of(context);
     final shadows = <Shadow>[
-      Shadow(blurRadius: 10, color: AppColorScheme.scrim.withValues(alpha: 0.8)),
+      Shadow(
+        blurRadius: 10,
+        color: AppColorScheme.scrim.withValues(alpha: 0.8),
+      ),
     ];
     final meta = <String>[
       if (item.year != null) '${item.year}',
@@ -456,7 +572,6 @@ class _BannerMediaBarState extends State<BannerMediaBar> {
     );
   }
 
-
   String _formatRuntime(Duration d) {
     final h = d.inHours;
     final m = d.inMinutes.remainder(60);
@@ -473,7 +588,10 @@ class _Dots extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final shown = count > 7 ? 7 : count;
-    final start = (active - shown ~/ 2).clamp(0, count - shown < 0 ? 0 : count - shown);
+    final start = (active - shown ~/ 2).clamp(
+      0,
+      count - shown < 0 ? 0 : count - shown,
+    );
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [

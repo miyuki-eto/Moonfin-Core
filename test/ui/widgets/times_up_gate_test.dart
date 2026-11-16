@@ -68,6 +68,38 @@ String _time(DateTime moment, {bool use24Hour = false}) =>
     (use24Hour ? DateFormat.Hm('en') : DateFormat.jm('en')).format(moment);
 
 void main() {
+  testWidgets(
+    'router initialization may notify while the focus guard builds its child',
+    (tester) async {
+      final route = ValueNotifier('/server');
+      final service = _closedService([_entry('Monday', 8, 20)])
+        ..setUser('child');
+      await tester.pump();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TimesUpFocusGuard(
+            service: service,
+            routeChanges: route,
+            currentPath: () => route.value,
+            child: _RouteInitialization(onMount: () => route.value = '/home'),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      final exclusion = find
+          .descendant(
+            of: find.byType(TimesUpFocusGuard),
+            matching: find.byType(ExcludeFocus),
+          )
+          .first;
+      expect(tester.widget<ExcludeFocus>(exclusion).excluding, isTrue);
+      await tester.pumpWidget(const SizedBox.shrink());
+      route.dispose();
+      service.dispose();
+    },
+  );
+
   testWidgets('shows nothing while the user is allowed', (tester) async {
     final service = _closedService([_entry('Monday', 8, 22)]);
     service.setUser('child');
@@ -467,4 +499,22 @@ void main() {
       );
     });
   });
+}
+
+class _RouteInitialization extends StatefulWidget {
+  const _RouteInitialization({required this.onMount});
+  final VoidCallback onMount;
+  @override
+  State<_RouteInitialization> createState() => _RouteInitializationState();
+}
+
+class _RouteInitializationState extends State<_RouteInitialization> {
+  @override
+  void initState() {
+    super.initState();
+    widget.onMount();
+  }
+
+  @override
+  Widget build(BuildContext context) => const Text('Route content');
 }

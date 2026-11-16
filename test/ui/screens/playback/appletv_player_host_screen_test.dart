@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:flutter/services.dart';
 import 'package:jellyfin_preference/jellyfin_preference.dart';
 import 'package:moonfin/l10n/app_localizations.dart';
@@ -185,30 +185,29 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('uses a white native spinner throughout tvOS bring-up', (
+  testWidgets('uses the shared throbber throughout tvOS bring-up', (
     tester,
   ) async {
     await tester.pumpWidget(const MaterialApp(home: AppleTvPlayerHostScreen()));
 
-    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
+    expect(find.byType(LoadingThrobber), findsOneWidget);
     expect(find.byType(PlayerLoadingOverlay), findsNothing);
-    final spinner = tester.widget<CupertinoActivityIndicator>(
-      find.byType(CupertinoActivityIndicator),
+    final spinner = tester.widget<LoadingThrobber>(
+      find.byType(LoadingThrobber),
     );
-    expect(spinner.radius, 20);
     expect(spinner.color, Colors.white);
 
     bringupController.add(
       const PlaybackBringupState(phase: PlaybackBringupPhase.resolving),
     );
     await tester.pump();
-    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
+    expect(find.byType(LoadingThrobber), findsOneWidget);
 
     bringupController.add(
       const PlaybackBringupState(phase: PlaybackBringupPhase.ready),
     );
     await tester.pump();
-    expect(find.byType(CupertinoActivityIndicator), findsNothing);
+    expect(find.byType(LoadingThrobber), findsNothing);
   });
 
   testWidgets('removes tvOS launch feedback after startup failure', (
@@ -221,6 +220,6 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byType(CupertinoActivityIndicator), findsNothing);
+    expect(find.byType(LoadingThrobber), findsNothing);
   });
 }

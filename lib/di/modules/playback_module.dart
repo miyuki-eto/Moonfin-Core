@@ -32,6 +32,7 @@ import '../../playback/headless_session_bootstrap.dart';
 import '../../playback/last_playback_session_store.dart';
 import '../../playback/media_browse_service.dart';
 import '../../playback/html_video_backend.dart';
+import '../../playback/tizen_player_backend.dart';
 import '../../playback/known_defects.dart';
 import '../../playback/external_player_policy.dart';
 import '../../playback/apple_player_ui.dart';
@@ -332,8 +333,12 @@ void registerPlaybackModule() {
   Media3PlayerBackend? media3Backend;
   NativeApplePlayerBackend? nativeApplePlayerBackend;
   AetherBackend? iosBackend;
+  TizenPlayerBackend? tizenBackend;
 
-  if (PlatformDetection.isAppleTV) {
+  if (PlatformDetection.isTizen) {
+    tizenBackend = TizenPlayerBackend(prefs);
+    _getIt.registerSingleton<TizenPlayerBackend>(tizenBackend);
+  } else if (PlatformDetection.isAppleTV) {
     nativeApplePlayerBackend = NativeApplePlayerBackend(prefs);
     _getIt.registerSingleton<NativeApplePlayerBackend>(nativeApplePlayerBackend);
     // Backs the Flutter player option. It sits idle until a video picks it.
@@ -372,7 +377,9 @@ void registerPlaybackModule() {
       PlatformDetection.isAndroid &&
       prefs.get(UserPreferences.playbackEnginePreference) ==
           PlaybackEnginePreference.media3;
-  final PlayerBackend initialBackend = PlatformDetection.isAppleTV
+  final PlayerBackend initialBackend = PlatformDetection.isTizen
+      ? tizenBackend!
+      : PlatformDetection.isAppleTV
       ? nativeApplePlayerBackend!
       : (PlatformDetection.isIOS || PlatformDetection.isMacOS)
       ? iosBackend!
@@ -492,6 +499,7 @@ void registerPlaybackModule() {
 
   manager.setBackend(initialBackend);
   manager.setBackendSelector((resolution, currentBackend) {
+    if (PlatformDetection.isTizen) return tizenBackend!;
     if (PlatformDetection.isAppleTV) {
       // Music and audiobooks keep the native player whichever video player
       // is picked.
@@ -610,132 +618,153 @@ void registerPlaybackModule() {
   final audioArbiter = PlaybackArbiter();
   _getIt.registerSingleton<PlaybackArbiter>(audioArbiter);
   manager.setAudioArbiter(audioArbiter);
-  manager.audioTrackSelector = (audioStreams, explicitIndex) {
-    if (explicitIndex != null) return explicitIndex;
+  manager.audioTrackSelector =
+      (currentItem, audioStreams, explicitIndex, preview) {
+        if (explicitIndex != null) return explicitIndex;
 
-    final currentItem = manager.queueService.currentItem;
-    if (currentItem is AggregatedItem &&
-        currentItem.seriesId != null &&
-        currentItem.seriesId!.isNotEmpty) {
-      final seriesAudioPref = prefs.getSeriesAudioPreference(
-        currentItem.seriesId!,
-      );
-      if (seriesAudioPref.isNotEmpty) {
-        final matchedIndex = matchSeriesTrackIndex(
-          streams: audioStreams,
-          pref: seriesAudioPref,
+        if (currentItem is AggregatedItem &&
+            currentItem.seriesId != null &&
+            currentItem.seriesId!.isNotEmpty) {
+          final seriesAudioPref = prefs.getSeriesAudioPreference(
+            currentItem.seriesId!,
+          );
+          if (seriesAudioPref.isNotEmpty) {
+            final matchedIndex = matchSeriesTrackIndex(
+              streams: audioStreams,
+              pref: seriesAudioPref,
+            );
+            if (matchedIndex != null) return matchedIndex;
+          }
+        }
+
+        final preferredAudioLanguage =
+            (preview ? null : manager.lastExplicitAudioLanguage) ??
+            (prefs.get(UserPreferences.defaultAudioLanguage) as String? ??
+                'auto');
+
+        return computeEffectiveAudioIndex(
+          audioStreams: audioStreams,
+          preferredAudioLanguage: preferredAudioLanguage,
+          fallbackAudioLanguage:
+              prefs.get(UserPreferences.fallbackAudioLanguage) as String? ?? '',
+          preferDefaultAudioTrack:
+              prefs.get(UserPreferences.preferDefaultAudioTrack) as bool? ??
+              false,
+          preferAudioDescription:
+              prefs.get(UserPreferences.preferAudioDescription) as bool? ??
+              false,
+          explicitAudioIndex: explicitIndex,
+          lastExplicitAudioIndex: preview
+              ? null
+              : manager.lastExplicitAudioIndex,
+          lastExplicitAudioTitle: preview
+              ? null
+              : manager.lastExplicitAudioTitle,
         );
-        if (matchedIndex != null) return matchedIndex;
-      }
-    }
+      };
 
-    final preferredAudioLanguage =
-        manager.lastExplicitAudioLanguage ??
-        (prefs.get(UserPreferences.defaultAudioLanguage) as String? ?? 'auto');
+  manager.subtitleTrackSelector =
+      (currentItem, subtitleStreams, audioStreams, explicitIndex, preview) {
+        if (explicitIndex != null) return explicitIndex;
 
-    return computeEffectiveAudioIndex(
-      audioStreams: audioStreams,
-      preferredAudioLanguage: preferredAudioLanguage,
-      fallbackAudioLanguage:
-          prefs.get(UserPreferences.fallbackAudioLanguage) as String? ?? '',
-      preferDefaultAudioTrack:
-          prefs.get(UserPreferences.preferDefaultAudioTrack) as bool? ?? false,
-      preferAudioDescription:
-          prefs.get(UserPreferences.preferAudioDescription) as bool? ?? false,
-      explicitAudioIndex: explicitIndex,
-      lastExplicitAudioIndex: manager.lastExplicitAudioIndex,
-      lastExplicitAudioTitle: manager.lastExplicitAudioTitle,
-    );
-  };
+        String? seriesId;
+        if (currentItem is AggregatedItem) {
+          seriesId = currentItem.seriesId;
+        }
 
-  manager
-      .subtitleTrackSelector = (subtitleStreams, audioStreams, explicitIndex) {
-    if (explicitIndex != null) return explicitIndex;
+        final seriesSubPref = seriesId != null && seriesId.isNotEmpty
+            ? prefs.getSeriesSubtitlePreference(seriesId)
+            : SeriesTrackPreference.empty;
+        if (seriesSubPref.isNone) return -1;
+        if (seriesSubPref.isNotEmpty) {
+          final matchedIndex = matchSeriesTrackIndex(
+            streams: subtitleStreams,
+            pref: seriesSubPref,
+          );
+          if (matchedIndex != null) return matchedIndex;
+        }
 
-    final currentItem = manager.queueService.currentItem;
-    String? seriesId;
-    if (currentItem is AggregatedItem) {
-      seriesId = currentItem.seriesId;
-    }
+        final effectiveAudioIndex = computeEffectiveAudioIndex(
+          audioStreams: audioStreams,
+          preferredAudioLanguage:
+              (preview ? null : manager.lastExplicitAudioLanguage) ??
+              (prefs.get(UserPreferences.defaultAudioLanguage) as String? ??
+                  'auto'),
+          fallbackAudioLanguage:
+              prefs.get(UserPreferences.fallbackAudioLanguage) as String? ?? '',
+          preferDefaultAudioTrack:
+              prefs.get(UserPreferences.preferDefaultAudioTrack) as bool? ??
+              false,
+          preferAudioDescription:
+              prefs.get(UserPreferences.preferAudioDescription) as bool? ??
+              false,
+          explicitAudioIndex: !preview && manager.audioSelectionExplicit
+              ? manager.audioStreamIndex
+              : null,
+          lastExplicitAudioIndex: preview
+              ? null
+              : manager.lastExplicitAudioIndex,
+          lastExplicitAudioTitle: preview
+              ? null
+              : manager.lastExplicitAudioTitle,
+        );
 
-    final seriesSubPref = seriesId != null && seriesId.isNotEmpty
-        ? prefs.getSeriesSubtitlePreference(seriesId)
-        : SeriesTrackPreference.empty;
-    if (seriesSubPref.isNone) return -1;
-    if (seriesSubPref.isNotEmpty) {
-      final matchedIndex = matchSeriesTrackIndex(
-        streams: subtitleStreams,
-        pref: seriesSubPref,
-      );
-      if (matchedIndex != null) return matchedIndex;
-    }
+        final activeAudioStream = audioStreams.firstWhere(
+          (s) => s['Index'] == effectiveAudioIndex,
+          orElse: () => const <String, dynamic>{},
+        );
+        final activeAudioLanguage = activeAudioStream.isNotEmpty
+            ? activeAudioStream['Language'] as String?
+            : null;
 
-    final effectiveAudioIndex = computeEffectiveAudioIndex(
-      audioStreams: audioStreams,
-      preferredAudioLanguage:
-          manager.lastExplicitAudioLanguage ??
-          (prefs.get(UserPreferences.defaultAudioLanguage) as String? ??
-              'auto'),
-      fallbackAudioLanguage:
-          prefs.get(UserPreferences.fallbackAudioLanguage) as String? ?? '',
-      preferDefaultAudioTrack:
-          prefs.get(UserPreferences.preferDefaultAudioTrack) as bool? ?? false,
-      preferAudioDescription:
-          prefs.get(UserPreferences.preferAudioDescription) as bool? ?? false,
-      explicitAudioIndex: manager.audioSelectionExplicit
-          ? manager.audioStreamIndex
-          : null,
-      lastExplicitAudioIndex: manager.lastExplicitAudioIndex,
-      lastExplicitAudioTitle: manager.lastExplicitAudioTitle,
-    );
+        var subtitleMode =
+            !preview && manager.lastExplicitSubtitleEnabled == false
+            ? SubtitleMode.none
+            : prefs.get(UserPreferences.subtitleMode);
 
-    final activeAudioStream = audioStreams.firstWhere(
-      (s) => s['Index'] == effectiveAudioIndex,
-      orElse: () => const <String, dynamic>{},
-    );
-    final activeAudioLanguage = activeAudioStream.isNotEmpty
-        ? activeAudioStream['Language'] as String?
-        : null;
+        var preferredLanguage = preview
+            ? null
+            : manager.lastExplicitSubtitleLanguage;
+        // No track in this episode carries the remembered one, so fall back to its
+        // language and make sure subtitles are on to show it. A remembered track
+        // with no language tag has nothing to fall back to.
+        if (preferredLanguage == null && seriesSubPref.language.isNotEmpty) {
+          preferredLanguage = seriesSubPref.language;
+          if (subtitleMode == SubtitleMode.none) {
+            subtitleMode = SubtitleMode.always;
+          }
+        }
 
-    var subtitleMode = manager.lastExplicitSubtitleEnabled == false
-        ? SubtitleMode.none
-        : prefs.get(UserPreferences.subtitleMode);
+        preferredLanguage ??=
+            (prefs.get(UserPreferences.defaultSubtitleLanguage) as String? ??
+            '');
 
-    var preferredLanguage = manager.lastExplicitSubtitleLanguage;
-    // No track in this episode carries the remembered one, so fall back to its
-    // language and make sure subtitles are on to show it. A remembered track
-    // with no language tag has nothing to fall back to.
-    if (preferredLanguage == null && seriesSubPref.language.isNotEmpty) {
-      preferredLanguage = seriesSubPref.language;
-      if (subtitleMode == SubtitleMode.none) {
-        subtitleMode = SubtitleMode.always;
-      }
-    }
-
-    preferredLanguage ??=
-        (prefs.get(UserPreferences.defaultSubtitleLanguage) as String? ?? '');
-
-    return computeEffectiveSubtitleIndex(
-      subtitleStreams: subtitleStreams,
-      selectedSubtitleIndex: null,
-      activePlaybackSubtitleIndex: null,
-      subtitleMode: subtitleMode,
-      preferredLanguage: preferredLanguage,
-      fallbackLanguage:
-          prefs.get(UserPreferences.fallbackSubtitleLanguage) as String? ?? '',
-      preferSdh:
-          prefs.get(UserPreferences.preferSdhSubtitles) as bool? ?? false,
-      preferTextSubtitles:
-          prefs.get(UserPreferences.preferTextSubtitles) as bool? ?? false,
-      preferExternalSubtitles:
-          prefs.get(UserPreferences.preferExternalSubtitles) as bool? ?? false,
-      pgsDirectPlay: prefs.get(UserPreferences.pgsDirectPlay) as bool? ?? false,
-      assDirectPlay: prefs.get(UserPreferences.assDirectPlay) as bool? ?? false,
-      preferredAudioLanguage:
-          prefs.get(UserPreferences.defaultAudioLanguage) as String? ?? 'auto',
-      activeAudioLanguage: activeAudioLanguage,
-    );
-  };
+        return computeEffectiveSubtitleIndex(
+          subtitleStreams: subtitleStreams,
+          selectedSubtitleIndex: null,
+          activePlaybackSubtitleIndex: null,
+          subtitleMode: subtitleMode,
+          preferredLanguage: preferredLanguage,
+          fallbackLanguage:
+              prefs.get(UserPreferences.fallbackSubtitleLanguage) as String? ??
+              '',
+          preferSdh:
+              prefs.get(UserPreferences.preferSdhSubtitles) as bool? ?? false,
+          preferTextSubtitles:
+              prefs.get(UserPreferences.preferTextSubtitles) as bool? ?? false,
+          preferExternalSubtitles:
+              prefs.get(UserPreferences.preferExternalSubtitles) as bool? ??
+              false,
+          pgsDirectPlay:
+              prefs.get(UserPreferences.pgsDirectPlay) as bool? ?? false,
+          assDirectPlay:
+              prefs.get(UserPreferences.assDirectPlay) as bool? ?? false,
+          preferredAudioLanguage:
+              prefs.get(UserPreferences.defaultAudioLanguage) as String? ??
+              'auto',
+          activeAudioLanguage: activeAudioLanguage,
+        );
+      };
 
   _getIt.registerSingleton<PlaybackManager>(manager);
 
@@ -863,9 +892,8 @@ void _onItemStopped(dynamic item) {
       _getIt.isRegistered<RemoveWatchedService>()) {
     _getIt<RemoveWatchedService>().onItemStopped(item.id);
   }
-  // Plex sends no user data events, so the new resume point and watched state
-  // have to be asked for. Plex items don't name their server, so one without
-  // an id belongs to the active client.
+  // Refresh after the stop report lands. Socket events can be delayed or lost,
+  // and the detail page underneath the player must show its new resume point.
   if (!_getIt.isRegistered<MediaServerClientFactory>() ||
       !_getIt.isRegistered<MediaServerClient>()) {
     return;
@@ -873,15 +901,13 @@ void _onItemStopped(dynamic item) {
   final client = _getIt<MediaServerClientFactory>().clientForServerOrActive(
     item.serverId,
   );
-  if (client.serverType == ServerType.plex) {
-    unawaited(
-      userDataSync.refreshFromServer(client, [
-        item.id,
-        ?item.seasonId,
-        ?item.seriesId,
-      ]),
-    );
-  }
+  unawaited(
+    userDataSync.refreshFromServer(client, [
+      item.id,
+      ?item.seasonId,
+      ?item.seriesId,
+    ]),
+  );
 }
 
 Future<void> _ensureResolverForItem(dynamic item) async {

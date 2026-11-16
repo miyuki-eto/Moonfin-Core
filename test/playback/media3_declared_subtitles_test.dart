@@ -43,6 +43,47 @@ void main() {
   Map<dynamic, dynamic> sourceArguments() =>
       calls.singleWhere((call) => call.method == 'setSource').arguments as Map;
 
+  test('unreported full-screen playback uses the main player slot', () async {
+    await backend.play(
+      {'url': 'http://server/video.mkv', 'preview': true},
+      startPosition: const Duration(minutes: 5),
+    );
+
+    expect(sourceArguments()['preview'], isFalse);
+    expect(sourceArguments()['startPositionMs'], 300000);
+  });
+
+  test('mid-film Retro timing uses the same clock and resets on a new programme', () async {
+    const position = Duration(minutes: 70);
+    await backend.play({
+      'url': 'http://server/batman.mkv',
+      'preview': true,
+      'subtitleDelaySessionId': 10,
+    }, startPosition: position);
+    expect(sourceArguments()['preview'], isFalse);
+    expect(sourceArguments()['startPositionMs'], position.inMilliseconds);
+    for (final delay in [-0.5, 0.5, 0.0]) {
+      await backend.setSubtitleDelay(delay);
+      final call = calls.lastWhere((c) => c.method == 'setSubtitleDelay');
+      expect(call.arguments['delayMs'], (delay * 1000).round());
+    }
+    await backend.setSubtitleDelay(0.5);
+    calls.clear();
+    await backend.play({
+      'url': 'http://server/batman.mkv',
+      'preview': true,
+      'subtitleDelaySessionId': 11,
+    }, startPosition: position + const Duration(minutes: 1));
+    expect(sourceArguments()['subtitleDelayMs'], 0);
+    expect(sourceArguments()['startPositionMs'], 4260000);
+  });
+
+  test('inline trailers use the native preview slot', () async {
+    await backend.play('http://server/trailer.mkv', inlinePreview: true);
+
+    expect(sourceArguments()['preview'], isTrue);
+  });
+
   test('the sidecars a source came with go out with the source', () async {
     const sidecars = [
       {

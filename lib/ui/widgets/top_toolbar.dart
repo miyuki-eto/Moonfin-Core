@@ -1,3 +1,5 @@
+import '../../config/app_features.dart';
+
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
@@ -9,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'package:moonfin_design/moonfin_design.dart';
 import 'package:server_core/server_core.dart';
 
+import '../settings_visibility.dart';
 import '../../l10n/app_localizations.dart';
 import '../../auth/repositories/user_repository.dart';
 import '../../data/models/aggregated_library.dart';
@@ -47,7 +50,9 @@ import 'user_menu_dialog.dart';
 
 import 'offline_aware_image.dart';
 import 'paced_network_image.dart';
+
 import 'package:playback_core/playback_core.dart';
+
 import '../../data/models/aggregated_item.dart';
 import '../../data/services/media_server_client_factory.dart';
 import '../../util/focus/dpad_keys.dart';
@@ -93,7 +98,9 @@ class TopToolbar extends StatefulWidget {
     final manager = GetIt.instance<PlaybackManager>();
     final item = manager.queueService.currentItem;
     final isMusic = item is AggregatedItem && item.isAudioLike;
-    if (!isMusic) return 0.0;
+    if (!isMusic) {
+      return 0.0;
+    }
     return PlatformDetection.useLeanbackUi ? 64.0 : 54.0;
   }
 
@@ -161,11 +168,15 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
     // Guarded so a stale registration from a torn-down toolbar is a safe
     // no-op instead of focusing a disposed node.
     _focusNavbarCallback = () {
-      if (!mounted || _homeFocus.context == null) return;
+      if (!mounted || _homeFocus.context == null) {
+        return;
+      }
       _homeFocus.requestFocus();
     };
     _focusAvatarCallback = () {
-      if (!mounted || _avatarFocus.context == null) return;
+      if (!mounted || _avatarFocus.context == null) {
+        return;
+      }
       _avatarFocus.requestFocus();
     };
     _previousFocusNavbarCallback = NavigationLayout.focusNavbarNotifier.value;
@@ -192,10 +203,14 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
     _loadLibraries();
     final manager = GetIt.instance<PlaybackManager>();
     _playSub = manager.state.playingStream.listen((_) {
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+      }
     });
     _queueSub = manager.queueService.queueChangedStream.listen((_) {
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+      }
     });
   }
 
@@ -205,7 +220,9 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final route = ModalRoute.of(context);
-    if (route == null || route == _observedRoute) return;
+    if (route == null || route == _observedRoute) {
+      return;
+    }
     if (_observedRoute != null) {
       routeLifecycleObserver.unsubscribe(this);
     }
@@ -296,14 +313,18 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
   }
 
   void _onPrefsChanged() {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     _updateClock();
     _scheduleLibrariesReload();
     setState(() {});
   }
 
   void _onUserViewsChanged() {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     _scheduleLibrariesReload();
   }
 
@@ -311,7 +332,9 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
   /// by itself, so the bar only rebuilds when the button comes or goes.
   void _onAchievementsChanged() {
     final available = FriendsNavSlot.isAvailable();
-    if (!mounted || available == _friendsAvailable) return;
+    if (!mounted || available == _friendsAvailable) {
+      return;
+    }
     setState(() => _friendsAvailable = available);
   }
 
@@ -320,12 +343,16 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
   void _scheduleLibrariesReload() {
     _librariesReloadDebounce?.cancel();
     _librariesReloadDebounce = Timer(const Duration(milliseconds: 300), () {
-      if (mounted) _loadLibraries();
+      if (mounted) {
+        _loadLibraries();
+      }
     });
   }
 
   void _onAvatarFocusChanged() {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     setState(() {});
   }
 
@@ -363,7 +390,9 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
                 .getAggregatedLibraries()
           : await _viewsRepo.getUserViews();
 
-      unawaited(GetIt.instance<GameLibraryRegistry>().refresh());
+      if (AppFeatures.has(AppFeature.games)) {
+        unawaited(GetIt.instance<GameLibraryRegistry>().refresh());
+      }
 
       final filtered = useMultiServer
           ? await GetIt.instance<LibraryScopeService>().withoutHiddenLibraries(
@@ -378,9 +407,13 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
   }
 
   bool _librariesEqual(List<AggregatedLibrary> a, List<AggregatedLibrary> b) {
-    if (a.length != b.length) return false;
+    if (a.length != b.length) {
+      return false;
+    }
     for (int i = 0; i < a.length; i++) {
-      if (a[i].id != b[i].id) return false;
+      if (a[i].id != b[i].id) {
+        return false;
+      }
     }
     return true;
   }
@@ -388,27 +421,41 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
   // Kids Mode sends /live-tv back to home, so the guide button would only be a
   // dead end.
   bool get _showLiveTvButton =>
+      AppFeatures.has(AppFeature.liveTv) &&
       !_kidsMode &&
       _prefs.get(UserPreferences.showLiveTvButton) &&
       _libraries.any(isLiveTvLibrary);
 
-  List<AggregatedLibrary> get _navLibraries =>
-      librariesForNav(_libraries, _showLiveTvButton, hideLiveTv: _kidsMode);
+  List<AggregatedLibrary> get _navLibraries => librariesForNav(
+    _libraries
+        .where((library) => AppFeatures.allowsLibrary(library.collectionType))
+        .toList(),
+    _showLiveTvButton,
+    hideLiveTv: _kidsMode,
+  );
 
   bool get _kidsMode => _prefs.get(UserPreferences.kidsModeEnabled);
 
   void _trackPreviousFocus() {
     final primary = FocusManager.instance.primaryFocus;
-    if (primary == null) return;
-    if (primary.skipTraversal) return;
-    if (_isInsideToolbar(primary)) return;
+    if (primary == null) {
+      return;
+    }
+    if (primary.skipTraversal) {
+      return;
+    }
+    if (_isInsideToolbar(primary)) {
+      return;
+    }
     _previousFocus = primary;
   }
 
   bool _isInsideToolbar(FocusNode node) {
     FocusNode? current = node;
     while (current != null) {
-      if (identical(current, _toolbarScopeNode)) return true;
+      if (identical(current, _toolbarScopeNode)) {
+        return true;
+      }
       current = current.parent;
     }
     return false;
@@ -417,26 +464,38 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
   bool _isDescendantOf(FocusNode? child, FocusNode parent) {
     FocusNode? current = child;
     while (current != null) {
-      if (identical(current, parent)) return true;
+      if (identical(current, parent)) {
+        return true;
+      }
       current = current.parent;
     }
     return false;
   }
 
   bool _isUsableOutsideToolbar(FocusNode? node) {
-    if (node == null) return false;
-    if (node.skipTraversal) return false;
-    if (_isInsideToolbar(node)) return false;
+    if (node == null) {
+      return false;
+    }
+    if (node.skipTraversal) {
+      return false;
+    }
+    if (_isInsideToolbar(node)) {
+      return false;
+    }
     return _isLaidOutFocusNode(node);
   }
 
   void _restoreFocusBelowToolbar() {
-    if (NavigationLayout.focusDetailsPlayButton()) return;
+    if (NavigationLayout.focusDetailsPlayButton()) {
+      return;
+    }
     final focusContent = NavigationLayout.focusContentFromNavbarNotifier.value;
     if (focusContent != null && widget.activeRoute == Destinations.home) {
       focusContent();
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
         final primary = FocusManager.instance.primaryFocus;
         if (primary == null || _isInsideToolbar(primary)) {
           _restoreFocusBelowToolbarFallback();
@@ -453,7 +512,9 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
     if (previous != null && _isUsableOutsideToolbar(previous)) {
       previous.requestFocus();
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
         final primary = FocusManager.instance.primaryFocus;
         if (_isUsableOutsideToolbar(primary)) {
           return;
@@ -475,7 +536,9 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
   }
 
   void _moveFocusDown({int attempt = 0}) {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     final scope = FocusScope.of(context);
     // Directional traversal measures every candidate it walks, so one node
     // still waiting on layout takes the whole call down. The manual paths below
@@ -483,7 +546,9 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
     try {
       if (scope.focusInDirection(TraversalDirection.down)) {
         final primary = FocusManager.instance.primaryFocus;
-        if (_isUsableOutsideToolbar(primary)) return;
+        if (_isUsableOutsideToolbar(primary)) {
+          return;
+        }
       }
     } catch (_) {}
 
@@ -500,23 +565,31 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
           firstContent.requestFocus();
         }
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
+          if (!mounted) {
+            return;
+          }
           final primary = FocusManager.instance.primaryFocus;
-          if (_isUsableOutsideToolbar(primary)) return;
+          if (_isUsableOutsideToolbar(primary)) {
+            return;
+          }
           if (attempt < 3) {
             _moveFocusDown(attempt: attempt + 1);
           }
         });
       } else if (attempt < 3) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _moveFocusDown(attempt: attempt + 1);
+          if (mounted) {
+            _moveFocusDown(attempt: attempt + 1);
+          }
         });
       }
       return;
     }
     if (attempt < 3) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _moveFocusDown(attempt: attempt + 1);
+        if (mounted) {
+          _moveFocusDown(attempt: attempt + 1);
+        }
       });
     }
   }
@@ -525,13 +598,15 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
   ///
   /// The row has collapsed by now, so its buttons are gone and the trigger is
   /// what sits in their place. Stepping from there lands on whatever is next,
-  /// which is downloads or server messages before it reaches settings.
+  /// which is downloads or server messages when those actions are offered.
   void _focusAfterInlineLibraries() {
     final moved = _moveWithinToolbar(
       TraversalDirection.right,
       from: _inlineLibrariesTriggerFocus,
     );
-    if (!moved) _settingsFocus.requestFocus();
+    if (!moved) {
+      _inlineLibrariesTriggerFocus.requestFocus();
+    }
   }
 
   /// Renders nothing while there is nothing saved.
@@ -559,7 +634,9 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
   /// can't rely on the primary node having caught up.
   bool _moveWithinToolbar(TraversalDirection direction, {FocusNode? from}) {
     final primary = from ?? FocusManager.instance.primaryFocus;
-    if (primary == null || !_isInsideToolbar(primary)) return false;
+    if (primary == null || !_isInsideToolbar(primary)) {
+      return false;
+    }
 
     final insideMusicBar = _isDescendantOf(primary, _musicBarFocusNode);
 
@@ -580,20 +657,30 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
           ..sort((a, b) => a.x.compareTo(b.x));
 
     final index = nodes.indexWhere((e) => e.node == primary);
-    if (index < 0) return false;
+    if (index < 0) {
+      return false;
+    }
     final nextIndex = direction == TraversalDirection.right
         ? index + 1
         : index - 1;
-    if (nextIndex < 0 || nextIndex >= nodes.length) return false;
+    if (nextIndex < 0 || nextIndex >= nodes.length) {
+      return false;
+    }
     nodes[nextIndex].node.requestFocus();
     return true;
   }
 
   FocusNode? _findFirstFocusableBelowToolbar(FocusScopeNode scope) {
     for (final node in scope.traversalDescendants) {
-      if (node.skipTraversal) continue;
-      if (!_isLaidOutFocusNode(node)) continue;
-      if (_isInsideToolbar(node)) continue;
+      if (node.skipTraversal) {
+        continue;
+      }
+      if (!_isLaidOutFocusNode(node)) {
+        continue;
+      }
+      if (_isInsideToolbar(node)) {
+        continue;
+      }
       return node;
     }
     return null;
@@ -605,7 +692,9 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
         return child;
       }
       final found = _firstFocusableDescendant(child);
-      if (found != null) return found;
+      if (found != null) {
+        return found;
+      }
     }
     return null;
   }
@@ -707,8 +796,7 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
                     final musicNodes =
                         _musicBarFocusNode.descendants
                             .where(
-                              (n) =>
-                                  !n.skipTraversal && _isLaidOutFocusNode(n),
+                              (n) => !n.skipTraversal && _isLaidOutFocusNode(n),
                             )
                             .map((n) {
                               final box =
@@ -761,8 +849,7 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
                       if (!n.skipTraversal &&
                           _isLaidOutFocusNode(n) &&
                           !_isDescendantOf(n, _musicBarFocusNode)) {
-                        final box =
-                            n.context!.findRenderObject() as RenderBox?;
+                        final box = n.context!.findRenderObject() as RenderBox?;
                         final pos = box?.localToGlobal(Offset.zero);
                         if (pos != null && pos.dx > 0) {
                           targetNode = n;
@@ -898,7 +985,9 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
     return Focus(
       focusNode: _avatarFocus,
       onKeyEvent: (node, event) {
-        if (event is! KeyDownEvent) return KeyEventResult.ignored;
+        if (event is! KeyDownEvent) {
+          return KeyEventResult.ignored;
+        }
         if (event.logicalKey == LogicalKeyboardKey.select ||
             event.logicalKey == LogicalKeyboardKey.enter) {
           _showUserMenu();
@@ -986,7 +1075,9 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
 
   Widget _buildCenter() {
     final isNeon = ThemeRegistry.active.id == ThemeRegistry.neonPulseId;
-    final showShuffle = _prefs.get(UserPreferences.showShuffleButton);
+    final showShuffle =
+        AppFeatures.has(AppFeature.surfing) &&
+        _prefs.get(UserPreferences.showShuffleButton);
     final showGenres = _prefs.get(UserPreferences.showGenresButton);
     final showFavorites = _prefs.get(UserPreferences.showFavoritesButton);
     // Checked alongside the show* preferences, never written into them, since
@@ -996,10 +1087,12 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
     final navLibraries = _navLibraries;
     final showLibraries =
         !kidsMode && _prefs.get(UserPreferences.showLibrariesInToolbar);
-    final showLibrariesIndividually =
-        _prefs.get(UserPreferences.showLibrariesIndividually);
+    final showLibrariesIndividually = _prefs.get(
+      UserPreferences.showLibrariesIndividually,
+    );
     final alwaysExpanded = _prefs.get(UserPreferences.navbarAlwaysExpanded);
     final showSyncPlay =
+        AppFeatures.has(AppFeature.syncPlay) &&
         !kidsMode &&
         _prefs.get(UserPreferences.syncPlayEnabled) &&
         _prefs.get(UserPreferences.showSyncPlayButton);
@@ -1024,7 +1117,9 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
     var navSlot = 0;
     Color? nextNavColor() {
       final c = AppColorScheme.navColorForSlot(navSlot);
-      if (c != null) navSlot += 1;
+      if (c != null) {
+        navSlot += 1;
+      }
       return c;
     }
 
@@ -1066,7 +1161,9 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
                   label: l10n.search,
                   baseColor: nextNavColor(),
                   onPressed: () {
-                    if (_isActive(Destinations.search)) return;
+                    if (_isActive(Destinations.search)) {
+                      return;
+                    }
                     context.navigateTopLevel(Destinations.search);
                   },
                 ),
@@ -1102,7 +1199,9 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
                     ),
                     label: l10n.genres,
                     onPressed: () {
-                      if (_isActive(Destinations.allGenres)) return;
+                      if (_isActive(Destinations.allGenres)) {
+                        return;
+                      }
                       context.navigateTopLevel(Destinations.allGenres);
                     },
                   ),
@@ -1119,7 +1218,9 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
                     label: l10n.favorites,
                     baseColor: nextNavColor(),
                     onPressed: () {
-                      if (_isActive(Destinations.allFavorites)) return;
+                      if (_isActive(Destinations.allFavorites)) {
+                        return;
+                      }
                       context.navigateTopLevel(Destinations.allFavorites);
                     },
                   ),
@@ -1136,7 +1237,9 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
                     label: l10n.liveTv,
                     baseColor: nextNavColor(),
                     onPressed: () {
-                      if (_isActive(Destinations.liveTvGuide)) return;
+                      if (_isActive(Destinations.liveTvGuide)) {
+                        return;
+                      }
                       context.navigateTopLevel(Destinations.liveTvGuide);
                     },
                   ),
@@ -1173,7 +1276,9 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
                         : SeerrIcon(size: size, color: color),
                     label: seerrNavLabel,
                     onPressed: () {
-                      if (_isActive(Destinations.seerrDiscover)) return;
+                      if (_isActive(Destinations.seerrDiscover)) {
+                        return;
+                      }
                       context.navigateTopLevel(Destinations.seerrDiscover);
                     },
                   ),
@@ -1236,7 +1341,8 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
                     label: l10n.friends,
                   ),
                 ),
-              if (_prefs.get(UserPreferences.showServerMessagesButton))
+              if (AppFeatures.has(AppFeature.serverMessages) &&
+                  _prefs.get(UserPreferences.showServerMessagesButton))
                 _orderButton(
                   order: 98,
                   // The slot is taken here rather than inside the builder, so the
@@ -1248,55 +1354,58 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
                     label: l10n.serverMessages,
                   ),
                 ),
-              _orderButton(
-                order: 99,
-                child: ExpandableIconButton(
-                  key: const ValueKey('toolbar_settings'),
-                  forceExpanded: alwaysExpanded,
-                  icon: Icons.settings_rounded,
-                  label: l10n.settings,
-                  baseColor: nextNavColor(),
-                  focusNode: _settingsFocus,
-                  onKeyEvent: (_, event) {
-                    final isRtl =
-                        Directionality.of(context) == TextDirection.rtl;
-                    final outwardKey = isRtl
-                        ? LogicalKeyboardKey.arrowLeft
-                        : LogicalKeyboardKey.arrowRight;
-                    final inwardKey = isRtl
-                        ? LogicalKeyboardKey.arrowRight
-                        : LogicalKeyboardKey.arrowLeft;
-                    if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
-                        PlatformDetection.isTV &&
-                        event.logicalKey == outwardKey) {
-                      return KeyEventResult.handled;
-                    }
-                    if (event is KeyDownEvent &&
-                        event.logicalKey == inwardKey &&
-                        useInlineLibraries &&
-                        showLibraries &&
-                        navLibraries.isNotEmpty) {
-                      // Step onto whatever is actually alongside first, since
-                      // downloads and server messages both sit between the
-                      // libraries and here. Jumping to the trigger is the
-                      // fallback for when nothing does, which is what keeps
-                      // the inline libraries reachable from the end of the row.
-                      if (!_moveWithinToolbar(TraversalDirection.left)) {
-                        _inlineLibrariesTriggerFocus.requestFocus();
+              if (showAppSettings)
+                _orderButton(
+                  order: 99,
+                  child: ExpandableIconButton(
+                    key: const ValueKey('toolbar_settings'),
+                    forceExpanded: alwaysExpanded,
+                    icon: Icons.settings_rounded,
+                    label: l10n.settings,
+                    baseColor: nextNavColor(),
+                    focusNode: _settingsFocus,
+                    onKeyEvent: (_, event) {
+                      final isRtl =
+                          Directionality.of(context) == TextDirection.rtl;
+                      final outwardKey = isRtl
+                          ? LogicalKeyboardKey.arrowLeft
+                          : LogicalKeyboardKey.arrowRight;
+                      final inwardKey = isRtl
+                          ? LogicalKeyboardKey.arrowRight
+                          : LogicalKeyboardKey.arrowLeft;
+                      if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
+                          PlatformDetection.isTV &&
+                          event.logicalKey == outwardKey) {
+                        return KeyEventResult.handled;
                       }
-                      return KeyEventResult.handled;
-                    }
-                    return KeyEventResult.ignored;
-                  },
-                  onPressed: () async {
-                    await SettingsPanel.open(
-                      context,
-                      const SettingsSidePanel(),
-                    );
-                    if (mounted) _settingsFocus.requestFocus();
-                  },
+                      if (event is KeyDownEvent &&
+                          event.logicalKey == inwardKey &&
+                          useInlineLibraries &&
+                          showLibraries &&
+                          navLibraries.isNotEmpty) {
+                        // Step onto whatever is actually alongside first, since
+                        // downloads and server messages both sit between the
+                        // libraries and here. Jumping to the trigger is the
+                        // fallback for when nothing does, which is what keeps
+                        // the inline libraries reachable from the end of the row.
+                        if (!_moveWithinToolbar(TraversalDirection.left)) {
+                          _inlineLibrariesTriggerFocus.requestFocus();
+                        }
+                        return KeyEventResult.handled;
+                      }
+                      return KeyEventResult.ignored;
+                    },
+                    onPressed: () async {
+                      await SettingsPanel.open(
+                        context,
+                        const SettingsSidePanel(),
+                      );
+                      if (mounted) {
+                        _settingsFocus.requestFocus();
+                      }
+                    },
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -1406,7 +1515,9 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
             focusNode: _serverMessagesFocus,
             onPressed: () async {
               await showServerMessagesDialog(context);
-              if (mounted) _serverMessagesFocus.requestFocus();
+              if (mounted) {
+                _serverMessagesFocus.requestFocus();
+              }
             },
           ),
           _gap(),
@@ -1439,7 +1550,9 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
             focusNode: _friendsFocus,
             onPressed: () async {
               await FriendsNavSlot.open(context);
-              if (mounted) _friendsFocus.requestFocus();
+              if (mounted) {
+                _friendsFocus.requestFocus();
+              }
             },
           ),
           _gap(),
@@ -1455,7 +1568,9 @@ class _TopToolbarState extends State<TopToolbar> with RouteAware {
         clockBehavior == ClockBehavior.inMenus;
     final isNeon = ThemeRegistry.active.id == ThemeRegistry.neonPulseId;
 
-    if (!showClock) return const SizedBox.shrink();
+    if (!showClock) {
+      return const SizedBox.shrink();
+    }
 
     return ValueListenableBuilder<String>(
       valueListenable: _currentTime,
@@ -1597,16 +1712,24 @@ class _AndroidTvExpandableLibrariesButtonState
   }
 
   void _focusLibraryAt(int index) {
-    if (index < 0 || index >= _libraryFocusNodes.length) return;
+    if (index < 0 || index >= _libraryFocusNodes.length) {
+      return;
+    }
     _libraryFocusNodes[index].requestFocus();
   }
 
   void _ensureLibraryVisible(int index) {
-    if (index < 0 || index >= _libraryItemKeys.length) return;
+    if (index < 0 || index >= _libraryItemKeys.length) {
+      return;
+    }
     final ctx = _libraryItemKeys[index].currentContext;
-    if (ctx == null) return;
+    if (ctx == null) {
+      return;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       Scrollable.ensureVisible(
         ctx,
         duration: const Duration(milliseconds: 180),
@@ -1618,12 +1741,16 @@ class _AndroidTvExpandableLibrariesButtonState
   }
 
   void _moveFocusToNextAfterLibraries() {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     if (_expanded) {
       setState(() => _expanded = false);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       final exit = widget.onExitForward;
       if (exit != null) {
         exit();
@@ -1657,11 +1784,15 @@ class _AndroidTvExpandableLibrariesButtonState
             iconColor: widget.iconColor,
             alwaysExpanded: widget.alwaysExpanded,
             onMoveRight: () {
-              if (!_expanded || _libraryFocusNodes.isEmpty) return;
+              if (!_expanded || _libraryFocusNodes.isEmpty) {
+                return;
+              }
               _focusLibraryAt(0);
             },
             onPressed: () {
-              if (!mounted) return;
+              if (!mounted) {
+                return;
+              }
               setState(() => _expanded = !_expanded);
             },
           ),
@@ -1711,7 +1842,9 @@ class _AndroidTvExpandableLibrariesButtonState
                                   },
                                   onPressed: () {
                                     widget.onLibraryTap(entry.$2);
-                                    if (!mounted) return;
+                                    if (!mounted) {
+                                      return;
+                                    }
                                     setState(() => _expanded = false);
                                   },
                                 ),
@@ -1794,12 +1927,16 @@ class _ToolbarLibrariesTriggerButtonState
     return MouseRegion(
       onEnter: hoverEnabled
           ? (_) {
-              if (mounted && !_hovered) setState(() => _hovered = true);
+              if (mounted && !_hovered) {
+                setState(() => _hovered = true);
+              }
             }
           : null,
       onExit: hoverEnabled
           ? (_) {
-              if (mounted && _hovered) setState(() => _hovered = false);
+              if (mounted && _hovered) {
+                setState(() => _hovered = false);
+              }
             }
           : null,
       child: Focus(
@@ -1924,12 +2061,16 @@ class _ToolbarLibraryLabelButtonState
     return MouseRegion(
       onEnter: hoverEnabled
           ? (_) {
-              if (mounted && !_hovered) setState(() => _hovered = true);
+              if (mounted && !_hovered) {
+                setState(() => _hovered = true);
+              }
             }
           : null,
       onExit: hoverEnabled
           ? (_) {
-              if (mounted && _hovered) setState(() => _hovered = false);
+              if (mounted && _hovered) {
+                setState(() => _hovered = false);
+              }
             }
           : null,
       child: Focus(
@@ -2041,14 +2182,20 @@ class _LibrariesDropdownState extends State<_LibrariesDropdown> {
   }
 
   bool _hasManagedFocus(FocusNode? node) {
-    if (node == null) return false;
-    if (identical(node, _buttonFocusNode)) return true;
+    if (node == null) {
+      return false;
+    }
+    if (identical(node, _buttonFocusNode)) {
+      return true;
+    }
     return _itemFocusNodes.any((candidate) => identical(candidate, node));
   }
 
   void _handleManagedFocusChange() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _overlayEntry == null) return;
+      if (!mounted || _overlayEntry == null) {
+        return;
+      }
       final current = FocusManager.instance.primaryFocus;
       if (!_hasManagedFocus(current) && !_buttonHovered && !_dropdownHovered) {
         _hideDropdown();
@@ -2070,9 +2217,8 @@ class _LibrariesDropdownState extends State<_LibrariesDropdown> {
   }
 
   double _calculateMenuWidth(BuildContext context, double screenWidth) {
-    final baseStyle = (Theme.of(context).textTheme.bodyMedium ??
-            const TextStyle())
-        .copyWith(
+    final baseStyle =
+        (Theme.of(context).textTheme.bodyMedium ?? const TextStyle()).copyWith(
           fontSize: 15,
           fontWeight: FontWeight.w500,
         );
@@ -2082,10 +2228,7 @@ class _LibrariesDropdownState extends State<_LibrariesDropdown> {
     );
     double maxTextWidth = 0.0;
     for (final lib in widget.libraries) {
-      textPainter.text = TextSpan(
-        text: lib.name,
-        style: baseStyle,
-      );
+      textPainter.text = TextSpan(text: lib.name, style: baseStyle);
       textPainter.layout();
       if (textPainter.width > maxTextWidth) {
         maxTextWidth = textPainter.width;
@@ -2101,7 +2244,9 @@ class _LibrariesDropdownState extends State<_LibrariesDropdown> {
 
   void _showDropdown({bool focusFirstItem = false}) {
     _hideTimer?.cancel();
-    if (_overlayEntry != null) return;
+    if (_overlayEntry != null) {
+      return;
+    }
 
     final screenWidth = MediaQuery.of(context).size.width;
     _menuWidth = _calculateMenuWidth(context, screenWidth);
@@ -2195,7 +2340,9 @@ class _LibrariesDropdownState extends State<_LibrariesDropdown> {
       child: content,
     );
 
-    if (!PlatformDetection.isMobile) return follower;
+    if (!PlatformDetection.isMobile) {
+      return follower;
+    }
 
     return Stack(
       children: [
@@ -2218,16 +2365,11 @@ class _LibrariesDropdownState extends State<_LibrariesDropdown> {
 
     return Container(
       width: _menuWidth,
-      constraints: BoxConstraints(
-        maxHeight: maxMenuHeight,
-      ),
+      constraints: BoxConstraints(maxHeight: maxMenuHeight),
       decoration: BoxDecoration(
         color: widget.surfaceColor,
         borderRadius: AppRadius.circular(12),
-        border: Border.all(
-          color: borderColor,
-          width: 1.2,
-        ),
+        border: Border.all(color: borderColor, width: 1.2),
         boxShadow: [
           if (isNeon)
             BoxShadow(
@@ -2294,7 +2436,9 @@ class _LibrariesDropdownState extends State<_LibrariesDropdown> {
           focusNode: _buttonFocusNode,
           onFocusChanged: (_) => _handleManagedFocusChange(),
           onKeyEvent: (_, event) {
-            if (event is! KeyDownEvent) return KeyEventResult.ignored;
+            if (event is! KeyDownEvent) {
+              return KeyEventResult.ignored;
+            }
             if (event.logicalKey == LogicalKeyboardKey.select ||
                 event.logicalKey == LogicalKeyboardKey.enter) {
               if (_overlayEntry != null) {
@@ -2372,7 +2516,9 @@ class _LibraryDropdownItemState extends State<_LibraryDropdownItem> {
           widget.onFocusChanged?.call(focused);
         },
         onKeyEvent: (_, event) {
-          if (event is! KeyDownEvent) return KeyEventResult.ignored;
+          if (event is! KeyDownEvent) {
+            return KeyEventResult.ignored;
+          }
           if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
             if (widget.isFirst) {
               widget.onMoveUpFromFirst?.call();
@@ -2404,14 +2550,15 @@ class _LibraryDropdownItemState extends State<_LibraryDropdownItem> {
               widget.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: (Theme.of(context).textTheme.bodyMedium ??
-                      const TextStyle())
-                  .copyWith(
-                    color:
-                        (_isHovered || _isFocused) ? focusColor : Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                  ),
+              style:
+                  (Theme.of(context).textTheme.bodyMedium ?? const TextStyle())
+                      .copyWith(
+                        color: (_isHovered || _isFocused)
+                            ? focusColor
+                            : Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
             ),
           ),
         ),
@@ -2438,10 +2585,14 @@ class _TopMusicBarState extends State<TopMusicBar> {
   void initState() {
     super.initState();
     _playSub = _manager.state.playingStream.listen((_) {
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+      }
     });
     _queueSub = _manager.queueService.queueChangedStream.listen((_) {
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+      }
     });
   }
 

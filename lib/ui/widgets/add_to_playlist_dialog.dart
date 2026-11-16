@@ -146,12 +146,16 @@ class _AddToPlaylistDialogState extends State<AddToPlaylistDialog> {
                 constraints: const BoxConstraints(minWidth: 320, maxWidth: 440),
                 decoration: BoxDecoration(
                   color: AppColorScheme.surface.withValues(alpha: 0.9),
-                  borderRadius: AppRadius.circular(20),
+                  borderRadius: PlatformDetection.isTV
+                        ? Tv26Style.modalShape.borderRadius
+                        : AppRadius.circular(20),
                   border: Border.fromBorderSide(
                     ThemeRegistry.active.borders.chipBorder,
                   ),
                 ),
-                padding: const EdgeInsets.all(24),
+                padding: PlatformDetection.isTV
+                    ? Tv26Style.modalContentPadding
+                    : const EdgeInsets.all(24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -270,17 +274,23 @@ class _AddToPlaylistDialogState extends State<AddToPlaylistDialog> {
         constraints: const BoxConstraints(minWidth: 340, maxWidth: 440),
         decoration: BoxDecoration(
           color: AppColorScheme.surface.withValues(alpha: 0.9),
-          borderRadius: AppRadius.circular(20),
+          borderRadius: PlatformDetection.isTV
+              ? Tv26Style.modalShape.borderRadius
+              : AppRadius.circular(20),
           border: Border.fromBorderSide(
             ThemeRegistry.active.borders.chipBorder,
           ),
         ),
-        padding: const EdgeInsets.symmetric(vertical: 20),
+        padding: PlatformDetection.isTV
+            ? Tv26Style.modalMenuPadding
+            : const EdgeInsets.symmetric(vertical: 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+              padding: PlatformDetection.isTV
+                  ? Tv26Style.modalMenuHeaderPadding
+                  : const EdgeInsets.fromLTRB(24, 0, 24, 12),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -308,9 +318,8 @@ class _AddToPlaylistDialogState extends State<AddToPlaylistDialog> {
               Padding(
                 padding: EdgeInsets.all(24),
                 child: Center(
-                  child: CircularProgressIndicator(
+                  child: LoadingThrobber(
                     color: AppColorScheme.accent,
-                    strokeWidth: 2,
                   ),
                 ),
               )

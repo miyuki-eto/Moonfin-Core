@@ -97,7 +97,9 @@ class _OfflineBannerState extends ConsumerState<OfflineBanner>
     _autoDismissTimer ??= Timer(_autoDismissDuration, _dismiss);
 
     final isServerUnavailable = isOnline && !serverReachable;
-    final tint = isServerUnavailable
+    final tint = isTv
+        ? Tv26Style.foreground
+        : isServerUnavailable
         ? AppColorScheme.statusRequested
         : AppColorScheme.statusPending;
     final onSurface = AppColorScheme.onSurface;

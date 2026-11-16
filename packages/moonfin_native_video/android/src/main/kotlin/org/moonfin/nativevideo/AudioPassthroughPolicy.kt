@@ -132,15 +132,20 @@ class PassthroughPolicyAudioSink(
         return super.getFormatOffloadSupport(sinkFormat)
     }
 
-    override fun configure(
-        inputFormat: Format,
-        specifiedBufferSize: Int,
-        outputChannels: IntArray?,
-    ) {
+    override fun configure(configuration: AudioSink.AudioSinkConfig) {
+        val inputFormat = configuration.format
         val sinkFormat = policy.sinkFormatFor(inputFormat) ?: inputFormat
         sendDtsCore = sinkFormat.sampleMimeType != inputFormat.sampleMimeType
         clearPending()
-        super.configure(sinkFormat, specifiedBufferSize, outputChannels)
+        super.configure(
+            if (sinkFormat == inputFormat) configuration else
+                AudioSink.AudioSinkConfig.Builder(sinkFormat)
+                    .setPreferredBufferSizeOverride(configuration.preferredBufferSizeOverride)
+                    .setOutputChannelMapping(configuration.outputChannelMapping)
+                    .setTimeline(configuration.timeline)
+                    .setMediaPeriodId(configuration.mediaPeriodId)
+                    .build(),
+        )
     }
 
     override fun handleBuffer(

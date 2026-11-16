@@ -7,6 +7,7 @@ import 'package:moonfin_design/moonfin_design.dart';
 import '../../data/services/pin_guard.dart';
 import '../../l10n/app_localizations.dart';
 import '../../util/focus/dpad_keys.dart';
+import '../../util/platform_detection.dart';
 import 'overlay_sheet.dart';
 
 enum PinEntryMode { set, verify }
@@ -287,7 +288,16 @@ class _PinEntryDialogState extends State<PinEntryDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final tv = PlatformDetection.isTV;
+    final colorScheme = tv
+        ? theme.colorScheme.copyWith(
+            primary: Tv26Style.foreground,
+            surfaceContainerHighest: Tv26Style.raisedSurface,
+            outline: Tv26Style.border,
+            onSurfaceVariant: Tv26Style.secondary,
+            error: Tv26Style.secondary,
+          )
+        : theme.colorScheme;
     final borders = ThemeRegistry.active.borders;
     final l10n = AppLocalizations.of(context);
 
@@ -298,15 +308,23 @@ class _PinEntryDialogState extends State<PinEntryDialog> {
         skipTraversal: true,
         onKeyEvent: _onDialogKey,
         child: Dialog(
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.circular(16)),
+          constraints: tv ? const BoxConstraints(maxWidth: 420) : null,
+          backgroundColor: tv ? Tv26Style.surface : null,
+          shape: tv
+              ? Tv26Style.modalShape
+              : RoundedRectangleBorder(borderRadius: AppRadius.circular(16)),
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: tv
+                ? Tv26Style.modalContentPadding
+                : const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-            Icon(Icons.lock, size: 40, color: colorScheme.primary),
+            Icon(Icons.lock, size: tv ? 28 : 40, color: colorScheme.primary),
             const SizedBox(height: 12),
-            Text(_title(l10n), style: theme.textTheme.headlineSmall),
+            Text(_title(l10n), style: tv
+                ? Tv26Style.text(28, weight: FontWeight.w600)
+                : theme.textTheme.headlineSmall),
             const SizedBox(height: 4),
             Text(
               _subtitle(l10n),
@@ -433,7 +451,7 @@ class _PinEntryDialogState extends State<PinEntryDialog> {
       padding: const EdgeInsets.all(4),
       child: SizedBox(
         width: 64,
-        height: 56,
+        height: PlatformDetection.isTV ? 48 : 56,
         child: ElevatedButton(
           onPressed: () => _onDigitButtonPressed(digit),
           style: _keypadButtonStyle(),
@@ -456,7 +474,7 @@ class _PinEntryDialogState extends State<PinEntryDialog> {
       padding: const EdgeInsets.all(4),
       child: SizedBox(
         width: 64,
-        height: 56,
+        height: PlatformDetection.isTV ? 48 : 56,
         child: ElevatedButton(
           onPressed: () => _onActionButtonPressed(onPressed),
           style: _keypadButtonStyle(),
@@ -476,18 +494,22 @@ class _PinEntryDialogState extends State<PinEntryDialog> {
       ),
     ).copyWith(
       backgroundColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.focused)) return AppColorScheme.onSurface;
+        if (states.contains(WidgetState.focused)) {
+          return PlatformDetection.isTV
+              ? Tv26Style.foreground
+              : AppColorScheme.onSurface;
+        }
         if (states.contains(WidgetState.pressed)) {
           return AppColorScheme.onSurface.withValues(alpha: 0.92);
         }
-        return null;
+        return PlatformDetection.isTV ? Tv26Style.raisedSurface : null;
       }),
       foregroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.focused) ||
             states.contains(WidgetState.pressed)) {
           return AppColors.black;
         }
-        return null;
+        return PlatformDetection.isTV ? Tv26Style.foreground : null;
       }),
     );
   }

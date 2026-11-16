@@ -290,7 +290,7 @@ class _SavedThemesScreenState extends State<SavedThemesScreen> {
             ],
           ),
           body: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: LoadingThrobber())
               : ListView(
                   padding: EdgeInsets.fromLTRB(
                     20,
@@ -348,9 +348,7 @@ class _SavedThemesScreenState extends State<SavedThemesScreen> {
                                 ? const SizedBox(
                                     width: 20,
                                     height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
+                                    child: LoadingThrobber(),
                                   )
                                 : Icon(
                                     Icons.delete_outline,
@@ -386,9 +384,7 @@ class _SavedThemesScreenState extends State<SavedThemesScreen> {
                                 ? const SizedBox(
                                     width: 20,
                                     height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
+                                    child: LoadingThrobber(),
                                   )
                                 : IconButton(
                                     onPressed: () =>

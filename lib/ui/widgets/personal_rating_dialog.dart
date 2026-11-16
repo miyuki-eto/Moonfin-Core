@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:moonfin_design/moonfin_design.dart';
+
+import '../../util/platform_detection.dart';
+import '../tv/tv26_button.dart';
+import '../tv/tv_modal.dart';
 
 import '../../data/models/aggregated_item.dart';
 import '../../l10n/app_localizations.dart';
@@ -142,8 +147,7 @@ class _PersonalRatingDialogState extends State<PersonalRatingDialog> {
             if (event.logicalKey == LogicalKeyboardKey.arrowLeft &&
                 _draftRating > 0) {
               setState(() {
-                _draftRating =
-                    (_draftRating - 0.5).clamp(0, 10).toDouble();
+                _draftRating = (_draftRating - 0.5).clamp(0, 10).toDouble();
                 _ratingChanged = true;
               });
               return KeyEventResult.handled;
@@ -151,8 +155,7 @@ class _PersonalRatingDialogState extends State<PersonalRatingDialog> {
             if (event.logicalKey == LogicalKeyboardKey.arrowRight &&
                 _draftRating < 10) {
               setState(() {
-                _draftRating =
-                    (_draftRating + 0.5).clamp(0, 10).toDouble();
+                _draftRating = (_draftRating + 0.5).clamp(0, 10).toDouble();
                 _ratingChanged = true;
               });
               return KeyEventResult.handled;
@@ -251,6 +254,86 @@ class _PersonalRatingDialogState extends State<PersonalRatingDialog> {
       PersonalRatingStyle.numeric => _buildNumericEditor(l10n),
     };
 
+    if (PlatformDetection.isTV) {
+      return Dialog(
+        backgroundColor: Colors.transparent,
+        child: TvModalPanel.menu(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: ExcludeFocus(
+            excluding: _saving,
+            child: IgnorePointer(
+              ignoring: _saving,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: Tv26Style.modalMenuHeaderPadding,
+                    child: Text(
+                      l10n.rate,
+                      style: Tv26Style.text(24, weight: FontWeight.w600),
+                    ),
+                  ),
+                  const SizedBox(height: Tv26Style.panelInset),
+                  if (isThumbs) ...[
+                    TvMenuRow(
+                      label: l10n.like,
+                      icon: Icons.thumb_up,
+                      autofocus: true,
+                      selected: _displayLikes == true,
+                      onPressed: () =>
+                          _submit(() => widget.onSetThumbRating(true)),
+                    ),
+                    TvMenuRow(
+                      label: l10n.dislike,
+                      icon: Icons.thumb_down,
+                      selected: _displayLikes == false,
+                      onPressed: () =>
+                          _submit(() => widget.onSetThumbRating(false)),
+                    ),
+                  ] else
+                    content,
+                  if (widget.rating != null)
+                    TvMenuRow(
+                      label: l10n.personalRatingClear,
+                      icon: Icons.clear,
+                      onPressed: () => _submit(widget.onClearRating),
+                    ),
+                  const SizedBox(height: Tv26Style.panelInset),
+                  if (isThumbs)
+                    TvMenuRow(
+                      label: l10n.cancel,
+                      onPressed: () => Navigator.of(context).pop(),
+                    )
+                  else
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Tv26Button(
+                          label: l10n.cancel,
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                        if (!isThumbs) ...[
+                          const SizedBox(width: Tv26Style.gap),
+                          Tv26Button(
+                            label: l10n.save,
+                            onPressed: () {
+                              if (_ratingChanged) {
+                                _submit(
+                                  () => widget.onSetNumericRating(_draftRating),
+                                );
+                              }
+                            },
+                          ),
+                        ],
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return AlertDialog(
       title: Text(l10n.rate),
       content: SizedBox(width: 320, child: content),

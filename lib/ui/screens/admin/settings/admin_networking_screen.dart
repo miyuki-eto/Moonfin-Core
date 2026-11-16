@@ -138,7 +138,7 @@ class _AdminNetworkingScreenState extends State<AdminNetworkingScreen>
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.of(context).padding.bottom;
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: LoadingThrobber());
     }
     final l10n = AppLocalizations.of(context);
     if (_error != null || _config == null) {

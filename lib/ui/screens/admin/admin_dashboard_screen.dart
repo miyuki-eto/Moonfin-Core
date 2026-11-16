@@ -177,7 +177,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     final isEmby = AdminServerScope.isEmby(context);
 
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: LoadingThrobber());
     }
     if (_error != null) {
       return Center(
@@ -234,7 +234,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
             mediaSummary.when(
               loading: () => const Padding(
                 padding: EdgeInsets.all(24),
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(child: LoadingThrobber()),
               ),
               error: (_, _) => adminSection(
                 context,

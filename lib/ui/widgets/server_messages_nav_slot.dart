@@ -1,3 +1,5 @@
+import '../../config/app_features.dart';
+
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 
@@ -17,9 +19,10 @@ class ServerMessagesNavSlot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!GetIt.instance<UserPreferences>().get(
-      UserPreferences.showServerMessagesButton,
-    )) {
+    if (!AppFeatures.has(AppFeature.serverMessages) ||
+        !GetIt.instance<UserPreferences>().get(
+          UserPreferences.showServerMessagesButton,
+        )) {
       return const SizedBox.shrink();
     }
 

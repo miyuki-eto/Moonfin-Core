@@ -1,3 +1,5 @@
+import '../config/app_features.dart';
+
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -19,6 +21,15 @@ import 'auto_download_background.dart';
 Future<void> autoDownloadBackgroundMain() async {
   WidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('org.moonfin.androidtv/auto_download');
+  if (!AppFeatures.has(AppFeature.downloads)) {
+    try {
+      await channel.invokeMethod('backgroundComplete', {
+        'ok': true,
+        'permanent': true,
+      });
+    } catch (_) {}
+    return;
+  }
 
   var ok = false;
   // Nobody signed in: tells the worker to stop scheduling instead of

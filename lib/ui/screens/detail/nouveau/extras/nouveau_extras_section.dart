@@ -9,6 +9,7 @@ import '../../../../../preference/user_preferences.dart';
 import '../../../../../preference/preference_constants.dart';
 import '../../../../../util/platform_detection.dart';
 import '../../../../widgets/navigation_layout.dart';
+import '../../../../widgets/media_card.dart';
 import '../../../../navigation/destinations.dart';
 import '../../../../widgets/focus/hub_focus_memory.dart';
 import '../../../../widgets/focus/locked_focus_row.dart';
@@ -142,7 +143,9 @@ class NouveauExtrasSectionState extends State<NouveauExtrasSection> {
       cardWidth: cardWidth,
       artworkHeight: artworkHeight,
       cardHeight: NouveauMediaRailMetrics.cardHeight(cardWidth),
-      cardSpacing: NouveauMediaRailMetrics.itemGap,
+      cardSpacing: PlatformDetection.isTV
+          ? Tv26Style.railItemGap
+          : NouveauMediaRailMetrics.itemGap,
       compact: false,
     );
   }
@@ -173,7 +176,9 @@ class NouveauExtrasSectionState extends State<NouveauExtrasSection> {
           children: [
             Text(
               l10n.extras,
-              style: layout.compact
+              style: PlatformDetection.isTV
+                  ? Tv26Style.sectionTitle
+                  : layout.compact
                   ? theme.textTheme.titleLarge?.copyWith(
                       color: foreground,
                       fontSize: 22,
@@ -205,6 +210,12 @@ class NouveauExtrasSectionState extends State<NouveauExtrasSection> {
                   width: availableWidth,
                   height: layout.cardHeight,
                   child: LockedFocusRow<AggregatedItem>(
+                    viewportInsets: PlatformDetection.isTV
+                        ? Tv26Style.railPadding
+                        : EdgeInsets.zero,
+                    paintOutset: PlatformDetection.isTV
+                        ? MediaCard.focusRingOutset
+                        : 0,
                     key: _rowKey,
                     items: widget.items,
                     hubKey: _hubKey,

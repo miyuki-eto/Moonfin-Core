@@ -3,6 +3,9 @@ import 'package:moonfin_design/moonfin_design.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../util/app_exit.dart';
+import '../../util/platform_detection.dart';
+import '../tv/tv26_button.dart';
+import '../tv/tv_modal.dart';
 import '../../util/focus/key_event_utils.dart';
 import 'navigation_layout.dart';
 import 'overlay_sheet.dart';
@@ -87,6 +90,46 @@ class _ExitConfirmationContentState extends State<_ExitConfirmationContent> {
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformDetection.isTV) {
+      return TvModalPanel(
+        constraints: const BoxConstraints(maxWidth: 500),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              widget.title,
+              style: Tv26Style.text(28, weight: FontWeight.w600),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              widget.message,
+              textAlign: TextAlign.center,
+              style: Tv26Style.text(18, color: Tv26Style.secondary),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Tv26Button(
+                  label: widget.cancelLabel,
+                  focusNode: widget.cancelFocus,
+                  autofocus: true,
+                  onPressed: widget.onCancel,
+                  onRight: _exitFocus.requestFocus,
+                ),
+                const SizedBox(width: Tv26Style.gap),
+                Tv26Button(
+                  label: widget.exitLabel,
+                  focusNode: _exitFocus,
+                  onPressed: widget.onExit,
+                  onLeft: widget.cancelFocus.requestFocus,
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
     final glass = AppColorScheme.isGlass;
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 500),

@@ -857,7 +857,7 @@ class _AdminMetadataEditScreenState extends State<AdminMetadataEditScreen>
     final compactHeader = screenWidth < 920;
 
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: LoadingThrobber());
     }
 
     if (_error != null) {
@@ -1456,7 +1456,7 @@ class _AdminMetadataEditScreenState extends State<AdminMetadataEditScreen>
                     child: SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: LoadingThrobber(),
                     ),
                   ),
               ],
@@ -1885,7 +1885,7 @@ class _RemoteImagePickerDialogState extends State<_RemoteImagePickerDialog> {
               Expanded(
                 child:
                     _loading
-                        ? const Center(child: CircularProgressIndicator())
+                        ? const Center(child: LoadingThrobber())
                         : _error != null
                         ? Center(
                           child: Column(

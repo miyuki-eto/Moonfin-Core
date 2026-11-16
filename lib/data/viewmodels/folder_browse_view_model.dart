@@ -1,3 +1,5 @@
+import '../../config/app_features.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:server_core/server_core.dart';
@@ -71,7 +73,9 @@ class FolderBrowseViewModel extends ChangeNotifier {
       _breadcrumbs.isNotEmpty ? _breadcrumbs.last.id : '';
 
   void _notify() {
-    if (!_disposed) notifyListeners();
+    if (!_disposed) {
+      notifyListeners();
+    }
   }
 
   Future<void> loadFolder(String folderId) async {
@@ -91,11 +95,13 @@ class FolderBrowseViewModel extends ChangeNotifier {
       while (currentId.isNotEmpty && visited.add(currentId)) {
         try {
           final data = await _client.itemsApi.getItem(currentId);
-          if (_disposed) return;
+          if (_disposed) {
+            return;
+          }
           final name = data['Name'] as String? ?? '';
           final type = (data['Type'] as String?) ?? '';
-          final collectionType =
-              (data['CollectionType'] as String?)?.toLowerCase();
+          final collectionType = (data['CollectionType'] as String?)
+              ?.toLowerCase();
           chain.insert(
             0,
             BreadcrumbEntry(
@@ -120,11 +126,14 @@ class FolderBrowseViewModel extends ChangeNotifier {
         }
       }
 
-      if (_disposed) return;
+      if (_disposed) {
+        return;
+      }
       if (chain.isNotEmpty) {
         _breadcrumbs.clear();
         for (final entry in chain) {
-          final isRootDuplicate = entry.id == 'root' ||
+          final isRootDuplicate =
+              entry.id == 'root' ||
               entry.name.toLowerCase() == 'root' ||
               entry.name.toLowerCase() == 'media folders';
           if (!isRootDuplicate) {
@@ -136,10 +145,14 @@ class FolderBrowseViewModel extends ChangeNotifier {
       }
 
       await _fetchPage(folderId, 0);
-      if (_disposed) return;
+      if (_disposed) {
+        return;
+      }
       _state = FolderBrowseState.ready;
     } catch (e) {
-      if (_disposed) return;
+      if (_disposed) {
+        return;
+      }
       _error = e;
       _state = FolderBrowseState.error;
     }
@@ -147,7 +160,9 @@ class FolderBrowseViewModel extends ChangeNotifier {
   }
 
   Future<void> loadMore() async {
-    if (_loadingMore || !hasMore) return;
+    if (_loadingMore || !hasMore) {
+      return;
+    }
     _loadingMore = true;
     _notify();
 
@@ -160,7 +175,9 @@ class FolderBrowseViewModel extends ChangeNotifier {
       }
     } catch (_) {}
 
-    if (_disposed) return;
+    if (_disposed) {
+      return;
+    }
     _loadingMore = false;
     _notify();
   }
@@ -170,7 +187,9 @@ class FolderBrowseViewModel extends ChangeNotifier {
   ) async {
     items = withoutBlockedItems(items);
     final isPlaylistRoot = _rootCollectionType == 'playlists';
-    if (!isPlaylistRoot) return items;
+    if (!isPlaylistRoot) {
+      return items;
+    }
 
     return filterBrowsablePlaylists(
       _client,
@@ -202,20 +221,22 @@ class FolderBrowseViewModel extends ChangeNotifier {
       _totalCount = loadedCount + (_hasMoreFromPageSize ? 1 : 0);
     }
 
-    final mapped = [
-      ...directories,
-      ...rawItems,
-    ].cast<Map<String, dynamic>>().map((raw) {
-      return AggregatedItem(
-        id: raw['Id']?.toString() ?? '',
-        serverId: (_serverId != null && _serverId.isNotEmpty)
-            ? _serverId
-            : _client.baseUrl,
-        rawData: raw,
-      );
-    }).toList();
+    final mapped = [...directories, ...rawItems]
+        .cast<Map<String, dynamic>>()
+        .map((raw) {
+          return AggregatedItem(
+            id: raw['Id']?.toString() ?? '',
+            serverId: (_serverId != null && _serverId.isNotEmpty)
+                ? _serverId
+                : _client.baseUrl,
+            rawData: raw,
+          );
+        })
+        .toList();
 
-    final filtered = await _filterItemsForFolder(mapped);
+    final filtered = (await _filterItemsForFolder(mapped))
+        .where((item) => AppFeatures.allowsItem(item.type))
+        .toList();
 
     // Directories all arrive with the first page and the rest follow by name a
     // page at a time, so pages only ever append.
@@ -235,6 +256,7 @@ class FolderBrowseViewModel extends ChangeNotifier {
         parentId: parentId,
         recursive: false,
         excludeItemTypes: kDirectoryItemTypes,
+        includeItemTypes: AppFeatures.browseTypes,
         sortBy: 'SortName',
         sortOrder: 'Ascending',
         startIndex: startIndex,
@@ -247,11 +269,14 @@ class FolderBrowseViewModel extends ChangeNotifier {
     } on DioException catch (e) {
       // The retry only drops the total count, which some servers fault on, so
       // a request the server rejected outright would just be rejected again.
-      if ((e.response?.statusCode ?? 0) < 500) rethrow;
+      if ((e.response?.statusCode ?? 0) < 500) {
+        rethrow;
+      }
       return await _client.itemsApi.getItems(
         parentId: parentId,
         recursive: false,
         excludeItemTypes: kDirectoryItemTypes,
+        includeItemTypes: AppFeatures.browseTypes,
         sortBy: 'SortName',
         sortOrder: 'Ascending',
         startIndex: startIndex,
@@ -280,7 +305,9 @@ class FolderBrowseViewModel extends ChangeNotifier {
 
   bool isNavigableFolder(AggregatedItem item) {
     final isFolder = item.rawData['IsFolder'] as bool? ?? false;
-    if (isFolder) return true;
+    if (isFolder) {
+      return true;
+    }
 
     final type = item.type;
     return type == 'Folder' ||
@@ -299,7 +326,9 @@ class FolderBrowseViewModel extends ChangeNotifier {
   /// The server's name for [item], except where that name was scraped for
   /// something the folder isn't, in which case the folder on disk is closer.
   String getItemDisplayName(AggregatedItem item) {
-    if (!_isMisidentifiedDirectory(item)) return item.name;
+    if (!_isMisidentifiedDirectory(item)) {
+      return item.name;
+    }
 
     final rawPath = item.rawData['Path'] as String?;
     if (rawPath != null && rawPath.isNotEmpty) {
@@ -307,11 +336,15 @@ class FolderBrowseViewModel extends ChangeNotifier {
           .replaceAll('\\', '/')
           .split('/')
           .where((s) => s.isNotEmpty);
-      if (segments.isNotEmpty) return segments.last;
+      if (segments.isNotEmpty) {
+        return segments.last;
+      }
     }
 
     final fileName = item.rawData['FileName'] as String?;
-    if (fileName != null && fileName.isNotEmpty) return fileName;
+    if (fileName != null && fileName.isNotEmpty) {
+      return fileName;
+    }
 
     return item.name;
   }
@@ -320,8 +353,12 @@ class FolderBrowseViewModel extends ChangeNotifier {
   /// still got typed as a show is almost always just a directory.
   bool _isMisidentifiedDirectory(AggregatedItem item) {
     const scrapedTypes = {'Series', 'Season', 'BoxSet', 'BookSeries'};
-    if (!scrapedTypes.contains(item.type)) return false;
-    if (item.productionYear != null) return false;
+    if (!scrapedTypes.contains(item.type)) {
+      return false;
+    }
+    if (item.productionYear != null) {
+      return false;
+    }
     final imageTags = item.rawData['ImageTags'];
     return imageTags is! Map || imageTags.isEmpty;
   }

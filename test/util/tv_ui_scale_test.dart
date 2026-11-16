@@ -18,8 +18,8 @@ void main() {
       expect(tvos.height, closeTo(kTvDesignWidth * 9 / 16, 0.5));
     });
 
-    test('is 1150 points across on every TV', () {
-      expect(kTvDesignWidth, 1150);
+    test('is 1145 points across on every TV', () {
+      expect(kTvDesignWidth, 1145);
     });
 
     test('drives a 1080p panel at the scale the layouts were drawn for', () {
@@ -107,7 +107,7 @@ void main() {
     }
 
     testWidgets('lays out on the panel rather than the canvas', (tester) async {
-      // A 1080p Android TV at density two, where the canvas is 1150 across.
+      // A 1080p Android TV at density two, where the canvas is 1145 across.
       final result = await pump(
         tester,
         panel: const Size(960, 540),

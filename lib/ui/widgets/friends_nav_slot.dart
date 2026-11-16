@@ -1,3 +1,5 @@
+import '../../config/app_features.dart';
+
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 
@@ -17,6 +19,7 @@ class FriendsNavSlot extends StatelessWidget {
   const FriendsNavSlot({super.key, required this.builder});
 
   static bool isOffered() =>
+      AppFeatures.has(AppFeature.social) &&
       GetIt.instance<UserPreferences>().get(UserPreferences.showFriendsButton);
 
   /// Whether the button has something to open right now.
@@ -26,7 +29,9 @@ class FriendsNavSlot extends StatelessWidget {
 
   /// Opens the friends list in the side panel the settings use.
   static Future<void> open(BuildContext context) =>
-      SettingsPanel.open(context, const FriendsScreen());
+      !AppFeatures.has(AppFeature.social)
+      ? Future.value()
+      : SettingsPanel.open(context, const FriendsScreen());
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +44,9 @@ class FriendsNavSlot extends StatelessWidget {
     return ListenableBuilder(
       listenable: service,
       builder: (context, _) {
-        if (!service.socialAvailable) return const SizedBox.shrink();
+        if (!service.socialAvailable) {
+          return const SizedBox.shrink();
+        }
         return builder(context, service.socialBadgeCount);
       },
     );

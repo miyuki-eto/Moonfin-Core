@@ -39,7 +39,10 @@ void main() {
     when(() => client.baseUrl).thenReturn('http://server');
 
     when(
-      () => itemsApi.getItem('boxset-1', mediaSourceId: any(named: 'mediaSourceId')),
+      () => itemsApi.getItem(
+        'boxset-1',
+        mediaSourceId: any(named: 'mediaSourceId'),
+      ),
     ).thenAnswer(
       (_) async => {'Id': 'boxset-1', 'Type': 'BoxSet', 'Name': 'Crossovers'},
     );
@@ -57,8 +60,18 @@ void main() {
     ).thenAnswer(
       (_) async => {
         'Items': [
-          {'Id': 'ep-flash', 'Type': 'Episode', 'Name': 'Flash vs. Arrow', 'SeriesName': 'The Flash'},
-          {'Id': 'ep-arrow', 'Type': 'Episode', 'Name': 'The Brave and the Bold', 'SeriesName': 'Arrow'},
+          {
+            'Id': 'ep-flash',
+            'Type': 'Episode',
+            'Name': 'Flash vs. Arrow',
+            'SeriesName': 'The Flash',
+          },
+          {
+            'Id': 'ep-arrow',
+            'Type': 'Episode',
+            'Name': 'The Brave and the Bold',
+            'SeriesName': 'Arrow',
+          },
         ],
         'TotalRecordCount': 2,
       },
@@ -67,89 +80,170 @@ void main() {
 
   tearDown(() => GetIt.instance.reset());
 
-  test('collection grid asks for the members themselves, episodes included',
-      () async {
-    final tmdb = TmdbRepository(client);
-    final vm = ItemDetailViewModel(
-      itemId: 'boxset-1',
-      client: client,
-      mutations: ItemMutationRepository(client),
-      mdbListRepository: MdbListRepository(client, tmdb),
-      tmdbRepository: tmdb,
-    );
+  test(
+    'collection grid asks for the members themselves, episodes included',
+    () async {
+      final tmdb = TmdbRepository(client);
+      final vm = ItemDetailViewModel(
+        itemId: 'boxset-1',
+        client: client,
+        mutations: ItemMutationRepository(client),
+        mdbListRepository: MdbListRepository(client, tmdb),
+        tmdbRepository: tmdb,
+      );
 
-    await vm.load();
-    // load() kicks the grid fetch off without awaiting it, so give the
-    // page a moment to land before looking.
-    for (var i = 0; i < 100 && vm.collectionItems.isEmpty; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 5));
-    }
+      await vm.load();
+      // load() kicks the grid fetch off without awaiting it, so give the
+      // page a moment to land before looking.
+      for (var i = 0; i < 100 && vm.collectionItems.isEmpty; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
 
-    expect(vm.collectionItems, hasLength(2));
-    expect(vm.collectionItems.map((i) => i.type), everyElement('Episode'));
-    expect(vm.collectionItems.first.name, 'Flash vs. Arrow');
-  });
+      expect(vm.collectionItems, hasLength(2));
+      expect(vm.collectionItems.map((i) => i.type), everyElement('Episode'));
+      expect(vm.collectionItems.first.name, 'Flash vs. Arrow');
+    },
+  );
 
-  test('the playlist keeps the server order until another sort is picked',
-      () async {
-    when(() => GetIt.instance<PluginSyncService>().pluginAvailable)
-        .thenReturn(false);
-    when(
-      () => itemsApi.getItems(
-        parentId: 'boxset-1',
-        limit: any(named: 'limit'),
-        fields: 'BasicSyncInfo',
-      ),
-    ).thenAnswer(
-      (_) async => {
-        'Items': [
-          {'Id': 'late', 'Type': 'Movie', 'Name': 'Late', 'ProductionYear': 2010},
-          {'Id': 'show', 'Type': 'Series', 'Name': 'Show'},
-          {'Id': 'early', 'Type': 'Movie', 'Name': 'Early', 'ProductionYear': 1990},
-        ],
-      },
-    );
-    when(() => itemsApi.getEpisodes('show')).thenAnswer(
-      (_) async => {
-        'Items': [
-          {'Id': 'ep', 'Type': 'Episode', 'Name': 'Pilot', 'ProductionYear': 2000},
-        ],
-      },
-    );
-    when(
-      () => itemsApi.getItems(
-        ids: any(named: 'ids'),
-        fields: 'PrimaryImageAspectRatio,BasicSyncInfo,People,Overview',
-      ),
-    ).thenAnswer((invocation) async {
-      final ids = invocation.namedArguments[#ids] as List<String>;
-      return {
-        'Items': [for (final id in ids) {'Id': id, 'Type': 'Movie', 'Name': id}],
-      };
-    });
+  test(
+    'omitted collection members cannot strand video behind a filtered page',
+    () async {
+      when(
+        () => itemsApi.getItems(
+          parentId: 'boxset-1',
+          startIndex: 0,
+          limit: any(named: 'limit'),
+          fields: 'PrimaryImageAspectRatio,BasicSyncInfo,People',
+        ),
+      ).thenAnswer(
+        (_) async => {
+          'Items': [
+            {'Id': 'book', 'Type': 'Book', 'Name': 'Book'},
+            {'Id': 'song', 'Type': 'Audio', 'Name': 'Song'},
+          ],
+          'TotalRecordCount': 3,
+        },
+      );
+      when(
+        () => itemsApi.getItems(
+          parentId: 'boxset-1',
+          startIndex: 2,
+          limit: any(named: 'limit'),
+          fields: 'PrimaryImageAspectRatio,BasicSyncInfo,People',
+        ),
+      ).thenAnswer(
+        (_) async => {
+          'Items': [
+            {'Id': 'video', 'Type': 'Movie', 'Name': 'Video'},
+          ],
+          'TotalRecordCount': 3,
+        },
+      );
+      final tmdb = TmdbRepository(client);
+      final vm = ItemDetailViewModel(
+        itemId: 'boxset-1',
+        client: client,
+        mutations: ItemMutationRepository(client),
+        mdbListRepository: MdbListRepository(client, tmdb),
+        tmdbRepository: tmdb,
+      );
+      addTearDown(vm.dispose);
+      await vm.load();
+      for (var i = 0; i < 100 && vm.collectionItems.isEmpty; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+      expect(vm.collectionItems.map((item) => item.id), ['video']);
+      await vm.loadMoreCollectionItems();
+      verify(
+        () => itemsApi.getItems(
+          parentId: 'boxset-1',
+          startIndex: 2,
+          limit: any(named: 'limit'),
+          fields: 'PrimaryImageAspectRatio,BasicSyncInfo,People',
+        ),
+      ).called(1);
+    },
+  );
 
-    final tmdb = TmdbRepository(client);
-    final vm = ItemDetailViewModel(
-      itemId: 'boxset-1',
-      client: client,
-      mutations: ItemMutationRepository(client),
-      mdbListRepository: MdbListRepository(client, tmdb),
-      tmdbRepository: tmdb,
-    );
+  test(
+    'the playlist keeps the server order until another sort is picked',
+    () async {
+      when(() => GetIt.instance<PluginSyncService>().pluginAvailable)
+          .thenReturn(false);
+      when(
+        () => itemsApi.getItems(
+          parentId: 'boxset-1',
+          limit: any(named: 'limit'),
+          fields: 'BasicSyncInfo',
+        ),
+      ).thenAnswer(
+        (_) async => {
+          'Items': [
+            {
+              'Id': 'late',
+              'Type': 'Movie',
+              'Name': 'Late',
+              'ProductionYear': 2010,
+            },
+            {'Id': 'show', 'Type': 'Series', 'Name': 'Show'},
+            {
+              'Id': 'early',
+              'Type': 'Movie',
+              'Name': 'Early',
+              'ProductionYear': 1990,
+            },
+          ],
+        },
+      );
+      when(() => itemsApi.getEpisodes('show')).thenAnswer(
+        (_) async => {
+          'Items': [
+            {
+              'Id': 'ep',
+              'Type': 'Episode',
+              'Name': 'Pilot',
+              'ProductionYear': 2000,
+            },
+          ],
+        },
+      );
+      when(
+        () => itemsApi.getItems(
+          ids: any(named: 'ids'),
+          fields: 'PrimaryImageAspectRatio,BasicSyncInfo,People,Overview',
+        ),
+      ).thenAnswer((invocation) async {
+        final ids = invocation.namedArguments[#ids] as List<String>;
+        return {
+          'Items': [
+            for (final id in ids) {'Id': id, 'Type': 'Movie', 'Name': id},
+          ],
+        };
+      });
 
-    await vm.load();
-    for (var i = 0; i < 100 && vm.playlistItems.isEmpty; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 5));
-    }
-    List<String> order() => vm.playlistItems.map((i) => i.id).toList();
+      final tmdb = TmdbRepository(client);
+      final vm = ItemDetailViewModel(
+        itemId: 'boxset-1',
+        client: client,
+        mutations: ItemMutationRepository(client),
+        mdbListRepository: MdbListRepository(client, tmdb),
+        tmdbRepository: tmdb,
+      );
 
-    expect(vm.collectionSort, CollectionSortOption.server);
-    expect(order(), ['late', 'ep', 'early']);
+      await vm.load();
+      for (var i = 0; i < 100 && vm.playlistItems.isEmpty; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+      List<String> order() => vm.playlistItems.map((i) => i.id).toList();
 
-    await vm.setCollectionSort(CollectionSortOption.releaseAscending);
-    expect(order(), ['early', 'ep', 'late']);
+      expect(vm.collectionSort, CollectionSortOption.server);
+      expect(order(), ['late', 'ep', 'early']);
 
-    await vm.setCollectionSort(CollectionSortOption.server);
-    expect(order(), ['late', 'ep', 'early']);
-  });
+      await vm.setCollectionSort(CollectionSortOption.releaseAscending);
+      expect(order(), ['early', 'ep', 'late']);
+
+      await vm.setCollectionSort(CollectionSortOption.server);
+      expect(order(), ['late', 'ep', 'early']);
+    },
+  );
 }

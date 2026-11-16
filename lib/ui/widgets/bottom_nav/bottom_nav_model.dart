@@ -1,3 +1,4 @@
+import '../../../config/app_features.dart';
 import '../../../preference/bottom_nav_tabs.dart';
 import '../../navigation/destinations.dart';
 
@@ -15,16 +16,16 @@ class BottomNavBarItem {
   const BottomNavBarItem.home() : this._(BottomNavItemKind.home, null, 0);
 
   const BottomNavBarItem.tab(BottomNavTab tab, int slot)
-      : this._(BottomNavItemKind.tab, tab, slot);
+    : this._(BottomNavItemKind.tab, tab, slot);
 
   const BottomNavBarItem.you(int slot)
-      : this._(BottomNavItemKind.you, null, slot);
+    : this._(BottomNavItemKind.you, null, slot);
 
   String get id => switch (kind) {
-        BottomNavItemKind.home => 'home',
-        BottomNavItemKind.you => 'you',
-        BottomNavItemKind.tab => tab!.name,
-      };
+    BottomNavItemKind.home => 'home',
+    BottomNavItemKind.you => 'you',
+    BottomNavItemKind.tab => tab!.name,
+  };
 
   @override
   bool operator ==(Object other) =>
@@ -58,7 +59,9 @@ List<BottomNavBarItem> resolveBarItems(
       .toList();
   final items = <BottomNavBarItem>[const BottomNavBarItem.home()];
   for (var i = 0; i < pins.length; i++) {
-    if (isAvailable != null && !isAvailable(pins[i])) continue;
+    if (isAvailable != null && !isAvailable(pins[i])) {
+      continue;
+    }
     items.add(BottomNavBarItem.tab(pins[i], i + 1));
   }
   items.add(BottomNavBarItem.you(pins.length + 1));
@@ -70,12 +73,13 @@ bool bottomNavTabMatchesRoute(BottomNavTab tab, String route) {
   bool under(String prefix) => route == prefix || route.startsWith('$prefix/');
   return switch (tab) {
     BottomNavTab.search => route == Destinations.search,
-    BottomNavTab.libraries => under('/library') ||
-        under('/library-view') ||
-        under('/folder') ||
-        under('/music') ||
-        under('/books') ||
-        under('/games'),
+    BottomNavTab.libraries =>
+      under('/library') ||
+          under('/library-view') ||
+          under('/folder') ||
+          under('/music') ||
+          under('/books') ||
+          under('/games'),
     BottomNavTab.favorites => route == Destinations.allFavorites,
     BottomNavTab.genres => route == Destinations.allGenres,
     BottomNavTab.liveTv => under(Destinations.liveTv),
@@ -99,7 +103,9 @@ int? activeBarIndex(
       BottomNavItemKind.tab =>
         !hubOpen && bottomNavTabMatchesRoute(item.tab!, route),
     };
-    if (active) return i;
+    if (active) {
+      return i;
+    }
   }
   return null;
 }
@@ -154,14 +160,18 @@ List<BottomNavHubTile> resolveHubTiles({
       if (item.tab != null) item.tab!,
   };
   return [
-    if (savedAvailable) const BottomNavHubTile.action(BottomNavHubAction.saved),
+    if (savedAvailable && AppFeatures.has(AppFeature.downloads))
+      const BottomNavHubTile.action(BottomNavHubAction.saved),
     for (final tab in BottomNavTab.values)
       if (!onBar.contains(tab) && gates.offers(tab) && isAvailable(tab))
         BottomNavHubTile.tab(tab),
-    if (shuffle) const BottomNavHubTile.action(BottomNavHubAction.shuffle),
-    if (syncPlay) const BottomNavHubTile.action(BottomNavHubAction.syncPlay),
-    if (quickConnect)
+    if (shuffle && AppFeatures.has(AppFeature.surfing))
+      const BottomNavHubTile.action(BottomNavHubAction.shuffle),
+    if (syncPlay && AppFeatures.has(AppFeature.syncPlay))
+      const BottomNavHubTile.action(BottomNavHubAction.syncPlay),
+    if (quickConnect && AppFeatures.has(AppFeature.casting))
       const BottomNavHubTile.action(BottomNavHubAction.quickConnect),
-    const BottomNavHubTile.action(BottomNavHubAction.remoteControl),
+    if (AppFeatures.has(AppFeature.casting))
+      const BottomNavHubTile.action(BottomNavHubAction.remoteControl),
   ];
 }

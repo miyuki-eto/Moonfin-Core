@@ -1219,14 +1219,15 @@ class _MediaBarState extends State<MediaBar>
         final payload = <String, dynamic>{
           'url': streamUrl,
           'mediaType': localRes?.mediaType ?? 'video',
-          'preview': true,
           'preferredAudioLanguage': ?youTubeAudioLanguage,
           if (localHeaders.isNotEmpty) 'headers': localHeaders,
           if (localRes?.container != null) 'container': localRes!.container,
           if (localRes?.videoRangeType != null)
             'videoRangeType': localRes!.videoRangeType,
         };
-        await _media3TrailerBackend.play(payload).timeout(_openTimeout);
+        await _media3TrailerBackend
+            .play(payload, inlinePreview: true)
+            .timeout(_openTimeout);
         if (resolveId != _trailerResolveId || !_trailerShouldBeActive()) {
           await _media3TrailerBackend.stop();
           return;
@@ -1909,7 +1910,7 @@ class _MediaBarState extends State<MediaBar>
           SizedBox(
             height: widget.height,
             child: const Center(
-              child: CircularProgressIndicator(),
+              child: LoadingThrobber(),
             ),
           ),
         ),
@@ -3715,11 +3716,8 @@ class _TheaterLoadingOverlay extends StatelessWidget {
             SizedBox(
               width: 44,
               height: 44,
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  AppColorScheme.accent,
-                ),
+              child: LoadingThrobber(
+                color: AppColorScheme.accent,
               ),
             ),
             const SizedBox(height: 22),

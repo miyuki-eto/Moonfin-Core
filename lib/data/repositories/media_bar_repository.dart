@@ -753,6 +753,7 @@ class MediaBarRepository {
       itemId: itemId,
       serverId: serverId,
       title: data['Name'] as String? ?? '',
+      isFavorite: (data['UserData'] as Map?)?['IsFavorite'] == true,
       overview: data['Overview'] as String?,
       backdropUrl: backdropUrl,
       bannerUrl: bannerUrl,

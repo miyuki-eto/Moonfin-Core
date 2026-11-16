@@ -1,6 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart';
+
+import '../../../../widgets/media_card.dart';
+
 import 'package:go_router/go_router.dart';
 import 'package:moonfin/util/season_queue_context.dart';
 
@@ -42,8 +46,7 @@ class NouveauEpisodesSection extends StatefulWidget {
   });
 
   @override
-  State<NouveauEpisodesSection> createState() =>
-      NouveauEpisodesSectionState();
+  State<NouveauEpisodesSection> createState() => NouveauEpisodesSectionState();
 }
 
 class NouveauEpisodesSectionState extends State<NouveauEpisodesSection> {
@@ -535,6 +538,10 @@ class NouveauEpisodesSectionState extends State<NouveauEpisodesSection> {
       return true;
     }
 
+    if (PlatformDetection.isTV) {
+      return widget.onNavigateDown?.call() ?? false;
+    }
+
     final card = _episodeCardKey(episode).currentState;
 
     if (card == null) {
@@ -673,13 +680,18 @@ class NouveauEpisodesSectionState extends State<NouveauEpisodesSection> {
         ? NouveauSpacing.tvEpisodeVisibleItemCount
         : NouveauSpacing.episodeVisibleItemCount;
 
+    // The rail bleeds into the trailing gutter beyond the inset section.
+    final railWidth = PlatformDetection.isTV
+        ? availableWidth + Tv26Style.inset
+        : availableWidth;
     final cardWidth =
-        (availableWidth - visibleItemCount.floor() * itemGap) /
-        visibleItemCount;
+        (railWidth - visibleItemCount.floor() * itemGap) / visibleItemCount;
 
     final imageHeight = cardWidth * 9 / 16;
 
-    final contentHeight = textScaler.scale(82).clamp(82.0, 118.0);
+    final contentHeight = PlatformDetection.isTV
+        ? NouveauLandscapeMediaCard.tvCaptionHeight(textScaler)
+        : textScaler.scale(82).clamp(82.0, 118.0);
 
     final railHeight = imageHeight + contentHeight + 16;
 
@@ -894,6 +906,8 @@ class NouveauEpisodesSectionState extends State<NouveauEpisodesSection> {
 
         final selectorToEpisodes = compact
             ? 18.0
+            : PlatformDetection.isTV
+            ? Tv26Style.detailHeaderGap
             : NouveauSpacing.seasonSelectorToEpisodes;
 
         if (reservingInitialLoad) {
@@ -1008,6 +1022,10 @@ class NouveauEpisodesSectionState extends State<NouveauEpisodesSection> {
           width: layout.viewportWidth,
           height: layout.railHeight,
           child: LockedFocusRow<AggregatedItem>(
+            viewportInsets: PlatformDetection.isTV
+                ? Tv26Style.railPadding
+                : EdgeInsets.zero,
+            paintOutset: PlatformDetection.isTV ? MediaCard.focusRingOutset : 0,
             key: _episodeRowKey,
             items: episodes,
             itemKey: (item, _) => '${item.serverId}|${item.id}',
@@ -1017,7 +1035,11 @@ class NouveauEpisodesSectionState extends State<NouveauEpisodesSection> {
             itemExtent: layout.itemExtent,
             clipBehavior: Clip.none,
             onTap: (_, episode) {
-              _playEpisode(context, episode);
+              if (PlatformDetection.isTV) {
+                _openEpisodeDetails(context, episode);
+              } else {
+                _playEpisode(context, episode);
+              }
             },
             onLongPress: (_, episode) {
               _showEpisodeContextMenu(context, episode);

@@ -21,6 +21,8 @@ import '../../../../../util/play_method_label.dart';
 import '../../../../navigation/destinations.dart';
 import '../../../../widgets/focus/focusable_wrapper.dart';
 import '../../../../widgets/navigation_layout.dart';
+import '../../../../tv/tv26_button.dart';
+import '../../../../../util/platform_detection.dart';
 import '../../../../widgets/seerr/seerr_item_chips.dart';
 import '../../../../widgets/seerr/seerr_item_status.dart';
 import '../../../../widgets/seerr/seerr_stats_card.dart';
@@ -57,8 +59,7 @@ class NouveauDetailsSection extends StatefulWidget {
   });
 
   @override
-  State<NouveauDetailsSection> createState() =>
-      NouveauDetailsSectionState();
+  State<NouveauDetailsSection> createState() => NouveauDetailsSectionState();
 }
 
 class NouveauDetailsSectionState extends State<NouveauDetailsSection> {
@@ -1241,10 +1242,12 @@ class NouveauDetailsSectionState extends State<NouveauDetailsSection> {
 
     final baseBackground = theme.scaffoldBackgroundColor.withValues(alpha: 1.0);
 
-    final sectionBackground = Color.alphaBlend(
-      foreground.withValues(alpha: 0.055),
-      baseBackground,
-    ).withValues(alpha: 1.0);
+    final sectionBackground = PlatformDetection.isTV
+        ? Tv26Style.canvas
+        : Color.alphaBlend(
+            foreground.withValues(alpha: 0.055),
+            baseBackground,
+          ).withValues(alpha: 1.0);
 
     return ColoredBox(
       color: sectionBackground,
@@ -1534,6 +1537,22 @@ class NouveauDetailsSectionState extends State<NouveauDetailsSection> {
     );
 
     final focused = _focusedStudioKey == key;
+
+    if (PlatformDetection.isTV) {
+      return Tv26Button(
+        label: name,
+        focusNode: focusNode,
+        height: Tv26Style.compactButtonHeight,
+        horizontalPadding: Tv26Style.compactButtonPadding,
+        fontSize: 14,
+        onPressed: openStudio,
+        onKeyEvent: focusNode.onKeyEvent,
+        onFocusChange: (focused) {
+          if (focused) _lastFocusedStudioKey = key;
+          setState(() => _focusedStudioKey = focused ? key : null);
+        },
+      );
+    }
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -1889,7 +1908,7 @@ class NouveauDetailsSectionState extends State<NouveauDetailsSection> {
           const SizedBox(
             width: 10,
             height: 10,
-            child: CircularProgressIndicator(strokeWidth: 1.4),
+            child: LoadingThrobber(),
           ),
 
           const SizedBox(width: 8),
@@ -2122,10 +2141,12 @@ class NouveauDetailsSectionState extends State<NouveauDetailsSection> {
 
     return Text(
       title,
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-        color: foreground.withValues(alpha: 0.92),
-        fontWeight: FontWeight.w600,
-      ),
+      style: PlatformDetection.isTV
+          ? Tv26Style.sectionTitle
+          : Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: foreground.withValues(alpha: 0.92),
+              fontWeight: FontWeight.w600,
+            ),
     );
   }
 
@@ -2145,9 +2166,8 @@ class NouveauDetailsSectionState extends State<NouveauDetailsSection> {
   Widget _emptyValue(BuildContext context) {
     return Text(
       '—',
-      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-        color: AppColorScheme.onSurface.withValues(alpha: 0.28),
-      ),
+      style: Theme.of(context).textTheme.bodySmall
+          ?.copyWith(color: AppColorScheme.onSurface.withValues(alpha: 0.28)),
     );
   }
 
@@ -2164,5 +2184,4 @@ class NouveauDetailsSectionState extends State<NouveauDetailsSection> {
       ),
     );
   }
-
 }

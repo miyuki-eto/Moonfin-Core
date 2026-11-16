@@ -599,7 +599,7 @@ class _GameSystemScreenState extends State<GameSystemScreen>
     required bool showBackdrop,
   }) {
     if (_browse.loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: LoadingThrobber());
     }
     if (_browse.error != null) {
       final l10n = AppLocalizations.of(context);

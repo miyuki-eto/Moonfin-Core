@@ -105,6 +105,7 @@ class Destinations {
 
   // Playback
   static const videoPlayer = '/player/video';
+  static const retroTv = '$videoPlayer?retroTv=1';
   static const externalPlayer = '/player/external';
   static const audioPlayer = '/player/audio';
   static const bookReader = '/player/book/:itemId';

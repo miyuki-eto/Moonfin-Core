@@ -178,7 +178,7 @@ class _GameLibraryScreenState extends State<GameLibraryScreen>
   Widget _buildBody() {
     final l10n = AppLocalizations.of(context);
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: LoadingThrobber());
     }
     if (_hasError) {
       return Center(

@@ -9,7 +9,7 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart'
     show HttpExceptionWithStatus;
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
-import 'package:moonfin_design/moonfin_design.dart' show GlassSettings;
+import 'package:moonfin_design/moonfin_design.dart' show GlassSettings, LoadingThrobber;
 import 'package:server_core/server_core.dart';
 
 import '../../navigation/destinations.dart';
@@ -505,7 +505,7 @@ class _GameDetailScreenState extends State<GameDetailScreen> with RouteAware {
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: LoadingThrobber());
     }
     if (_error != null) {
       return Center(

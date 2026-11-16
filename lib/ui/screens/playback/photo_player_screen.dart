@@ -173,7 +173,7 @@ class _PhotoPlayerScreenState extends State<PhotoPlayerScreen>
   Widget _buildPhotoView() {
     if (_items.isEmpty) {
       return Center(
-        child: CircularProgressIndicator(color: AppColorScheme.accent),
+        child: LoadingThrobber(color: AppColorScheme.accent),
       );
     }
 
@@ -203,7 +203,7 @@ class _PhotoPlayerScreenState extends State<PhotoPlayerScreen>
             // The viewer zooms to 5x, so the photo keeps its source pixels.
             decodeBound: DecodeBound.none,
             placeholder: (_, _) => Center(
-              child: CircularProgressIndicator(color: AppColorScheme.accent),
+              child: LoadingThrobber(color: AppColorScheme.accent),
             ),
             errorWidget: (_, _, _) => AdaptiveIcon(
               Icons.broken_image,

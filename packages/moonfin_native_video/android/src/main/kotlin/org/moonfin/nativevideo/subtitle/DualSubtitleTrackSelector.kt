@@ -54,7 +54,7 @@ internal class DualSubtitleTrackSelector(context: Context) : TrackSelector() {
     fun setSecondaryTrack(selection: TrackSelectionOverride?): Boolean {
         if (secondary == selection) return false
         secondary = selection
-        invalidate()
+        invalidate(null)
         return true
     }
 
@@ -68,7 +68,7 @@ internal class DualSubtitleTrackSelector(context: Context) : TrackSelector() {
     fun suspendSecondary(value: Boolean) {
         if (suspended == value) return
         suspended = value
-        invalidate()
+        invalidate(null)
     }
 
     override fun init(listener: InvalidationListener, bandwidthMeter: BandwidthMeter) {
@@ -89,6 +89,8 @@ internal class DualSubtitleTrackSelector(context: Context) : TrackSelector() {
     override fun isSetParametersSupported() = true
     override fun setAudioAttributes(audioAttributes: AudioAttributes) = primary.setAudioAttributes(audioAttributes)
     override fun getRendererCapabilitiesListener() = primary.rendererCapabilitiesListener
+    override fun onParametersActivated(parameters: TrackSelectionParameters?) =
+        primary.onParametersActivated(parameters)
     override fun onSelectionActivated(info: Any?) {
         val selection = info as? SelectionInfo
         primaryTracks = selection?.primary?.tracks ?: Tracks.EMPTY

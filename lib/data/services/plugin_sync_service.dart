@@ -1,3 +1,5 @@
+import '../../config/app_features.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -56,7 +58,8 @@ class PluginSyncService extends ChangeNotifier {
   /// Null when the app has not registered it yet, which is the case in tests
   /// that only exercise settings sync.
   ServerMessagesService? get _messages =>
-      GetIt.instance.isRegistered<ServerMessagesService>()
+      AppFeatures.has(AppFeature.serverMessages) &&
+          GetIt.instance.isRegistered<ServerMessagesService>()
       ? GetIt.instance<ServerMessagesService>()
       : null;
 
@@ -79,7 +82,10 @@ class PluginSyncService extends ChangeNotifier {
   bool _seerrEnabled = false;
   bool get seerrEnabled => _seerrEnabled;
   bool get seerrAvailable =>
-      _pluginAvailable && _seerrEnabled && _prefs.get(UserPreferences.seerrEnabled);
+      AppFeatures.has(AppFeature.seerr) &&
+      _pluginAvailable &&
+      _seerrEnabled &&
+      _prefs.get(UserPreferences.seerrEnabled);
   bool _seerrInfoAvailable = false;
   bool get seerrInfoAvailable => _seerrInfoAvailable;
 
@@ -193,7 +199,9 @@ class PluginSyncService extends ChangeNotifier {
 
   Map<String, String>? _authHeaders(MediaServerClient client) {
     final token = client.accessToken;
-    if (token == null || token.isEmpty) return null;
+    if (token == null || token.isEmpty) {
+      return null;
+    }
 
     return {
       'Authorization': buildServerAuthorizationHeader(
@@ -254,7 +262,9 @@ class PluginSyncService extends ChangeNotifier {
     _tmdbDetailsSupported = false;
     _recommendationsSupported = false;
     _clientLogSupported = false;
-    if (!keepIncompleteRecordings) _incompleteRecordings?.setSupported(false);
+    if (!keepIncompleteRecordings) {
+      _incompleteRecordings?.setSupported(false);
+    }
     _activeThemeCacheServerId = null;
     if (notify) {
       _setLocalSeerrEnabled(false);
@@ -334,11 +344,13 @@ class PluginSyncService extends ChangeNotifier {
       _messages?.setSupported(
         _readBool(pingResult, 'messagesSupported') ?? false,
       );
-      _clientLogSupported = _readBool(pingResult, 'clientLogSupported') ?? false;
+      _clientLogSupported =
+          _readBool(pingResult, 'clientLogSupported') ?? false;
       // The Emby port and older plugins leave this out, which hides the feature.
       _incompleteRecordings?.setSupported(
         _readBool(pingResult, 'incompleteRecordingsSupported') ?? false,
-        extended: _readBool(pingResult, 'extendedCompleteShowingsSupported') ?? false,
+        extended:
+            _readBool(pingResult, 'extendedCompleteShowingsSupported') ?? false,
       );
 
       final seerrConfig = await _fetchSeerrConfig(client);
@@ -381,8 +393,12 @@ class PluginSyncService extends ChangeNotifier {
   }
 
   String get _profileName {
-    if (PlatformDetection.isTV) return 'tv';
-    if (PlatformDetection.useMobileUi) return 'mobile';
+    if (PlatformDetection.isTV) {
+      return 'tv';
+    }
+    if (PlatformDetection.useMobileUi) {
+      return 'mobile';
+    }
     return 'desktop';
   }
 
@@ -407,8 +423,12 @@ class PluginSyncService extends ChangeNotifier {
 
   /// Picking the device's own profile goes back to following it.
   Future<void> setSyncProfile(String profile) async {
-    if (!supportedProfiles.contains(profile)) return;
-    if (profile == syncProfile) return;
+    if (!supportedProfiles.contains(profile)) {
+      return;
+    }
+    if (profile == syncProfile) {
+      return;
+    }
     // Picking only changes where sync points. Without a snapshot the next
     // preference write of any kind would push this device's settings over the
     // picked profile, so only a real settings edit sends anything.
@@ -429,7 +449,9 @@ class PluginSyncService extends ChangeNotifier {
   // Retries the plugin check a few times after login so a slow cellular link has
   // time to come up.
   void _scheduleSyncRetry(MediaServerClient client, {String? serverId}) {
-    if (_syncRetryCount >= 3) return;
+    if (_syncRetryCount >= 3) {
+      return;
+    }
     _syncRetryCount++;
     _syncRetryTimer?.cancel();
     _syncRetryTimer = Timer(const Duration(seconds: 5), () {
@@ -730,8 +752,13 @@ class PluginSyncService extends ChangeNotifier {
     String? password,
   }) async {
     final token = client.accessToken;
-    if (token == null || token.isEmpty) return false;
+    if (token == null || token.isEmpty) {
+      return false;
+    }
 
+    if (!AppFeatures.has(AppFeature.seerr)) {
+      return false;
+    }
     final seerrRepo = await GetIt.instance.getAsync<SeerrRepository>();
 
     // A session the plugin kept from an earlier sign in is already live, and
@@ -756,12 +783,18 @@ class PluginSyncService extends ChangeNotifier {
       Duration(seconds: 10),
     ];
     for (final delay in attemptDelays) {
-      if (delay > Duration.zero) await Future<void>.delayed(delay);
+      if (delay > Duration.zero) {
+        await Future<void>.delayed(delay);
+      }
 
       if (!_pluginAvailable) {
         final status = await _refreshAvailabilityStatus(client);
-        if (status == _PluginAvailabilityStatus.unavailable) return false;
-        if (!_pluginAvailable) continue;
+        if (status == _PluginAvailabilityStatus.unavailable) {
+          return false;
+        }
+        if (!_pluginAvailable) {
+          continue;
+        }
       }
 
       try {
@@ -771,20 +804,26 @@ class PluginSyncService extends ChangeNotifier {
           username: username,
           password: password,
         );
-        if (seerrRepo.isAvailable) await _enableSeerrOnceSignedIn(client);
+        if (seerrRepo.isAvailable) {
+          await _enableSeerrOnceSignedIn(client);
+        }
         await _refreshAvailabilityStatus(client);
       } catch (_) {
         continue;
       }
 
-      if (seerrRepo.isAvailable) return true;
+      if (seerrRepo.isAvailable) {
+        return true;
+      }
     }
 
     return seerrRepo.isAvailable;
   }
 
   Future<void> _enableSeerrOnceSignedIn(MediaServerClient client) async {
-    if (_prefs.get(UserPreferences.seerrEnabled)) return;
+    if (_prefs.get(UserPreferences.seerrEnabled)) {
+      return;
+    }
     _setLocalSeerrEnabled(true);
     await pushSettings(client);
   }
@@ -793,11 +832,7 @@ class PluginSyncService extends ChangeNotifier {
     MediaServerClient client, {
     bool force = false,
   }) async {
-    await pushSettingsForProfile(
-      client,
-      profile: syncProfile,
-      force: force,
-    );
+    await pushSettingsForProfile(client, profile: syncProfile, force: force);
   }
 
   /// [force] skips the identity check, since an explicit push means overwrite
@@ -808,15 +843,23 @@ class PluginSyncService extends ChangeNotifier {
     required String profile,
     bool force = false,
   }) async {
-    if (!_pluginAvailable) return;
-    if (!_prefs.get(UserPreferences.pluginSyncEnabled)) return;
+    if (!_pluginAvailable) {
+      return;
+    }
+    if (!_prefs.get(UserPreferences.pluginSyncEnabled)) {
+      return;
+    }
 
-    if (!supportedProfiles.contains(profile)) return;
+    if (!supportedProfiles.contains(profile)) {
+      return;
+    }
 
     try {
       final payloadProfile = _buildProfileFromLocal();
       final headers = _authHeaders(client);
-      if (headers == null) return;
+      if (headers == null) {
+        return;
+      }
 
       // Pushing a payload the server already has makes the plugin broadcast a
       // settingsUpdated event straight back at this device, and the resulting
@@ -890,11 +933,7 @@ class PluginSyncService extends ChangeNotifier {
 
       await _dio.post(
         '${client.baseUrl}/Moonfin/Notifications/Register',
-        data: {
-          'token': token,
-          'platform': platform,
-          'deviceId': deviceId,
-        },
+        data: {'token': token, 'platform': platform, 'deviceId': deviceId},
         options: Options(
           headers: {...headers, 'Content-Type': 'application/json'},
         ),
@@ -909,11 +948,15 @@ class PluginSyncService extends ChangeNotifier {
     MediaServerClient client, {
     required String deviceId,
   }) async {
-    if (!_pluginAvailable) return;
+    if (!_pluginAvailable) {
+      return;
+    }
 
     try {
       final headers = _authHeaders(client);
-      if (headers == null) return;
+      if (headers == null) {
+        return;
+      }
 
       await _dio.delete(
         '${client.baseUrl}/Moonfin/Notifications/Register',
@@ -933,9 +976,13 @@ class PluginSyncService extends ChangeNotifier {
     String collectionId, {
     bool requireAvailable = true,
   }) async {
-    if (requireAvailable && !_pluginAvailable) return null;
+    if (requireAvailable && !_pluginAvailable) {
+      return null;
+    }
     final headers = _authHeaders(client);
-    if (headers == null) return null;
+    if (headers == null) {
+      return null;
+    }
 
     try {
       final response = await _dio.get(
@@ -954,9 +1001,13 @@ class PluginSyncService extends ChangeNotifier {
     String collectionId,
     List<String> itemIds,
   ) async {
-    if (!_pluginAvailable) return false;
+    if (!_pluginAvailable) {
+      return false;
+    }
     final headers = _authHeaders(client);
-    if (headers == null) return false;
+    if (headers == null) {
+      return false;
+    }
 
     try {
       final response = await _dio.post(
@@ -976,8 +1027,12 @@ class PluginSyncService extends ChangeNotifier {
     required String profile,
   }) async {
     try {
-      if (!supportedProfiles.contains(profile)) return false;
-      if (!_pluginAvailable) return false;
+      if (!supportedProfiles.contains(profile)) {
+        return false;
+      }
+      if (!_pluginAvailable) {
+        return false;
+      }
 
       await _refreshCustomThemes(client);
 
@@ -1002,12 +1057,20 @@ class PluginSyncService extends ChangeNotifier {
     MediaServerClient client, {
     required String profile,
   }) async {
-    if (!_pluginAvailable) return false;
-    if (!_prefs.get(UserPreferences.pluginSyncEnabled)) return false;
-    if (!supportedProfiles.contains(profile)) return false;
+    if (!_pluginAvailable) {
+      return false;
+    }
+    if (!_prefs.get(UserPreferences.pluginSyncEnabled)) {
+      return false;
+    }
+    if (!supportedProfiles.contains(profile)) {
+      return false;
+    }
 
     final headers = _authHeaders(client);
-    if (headers == null) return false;
+    if (headers == null) {
+      return false;
+    }
 
     // A push queued by an earlier edit would put the old settings back moments
     // after the delete, so drop it before anything is removed.
@@ -1064,7 +1127,9 @@ class PluginSyncService extends ChangeNotifier {
       // The API keys come from the server rather than from anything the user
       // typed here, so wiping them would stop ratings loading with nothing the
       // user could do about it.
-      if (field.receiveOnly) continue;
+      if (field.receiveOnly) {
+        continue;
+      }
       await _prefs.removePreference(field.pref);
     }
 
@@ -1094,7 +1159,9 @@ class PluginSyncService extends ChangeNotifier {
 
   Future<Map<String, dynamic>?> _ping(MediaServerClient client) async {
     final headers = _authHeaders(client);
-    if (headers == null) return null;
+    if (headers == null) {
+      return null;
+    }
 
     try {
       final response = await _dio.get(
@@ -1112,7 +1179,9 @@ class PluginSyncService extends ChangeNotifier {
     MediaServerClient client,
   ) async {
     final headers = _authHeaders(client);
-    if (headers == null) return null;
+    if (headers == null) {
+      return null;
+    }
 
     try {
       final response = await _dio.get(
@@ -1131,7 +1200,9 @@ class PluginSyncService extends ChangeNotifier {
     String profile,
   ) async {
     final headers = _authHeaders(client);
-    if (headers == null) return null;
+    if (headers == null) {
+      return null;
+    }
 
     try {
       final response = await _dio.get(
@@ -1151,7 +1222,9 @@ class PluginSyncService extends ChangeNotifier {
     int limit = 100,
   }) async {
     final headers = _authHeaders(client);
-    if (headers == null) return null;
+    if (headers == null) {
+      return null;
+    }
 
     try {
       // Moonbase needs the user to work out which libraries the caller may see, and it
@@ -1182,7 +1255,9 @@ class PluginSyncService extends ChangeNotifier {
     String? country,
   }) async {
     final headers = _authHeaders(client);
-    if (headers == null) return null;
+    if (headers == null) {
+      return null;
+    }
 
     try {
       final response = await _dio.get(
@@ -1201,7 +1276,9 @@ class PluginSyncService extends ChangeNotifier {
 
   Future<dynamic> _fetchThemesPayload(MediaServerClient client) async {
     final headers = _authHeaders(client);
-    if (headers == null) return null;
+    if (headers == null) {
+      return null;
+    }
 
     try {
       final response = await _dio.get(
@@ -1378,7 +1455,9 @@ class PluginSyncService extends ChangeNotifier {
     final specs = <ThemeSpec>[];
 
     for (final entry in objects) {
-      if (entry is! Map) continue;
+      if (entry is! Map) {
+        continue;
+      }
       try {
         specs.add(ThemeSpec.fromJson(Map<String, dynamic>.from(entry)));
       } catch (_) {}
@@ -1448,8 +1527,16 @@ class PluginSyncService extends ChangeNotifier {
       // When the server profile carries no API key, keep the locally stored
       // one. Both fallbacks must run before the field table is applied,
       // otherwise _applySyncedField has already wiped the local value.
-      _preserveLocalKeyWhenServerEmpty(resolved, 'tmdbApiKey', UserPreferences.tmdbApiKey);
-      _preserveLocalKeyWhenServerEmpty(resolved, 'mdblistApiKey', UserPreferences.mdblistApiKey);
+      _preserveLocalKeyWhenServerEmpty(
+        resolved,
+        'tmdbApiKey',
+        UserPreferences.tmdbApiKey,
+      );
+      _preserveLocalKeyWhenServerEmpty(
+        resolved,
+        'mdblistApiKey',
+        UserPreferences.mdblistApiKey,
+      );
 
       // Everything describable as a key, preference and codec comes from one table, so
       // the send and receive directions can't drift apart. The settings that need
@@ -1489,7 +1576,8 @@ class PluginSyncService extends ChangeNotifier {
     if (homeSectionsRaw is List) {
       final parsed = <HomeSectionConfig>[
         for (final e in homeSectionsRaw)
-          if (e is Map && HomeSectionConfig.isSupportedJson(Map<String, dynamic>.from(e)))
+          if (e is Map &&
+              HomeSectionConfig.isSupportedJson(Map<String, dynamic>.from(e)))
             HomeSectionConfig.fromJson(Map<String, dynamic>.from(e)),
       ];
       if (parsed.isNotEmpty) {
@@ -1511,7 +1599,11 @@ class PluginSyncService extends ChangeNotifier {
         // keep them instead of letting the incoming layout drop them. Matching is on
         // pluginSection because an edit changes stableId and would leave a stale copy.
         final incomingCustom = sections
-            .where((s) => s.isPluginDynamic && s.pluginSource == HomeSectionPluginSource.custom)
+            .where(
+              (s) =>
+                  s.isPluginDynamic &&
+                  s.pluginSource == HomeSectionPluginSource.custom,
+            )
             .map((s) => s.pluginSection)
             .toSet();
         final existingCustom = _prefs.homeSectionsConfig.where(
@@ -1531,7 +1623,8 @@ class PluginSyncService extends ChangeNotifier {
             .map((s) => s.stableId)
             .toSet();
         for (final slider in _prefs.homeSectionsConfig.where(
-          (c) => isSeerrSliderSection(c) && !incomingSliders.contains(c.stableId),
+          (c) =>
+              isSeerrSliderSection(c) && !incomingSliders.contains(c.stableId),
         )) {
           sections.add(slider.copyWith(order: order++));
         }
@@ -1557,7 +1650,9 @@ class PluginSyncService extends ChangeNotifier {
         var order = 0;
         for (final name in serverOrder) {
           final type = prefs.HomeSectionType.fromSerialized(name);
-          if (type == prefs.HomeSectionType.none) continue;
+          if (type == prefs.HomeSectionType.none) {
+            continue;
+          }
           sections.add(
             HomeSectionConfig(type: type, enabled: true, order: order++),
           );
@@ -1567,7 +1662,9 @@ class PluginSyncService extends ChangeNotifier {
         } else {
           final enabledTypes = sections.map((s) => s.type).toSet();
           for (final type in prefs.HomeSectionType.values) {
-            if (type == prefs.HomeSectionType.none) continue;
+            if (type == prefs.HomeSectionType.none) {
+              continue;
+            }
             if (_isTmdbSectionType(type)) {
               final localEnabled = _prefs.get(_tmdbPrefForType(type));
               final idx = sections.indexWhere((s) => s.type == type);
@@ -1575,31 +1672,47 @@ class PluginSyncService extends ChangeNotifier {
                 sections[idx] = sections[idx].copyWith(enabled: localEnabled);
               } else {
                 sections.add(
-                  HomeSectionConfig(type: type, enabled: localEnabled, order: order++),
+                  HomeSectionConfig(
+                    type: type,
+                    enabled: localEnabled,
+                    order: order++,
+                  ),
                 );
               }
               continue;
             }
             if (type == prefs.HomeSectionType.radarrCalendar) {
-              final localEnabled = _prefs.get(UserPreferences.enableRadarrCalendar);
+              final localEnabled = _prefs.get(
+                UserPreferences.enableRadarrCalendar,
+              );
               final idx = sections.indexWhere((s) => s.type == type);
               if (idx >= 0) {
                 sections[idx] = sections[idx].copyWith(enabled: localEnabled);
               } else {
                 sections.add(
-                  HomeSectionConfig(type: type, enabled: localEnabled, order: order++),
+                  HomeSectionConfig(
+                    type: type,
+                    enabled: localEnabled,
+                    order: order++,
+                  ),
                 );
               }
               continue;
             }
             if (type == prefs.HomeSectionType.sonarrCalendar) {
-              final localEnabled = _prefs.get(UserPreferences.enableSonarrCalendar);
+              final localEnabled = _prefs.get(
+                UserPreferences.enableSonarrCalendar,
+              );
               final idx = sections.indexWhere((s) => s.type == type);
               if (idx >= 0) {
                 sections[idx] = sections[idx].copyWith(enabled: localEnabled);
               } else {
                 sections.add(
-                  HomeSectionConfig(type: type, enabled: localEnabled, order: order++),
+                  HomeSectionConfig(
+                    type: type,
+                    enabled: localEnabled,
+                    order: order++,
+                  ),
                 );
               }
               continue;
@@ -1651,9 +1764,7 @@ class PluginSyncService extends ChangeNotifier {
     _prefs.notifyPreferenceChanged();
 
     final currentNavbarPos = _prefs.get(UserPreferences.navbarPosition);
-    final navbarPos = NavigationLayout.sanitizeNavbarPosition(
-      currentNavbarPos,
-    );
+    final navbarPos = NavigationLayout.sanitizeNavbarPosition(currentNavbarPos);
     if (currentNavbarPos != navbarPos) {
       await _prefs.set(UserPreferences.navbarPosition, navbarPos);
     }
@@ -1744,7 +1855,8 @@ class PluginSyncService extends ChangeNotifier {
       if (type == prefs.HomeSectionType.none || present.contains(type)) {
         continue;
       }
-      final enabled = type == prefs.HomeSectionType.seasonal &&
+      final enabled =
+          type == prefs.HomeSectionType.seasonal &&
           _prefs.get(UserPreferences.seasonalRowEnabled);
       sections.add(
         HomeSectionConfig(type: type, enabled: enabled, order: order++),
@@ -1781,11 +1893,19 @@ class PluginSyncService extends ChangeNotifier {
       case SyncCodec.textAsInt:
         _applyInt(data, field.serverKey, field.pref);
       case SyncCodec.text:
-        _applyString(data, field.serverKey, field.pref,
-            normalize: field.normalize);
+        _applyString(
+          data,
+          field.serverKey,
+          field.pref,
+          normalize: field.normalize,
+        );
       case SyncCodec.enumName:
-        _applyString(data, field.serverKey, field.pref,
-            enumValues: field.enumValues);
+        _applyString(
+          data,
+          field.serverKey,
+          field.pref,
+          enumValues: field.enumValues,
+        );
       case SyncCodec.intAsText:
         _applyString(data, field.serverKey, field.pref, intFromString: true);
       case SyncCodec.decimal:
@@ -1794,7 +1914,10 @@ class PluginSyncService extends ChangeNotifier {
         _applyColor(data, field.serverKey, field.pref as Preference<int>);
       case SyncCodec.csvList:
         _applyStringList(
-            data, field.serverKey, field.pref as Preference<String>);
+          data,
+          field.serverKey,
+          field.pref as Preference<String>,
+        );
     }
   }
 
@@ -1839,19 +1962,29 @@ class PluginSyncService extends ChangeNotifier {
     Preference<int> pref,
   ) {
     final value = data[serverKey];
-    if (value is! String) return;
+    if (value is! String) {
+      return;
+    }
 
     final parsed = _parseArgb(value);
-    if (parsed == null) return;
+    if (parsed == null) {
+      return;
+    }
     _store.set(_prefs.getEffectivePreference(pref), parsed);
   }
 
   /// Reads a #AARRGGBB or #RRGGBB colour, returning null for anything else.
   static int? _parseArgb(String value) {
     var hex = value.trim();
-    if (hex.startsWith('#')) hex = hex.substring(1);
-    if (hex.length == 6) hex = 'FF$hex';
-    if (hex.length != 8) return null;
+    if (hex.startsWith('#')) {
+      hex = hex.substring(1);
+    }
+    if (hex.length == 6) {
+      hex = 'FF$hex';
+    }
+    if (hex.length != 8) {
+      return null;
+    }
     return int.tryParse(hex, radix: 16);
   }
 
@@ -1865,7 +1998,9 @@ class PluginSyncService extends ChangeNotifier {
   // here as an item type and stuck, leaving the picker displaying a value it never offered.
   void _applyMediaBarContentType(Map<String, dynamic> data) {
     final value = _readString(data, 'mediaBarContentType');
-    if (value == null) return;
+    if (value == null) {
+      return;
+    }
 
     _store.set(
       _prefs.getEffectivePreference(UserPreferences.mediaBarContentType),
@@ -1877,7 +2012,9 @@ class PluginSyncService extends ChangeNotifier {
   // picked a type for.
   void _applyHomeRowImageTypes(Map<String, dynamic> data) {
     final value = _readString(data, 'homeRowImageTypes');
-    if (value == null) return;
+    if (value == null) {
+      return;
+    }
 
     decodeHomeRowImageTypes(value).forEach((type, imageType) {
       _store.set(
@@ -1929,15 +2066,21 @@ class PluginSyncService extends ChangeNotifier {
   ) async {
     var highest = 0;
     for (final section in sections) {
-      if (!section.enabled) continue;
+      if (!section.enabled) {
+        continue;
+      }
       final row = section.type.sinceYouWatchedRow;
-      if (row > highest) highest = row;
+      if (row > highest) {
+        highest = row;
+      }
     }
     if (highest <= _prefs.get(UserPreferences.sinceYouWatchedNumRows).value) {
       return;
     }
     for (final option in prefs.SinceYouWatchedNumRows.values) {
-      if (option.value != highest) continue;
+      if (option.value != highest) {
+        continue;
+      }
       await _prefs.set(UserPreferences.sinceYouWatchedNumRows, option);
       return;
     }
@@ -1946,12 +2089,16 @@ class PluginSyncService extends ChangeNotifier {
   // The server stores this as an int row count, so map it back onto the enum by value.
   void _applySinceYouWatchedNumRows(Map<String, dynamic> data) {
     final value = data['sinceYouWatchedNumRows'];
-    if (value is! int) return;
+    if (value is! int) {
+      return;
+    }
 
     final match = prefs.SinceYouWatchedNumRows.values.where(
       (e) => e.value == value,
     );
-    if (match.isEmpty) return;
+    if (match.isEmpty) {
+      return;
+    }
 
     final effective = _prefs.getEffectivePreference(
       UserPreferences.sinceYouWatchedNumRows,
@@ -1968,10 +2115,14 @@ class PluginSyncService extends ChangeNotifier {
     String? Function(String value)? normalize,
   }) {
     var value = data[serverKey];
-    if (value == null) return;
+    if (value == null) {
+      return;
+    }
     if (normalize != null && value is String) {
       value = normalize(value);
-      if (value == null) return;
+      if (value == null) {
+        return;
+      }
     }
 
     final effective = _prefs.getEffectivePreference(pref);
@@ -2077,7 +2228,9 @@ class PluginSyncService extends ChangeNotifier {
     bool emptyKeepsLocal = true,
   }) {
     final raw = resolved[serverKey];
-    if (raw is! List || (emptyKeepsLocal && raw.isEmpty)) return;
+    if (raw is! List || (emptyKeepsLocal && raw.isEmpty)) {
+      return;
+    }
     final sources = raw
         .cast<String>()
         .map((s) => _serverToClientRatingSource[s] ?? s)
@@ -2095,7 +2248,9 @@ class PluginSyncService extends ChangeNotifier {
       // settings that need real logic rather than a straight codec.
       for (final field in syncedFields)
         if (!field.receiveOnly) field.serverKey: _encodeSyncedField(field),
-      'sinceYouWatchedNumRows': _prefs.get(UserPreferences.sinceYouWatchedNumRows).value,
+      'sinceYouWatchedNumRows': _prefs
+          .get(UserPreferences.sinceYouWatchedNumRows)
+          .value,
       'mediaBarEnabled': mediaBarEnabled,
       'mediaBarMode': mediaBarMode,
       'mediaBarContentType': UserPreferences.normalizeMediaBarContentType(
@@ -2114,13 +2269,13 @@ class PluginSyncService extends ChangeNotifier {
           .where((c) => c.enabled)
           .map((c) => c.type.serializedName)
           .toList(),
-      'homeSections':
-          _prefs.homeSectionsConfig.map((c) => c.toJson()).toList(),
+      'homeSections': _prefs.homeSectionsConfig.map((c) => c.toJson()).toList(),
       'seerrRows': {
         'rowOrder': _seerrPrefs.activeRows
             .map((t) => t.serializedName)
             .toList(),
-      },};
+      },
+    };
 
     // Only include keys when set. Pushing an explicit null would clear the
     // server-side profile value that other devices rely on.
@@ -2149,7 +2304,9 @@ class PluginSyncService extends ChangeNotifier {
   }
 
   void _onPrefsChanged() {
-    if (_isSyncingFromServer) return;
+    if (_isSyncingFromServer) {
+      return;
+    }
     if (!_pluginAvailable || !_prefs.get(UserPreferences.pluginSyncEnabled)) {
       return;
     }
@@ -2177,8 +2334,6 @@ class PluginSyncService extends ChangeNotifier {
     }
   }
 
-
-
   bool _isTmdbSectionType(prefs.HomeSectionType type) =>
       UserPreferences.isTmdbSectionType(type);
 
@@ -2187,7 +2342,9 @@ class PluginSyncService extends ChangeNotifier {
       (throw ArgumentError('Not a TMDB section type: $type'));
 
   Preference<bool>? _rowEnabledPreference(prefs.HomeSectionType type) {
-    if (_isTmdbSectionType(type)) return _tmdbPrefForType(type);
+    if (_isTmdbSectionType(type)) {
+      return _tmdbPrefForType(type);
+    }
     return switch (type) {
       prefs.HomeSectionType.imdbTop250Movies =>
         UserPreferences.imdbTop250MoviesEnabled,

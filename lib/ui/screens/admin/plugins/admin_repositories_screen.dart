@@ -127,7 +127,7 @@ class _AdminRepositoriesScreenState
     final reposAsync = ref.watch(adminRepositoriesProvider);
 
     return reposAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: LoadingThrobber()),
       error:
           (error, _) => Center(
             child: Column(
@@ -215,7 +215,7 @@ class _AdminRepositoriesScreenState
               ),
             ],
           ),
-        if (_saving) const Center(child: CircularProgressIndicator()),
+        if (_saving) const Center(child: LoadingThrobber()),
         Positioned(
           right: 16,
           bottom: fabBottom,

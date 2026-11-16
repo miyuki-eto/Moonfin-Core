@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moonfin/ui/screens/detail/nouveau/shared/nouveau_segmented_selector.dart';
 import 'package:moonfin/ui/theme/app_theme.dart';
+import 'package:moonfin/ui/tv/tv26_button.dart';
+import 'package:moonfin/ui/tv/tv_segmented_surface.dart';
+import 'package:moonfin/util/platform_detection.dart';
 import 'package:moonfin_design/moonfin_design.dart';
 
 void main() {
@@ -20,6 +23,7 @@ void main() {
   Future<GlobalKey<NouveauSegmentedSelectorState<int>>> pumpSelector(
     WidgetTester tester, {
     int initial = 1,
+    bool standaloneTabs = false,
   }) async {
     final key = GlobalKey<NouveauSegmentedSelectorState<int>>();
     var selected = initial;
@@ -37,6 +41,7 @@ void main() {
                 setState(() => selected = value);
               },
               selectOnFocus: true,
+              standaloneTabs: standaloneTabs,
             );
           },
         ),
@@ -58,9 +63,7 @@ void main() {
     expect(segment.right, lessThanOrEqualTo(viewport.right));
   }
 
-  testWidgets('scrolls a segment focused off screen into view', (
-    tester,
-  ) async {
+  testWidgets('scrolls a segment focused off screen into view', (tester) async {
     final key = await pumpSelector(tester);
 
     key.currentState!.requestFocusAt(1);
@@ -88,6 +91,39 @@ void main() {
     await tester.pumpAndSettle();
 
     expectSegmentVisible(tester, 20);
+  });
+
+  testWidgets('TV standalone tabs keep one selected pill and reach both ends', (
+    tester,
+  ) async {
+    PlatformDetection.setTvMode(true);
+    addTearDown(() => PlatformDetection.setTvMode(false));
+    final key = await pumpSelector(tester, standaloneTabs: true);
+    await tester.pumpAndSettle();
+    expect(find.byType(TvSegmentedSurface), findsNothing);
+    expect(
+      tester
+          .widgetList<Tv26Button>(find.byType(Tv26Button))
+          .every((button) => button.transparent),
+      isTrue,
+    );
+    key.currentState!.requestFocusAt(1);
+    await tester.pumpAndSettle();
+    for (var i = 0; i < 19; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pumpAndSettle();
+    }
+    expectSegmentVisible(tester, 20);
+    final selected = tester
+        .widgetList<Tv26Button>(find.byType(Tv26Button))
+        .where((button) => button.selected);
+    expect(selected.single.label, 'Season 20');
+    for (var i = 0; i < 19; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pumpAndSettle();
+    }
+    expectSegmentVisible(tester, 1);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('opens on a selected segment off screen with nothing focused', (

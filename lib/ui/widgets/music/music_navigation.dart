@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:moonfin_design/moonfin_design.dart' show LoadingThrobber;
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:playback_core/playback_core.dart';
@@ -129,7 +130,7 @@ Future<void> playMusicTrack(BuildContext context, AggregatedItem item) async {
   showDialog(
     context: context,
     barrierDismissible: false,
-    builder: (_) => const Center(child: CircularProgressIndicator()),
+    builder: (_) => const Center(child: LoadingThrobber()),
   );
 
   final albumId =

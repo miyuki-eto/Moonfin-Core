@@ -8,8 +8,8 @@ const _black = Color(0xFF000000);
 /// Real registry themes rather than hand-rolled tokens, so the derivation is
 /// exercised against the palettes it will actually see in production.
 ThemeSpec _spec({bool isGlass = false}) => ThemeRegistry.resolveById(
-      isGlass ? ThemeRegistry.glassId : ThemeRegistry.moonfinId,
-    );
+  isGlass ? ThemeRegistry.glassId : ThemeRegistry.moonfinId,
+);
 
 void main() {
   group('applyOled', () {
@@ -24,9 +24,12 @@ void main() {
     });
 
     test('subtle darkens the background without fully crushing it', () {
-      final out = applyOled(_spec(), OledTuning.subtle);
+      final base = _spec().withColors(
+        _spec().colors.copyWith(background: const Color(0xFF202020)),
+      );
+      final out = applyOled(base, OledTuning.subtle);
       expect(out.colors.background, isNot(_black));
-      expect(out.colors.background.g, lessThan(_spec().colors.background.g));
+      expect(out.colors.background.g, lessThan(base.colors.background.g));
     });
 
     test('glass keeps its translucent surface so the frosting survives', () {
@@ -53,7 +56,7 @@ void main() {
     test('borders are lifted rather than crushed, to stay visible', () {
       final base = _spec();
       final out = applyOled(base, OledTuning.vivid);
-      expect(out.colors.inputBorder.r, greaterThan(base.colors.inputBorder.r));
+      expect(out.colors.inputBorder.a, greaterThan(base.colors.inputBorder.a));
     });
 
     test('everything outside the crush list is left alone', () {
@@ -96,7 +99,9 @@ void main() {
 
     test('contrast pivots around mid grey', () {
       const c = 1.08;
-      final m = Vibrance.saturationContrastMatrix(const OledTuning(1.0, 1.0, c));
+      final m = Vibrance.saturationContrastMatrix(
+        const OledTuning(1.0, 1.0, c),
+      );
       // Mid grey in must be mid grey out: 0.5 * c + offset == 0.5.
       final offset = m[4] / 255.0;
       expect(0.5 * c + offset, closeTo(0.5, 1e-9));

@@ -3,7 +3,10 @@ import 'package:go_router/go_router.dart';
 import 'package:moonfin_design/moonfin_design.dart';
 import 'package:server_core/server_core.dart';
 
+import '../../../../../util/platform_detection.dart';
 import '../../../../navigation/destinations.dart';
+import '../../../../tv/tv_card_focus_frame.dart';
+import '../../../../../util/focus/input_mode_tracker.dart';
 import '../../../../widgets/offline_aware_image.dart';
 import '../../../../widgets/seerr/seerr_image_urls.dart';
 import '../shared/nouveau_spacing.dart';
@@ -84,7 +87,10 @@ class _NouveauPeopleCardState extends State<NouveauPeopleCard> {
 
   bool _hovered = false;
 
-  bool get _active => widget.isFocused || _hovered;
+  bool get _active =>
+      widget.isFocused ||
+      (_hovered &&
+          (!PlatformDetection.isTV || InputModeTracker.pointerIsLive(context)));
 
   bool get _canOpen {
     final id = widget.person['Id']?.toString();
@@ -150,6 +156,33 @@ class _NouveauPeopleCardState extends State<NouveauPeopleCard> {
       maxHeight: (widget.avatarSize * 2).round(),
     );
 
+    final avatar = ClipOval(
+      child: ColoredBox(
+        color: foreground.withValues(alpha: 0.06),
+        child: imageUrl != null
+            ? OfflineAwareImage(
+                imageUrl: imageUrl,
+                fit: BoxFit.cover,
+                errorWidget: (_, _, _) {
+                  return Center(
+                    child: Icon(
+                      Icons.person_rounded,
+                      size: widget.avatarSize * 0.34,
+                      color: foreground.withValues(alpha: 0.38),
+                    ),
+                  );
+                },
+              )
+            : Center(
+                child: Icon(
+                  Icons.person_rounded,
+                  size: widget.avatarSize * 0.34,
+                  color: foreground.withValues(alpha: 0.38),
+                ),
+              ),
+      ),
+    );
+
     return MouseRegion(
       cursor: _canOpen ? SystemMouseCursors.click : MouseCursor.defer,
       onEnter: (_) {
@@ -166,7 +199,9 @@ class _NouveauPeopleCardState extends State<NouveauPeopleCard> {
               }
             : null,
         child: AnimatedScale(
-          scale: phonePortrait ? 1.0 : (_active ? 1.025 : 1.0),
+          scale: phonePortrait || PlatformDetection.isTV
+              ? 1.0
+              : (_active ? 1.025 : 1.0),
           duration: _motionDuration,
           curve: Curves.easeOutCubic,
           alignment: Alignment.topCenter,
@@ -176,66 +211,54 @@ class _NouveauPeopleCardState extends State<NouveauPeopleCard> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                AnimatedContainer(
-                  duration: _motionDuration,
-                  curve: Curves.easeOutCubic,
-                  width: widget.avatarSize,
-                  height: widget.avatarSize,
-                  padding: EdgeInsets.all(phonePortrait ? 2 : 3),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: widget.isFocused
-                          ? foreground.withValues(alpha: 0.96)
-                          : foreground.withValues(
-                              alpha: phonePortrait ? 0.12 : 0.08,
-                            ),
-                      width: widget.isFocused ? 2 : 1,
+                if (PlatformDetection.isTV)
+                  SizedBox(
+                    width: widget.avatarSize,
+                    height: widget.avatarSize,
+                    child: TvCardFocusFrame(
+                      focused: _active,
+                      borderRadius: BorderRadius.circular(
+                        widget.avatarSize / 2,
+                      ),
+                      child: SizedBox.expand(child: avatar),
                     ),
-                    boxShadow: !phonePortrait && _active
-                        ? [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.30),
-                              blurRadius: 22,
-                              offset: const Offset(0, 7),
-                            ),
-                            BoxShadow(
-                              color: foreground.withValues(
-                                alpha: widget.isFocused ? 0.07 : 0.035,
+                  )
+                else
+                  AnimatedContainer(
+                    duration: _motionDuration,
+                    curve: Curves.easeOutCubic,
+                    width: widget.avatarSize,
+                    height: widget.avatarSize,
+                    padding: EdgeInsets.all(phonePortrait ? 2 : 3),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: widget.isFocused
+                            ? foreground.withValues(alpha: 0.96)
+                            : foreground.withValues(
+                                alpha: phonePortrait ? 0.12 : 0.08,
                               ),
-                              blurRadius: 14,
-                              spreadRadius: 1,
-                            ),
-                          ]
-                        : null,
-                  ),
-                  child: ClipOval(
-                    child: ColoredBox(
-                      color: foreground.withValues(alpha: 0.06),
-                      child: imageUrl != null
-                          ? OfflineAwareImage(
-                              imageUrl: imageUrl,
-                              fit: BoxFit.cover,
-                              errorWidget: (_, _, _) {
-                                return Center(
-                                  child: Icon(
-                                    Icons.person_rounded,
-                                    size: widget.avatarSize * 0.34,
-                                    color: foreground.withValues(alpha: 0.38),
-                                  ),
-                                );
-                              },
-                            )
-                          : Center(
-                              child: Icon(
-                                Icons.person_rounded,
-                                size: widget.avatarSize * 0.34,
-                                color: foreground.withValues(alpha: 0.38),
+                        width: widget.isFocused ? 2 : 1,
+                      ),
+                      boxShadow: !phonePortrait && _active
+                          ? [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.30),
+                                blurRadius: 22,
+                                offset: const Offset(0, 7),
                               ),
-                            ),
+                              BoxShadow(
+                                color: foreground.withValues(
+                                  alpha: widget.isFocused ? 0.07 : 0.035,
+                                ),
+                                blurRadius: 14,
+                                spreadRadius: 1,
+                              ),
+                            ]
+                          : null,
                     ),
+                    child: avatar,
                   ),
-                ),
 
                 SizedBox(
                   height: phonePortrait
@@ -274,9 +297,7 @@ class _NouveauPeopleCardState extends State<NouveauPeopleCard> {
 
                 if (_role != null) ...[
                   SizedBox(
-                    height: phonePortrait
-                        ? 4
-                        : NouveauSpacing.peopleNameToRole,
+                    height: phonePortrait ? 4 : NouveauSpacing.peopleNameToRole,
                   ),
 
                   Text(

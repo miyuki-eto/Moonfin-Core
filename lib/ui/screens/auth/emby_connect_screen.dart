@@ -62,7 +62,14 @@ class _EmbyConnectScreenState extends State<EmbyConnectScreen> {
 
   Future<void> _signIn() async {
     final username = _usernameController.text.trim();
-    if (username.isEmpty) return;
+    if (username.isEmpty) {
+      setState(
+        () =>
+            _errorMessage = AppLocalizations.of(context).adminUsernameRequired,
+      );
+      _usernameFocus.requestFocus();
+      return;
+    }
 
     setState(() {
       _phase = _EmbyConnectPhase.authenticating;
@@ -212,10 +219,12 @@ class _EmbyConnectScreenState extends State<EmbyConnectScreen> {
     final l10n = AppLocalizations.of(context);
     return LoginScaffold(
       maxWidth: 700,
-      header: Padding(
-        padding: const EdgeInsets.only(bottom: 24),
-        child: Image.asset('assets/images/logo_and_text.png', height: 80),
-      ),
+      header: PlatformDetection.isTV
+          ? null
+          : Padding(
+              padding: const EdgeInsets.only(bottom: 24),
+              child: Image.asset('assets/images/logo_and_text.png', height: 80),
+            ),
       footer: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         height: PlatformDetection.isTV && _tvKeyboardVisible ? 280 : 0,
@@ -295,7 +304,8 @@ class _EmbyConnectScreenState extends State<EmbyConnectScreen> {
           const SizedBox(height: 12),
           Text(
             _errorMessage!,
-            style: TextStyle(color: AppColorScheme.statusRequested),
+            style: TextStyle(color: PlatformDetection.isTV
+                ? Tv26Style.secondary : AppColorScheme.statusRequested),
             textAlign: TextAlign.center,
           ),
         ],
@@ -320,7 +330,7 @@ class _EmbyConnectScreenState extends State<EmbyConnectScreen> {
                     ? const SizedBox(
                         height: 16,
                         width: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: LoadingThrobber(),
                       )
                     : const Icon(Icons.login, size: 18),
                 label: FittedBox(
@@ -343,9 +353,8 @@ class _EmbyConnectScreenState extends State<EmbyConnectScreen> {
       children: [
         Text(
           l10n.selectAServer,
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          style: Theme.of(context).textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         ..._servers.map(_buildServerTile),
@@ -353,7 +362,8 @@ class _EmbyConnectScreenState extends State<EmbyConnectScreen> {
           const SizedBox(height: 12),
           Text(
             _errorMessage!,
-            style: TextStyle(color: AppColorScheme.statusRequested),
+            style: TextStyle(color: PlatformDetection.isTV
+                ? Tv26Style.secondary : AppColorScheme.statusRequested),
           ),
         ],
         const SizedBox(height: 16),
@@ -449,7 +459,7 @@ class _EmbyConnectScreenState extends State<EmbyConnectScreen> {
         const SizedBox(
           height: 28,
           width: 28,
-          child: CircularProgressIndicator(strokeWidth: 2),
+          child: LoadingThrobber(),
         ),
         const SizedBox(height: 12),
         Text(
@@ -463,6 +473,7 @@ class _EmbyConnectScreenState extends State<EmbyConnectScreen> {
   }
 
   ButtonStyle _focusableButtonStyle() {
+    if (PlatformDetection.isTV) return const ButtonStyle();
     return ButtonStyle(
       side: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.focused) ||

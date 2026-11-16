@@ -1,7 +1,13 @@
+import '../../tv/tv_status_view.dart';
+
 import 'dart:async';
+
+import '../../tv/tv_async_content.dart';
+import '../../../config/app_features.dart';
 
 import 'package:custom_tv_text_field/custom_tv_text_field.dart';
 import 'package:flutter/material.dart';
+import '../../widgets/scroll_edge_fade.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:get_it/get_it.dart';
@@ -28,6 +34,7 @@ import '../../../util/artwork_request_size.dart';
 import '../../../util/platform_detection.dart';
 import '../../../util/game_library.dart';
 import '../../../util/focus/dpad_keys.dart';
+import '../../../util/focus/key_event_utils.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../util/error_message.dart';
 import '../../util/search_group_title_localizer.dart';
@@ -118,8 +125,11 @@ class _SearchScreenState extends State<SearchScreen>
       _searchRepository,
       getIt<MediaServerClient>(),
       scopedParentId: widget.scopedLibraryId,
-      multiServerRepository: widget.scopedLibraryId == null &&
-              _userPreferences.get(UserPreferences.enableMultiServerLibraries) &&
+      multiServerRepository:
+          widget.scopedLibraryId == null &&
+              _userPreferences.get(
+                UserPreferences.enableMultiServerLibraries,
+              ) &&
               !shouldUseOfflineCatalog()
           ? getIt<MultiServerRepository>()
           : null,
@@ -140,7 +150,9 @@ class _SearchScreenState extends State<SearchScreen>
 
     if (widget.remoteSearch != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
         widget.remoteSearch!.attach(_applyRemoteSearch);
         _fieldNode.requestFocus();
       });
@@ -166,6 +178,9 @@ class _SearchScreenState extends State<SearchScreen>
   void didPushNext() => widget.remoteSearch?.close();
 
   Future<void> _initSeerr() async {
+    if (!AppFeatures.has(AppFeature.seerr)) {
+      return;
+    }
     try {
       final repo = await GetIt.instance.getAsync<SeerrRepository>();
       await repo.ensureInitialized();
@@ -204,17 +219,23 @@ class _SearchScreenState extends State<SearchScreen>
     }
     _maybeBumpGridVersion();
     _keepFocusedAllCardInView();
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   // A row that arrives late pushes the rows below it down, which can leave the
   // focused card off screen.
   void _keepFocusedAllCardInView() {
     final focused = FocusManager.instance.primaryFocus;
-    if (focused == null || !_allRowNodes.containsValue(focused)) return;
+    if (focused == null || !_allRowNodes.containsValue(focused)) {
+      return;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final cardContext = focused.context;
-      if (!mounted || cardContext == null) return;
+      if (!mounted || cardContext == null) {
+        return;
+      }
       unawaited(
         Scrollable.ensureVisible(
           cardContext,
@@ -231,13 +252,17 @@ class _SearchScreenState extends State<SearchScreen>
   void _maybeBumpGridVersion() {
     final count = _currentTabItemCount();
     final firstId = _currentGridFirstId();
-    if (count == _lastGridCount && firstId == _lastGridFirstId) return;
+    if (count == _lastGridCount && firstId == _lastGridFirstId) {
+      return;
+    }
     _lastGridCount = count;
     _lastGridFirstId = firstId;
     gridContentVersion++;
     cleanupGridFocusNodes(count);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       final primary = FocusManager.instance.primaryFocus;
       final inGrid =
           primary != null &&
@@ -249,7 +274,9 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   Object? _currentGridFirstId() {
-    if (_tabIsAll(_selectedTab)) return null;
+    if (_tabIsAll(_selectedTab)) {
+      return null;
+    }
     if (_tabIsSeerr(_selectedTab)) {
       return _vm.seerrResults.isEmpty ? null : _vm.seerrResults.first.id;
     }
@@ -270,7 +297,9 @@ class _SearchScreenState extends State<SearchScreen>
     }
     _lastSearchText = _searchController.text;
     _vm.searchDebounced(_searchController.text);
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<List<String>> _fetchKeyboardSuggestions(String query) {
@@ -282,7 +311,9 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   void _applyRemoteSearch(String text) {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     _applyingRemoteSearch = true;
     try {
       // A native editor has its own snapshot. Dismiss it before applying phone
@@ -299,7 +330,9 @@ class _SearchScreenState extends State<SearchScreen>
 
   Future<void> _saveRecentSearch(String query) async {
     await _recentSearchesStore.add(query);
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _recentSearches = _recentSearchesStore.recent;
     });
@@ -307,7 +340,9 @@ class _SearchScreenState extends State<SearchScreen>
 
   void _onSearchSubmitted(String query) {
     final trimmed = query.trim();
-    if (trimmed.isEmpty) return;
+    if (trimmed.isEmpty) {
+      return;
+    }
 
     _searchController.text = trimmed;
     _searchController.selection = TextSelection.collapsed(
@@ -322,14 +357,18 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   void _onVoiceControllerChanged() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _onFocusChanged() {
     if (_searchFocus.hasFocus || _searchInputFocus.hasFocus) {
       _restoreNavbarToNormalPosition();
     }
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _restoreNavbarToNormalPosition() {
@@ -381,7 +420,9 @@ class _SearchScreenState extends State<SearchScreen>
   int _groupIndex(int tab) => tab - _leadingTabCount - 1;
 
   void _selectTab(int index) {
-    if (index == _selectedTab) return;
+    if (index == _selectedTab) {
+      return;
+    }
     setState(() => _selectedTab = index);
     cleanupGridFocusNodes(_currentTabItemCount());
     _lastGridCount = -1;
@@ -417,7 +458,9 @@ class _SearchScreenState extends State<SearchScreen>
 
   void _ensureVisibleNode(FocusNode node) {
     final nodeContext = node.context;
-    if (nodeContext == null) return;
+    if (nodeContext == null) {
+      return;
+    }
     unawaited(
       Scrollable.ensureVisible(
         nodeContext,
@@ -437,7 +480,9 @@ class _SearchScreenState extends State<SearchScreen>
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       final target = getGridItemFocusNode(index);
       if (target.canRequestFocus) {
         target.requestFocus();
@@ -457,7 +502,9 @@ class _SearchScreenState extends State<SearchScreen>
     required int count,
     required KeyEvent event,
   }) {
-    if (!event.isActionable) return KeyEventResult.ignored;
+    if (!event.isActionable) {
+      return KeyEventResult.ignored;
+    }
     final key = event.logicalKey;
     final column = index % columns;
 
@@ -490,7 +537,9 @@ class _SearchScreenState extends State<SearchScreen>
     }
     if (key.isDownKey) {
       final target = index + columns;
-      if (target >= count) return KeyEventResult.handled;
+      if (target >= count) {
+        return KeyEventResult.handled;
+      }
       _focusGridCell(target);
       return KeyEventResult.handled;
     }
@@ -532,7 +581,9 @@ class _SearchScreenState extends State<SearchScreen>
       _vm.searchDebounced(query);
     }
 
-    if (!isFinal) return;
+    if (!isFinal) {
+      return;
+    }
 
     if (query.isNotEmpty) {
       unawaited(_saveRecentSearch(query));
@@ -616,7 +667,9 @@ class _SearchScreenState extends State<SearchScreen>
       onError: () => _showVoiceSearchError(_voiceErrorMessage(l10n)),
     );
 
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
     switch (startResult) {
       case VoiceSearchStartResult.listeningStarted:
@@ -670,7 +723,9 @@ class _SearchScreenState extends State<SearchScreen>
     String message, {
     bool showSettingsAction = false,
   }) async {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
@@ -701,6 +756,8 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   KeyEventResult _onVoiceKey(FocusNode node, KeyEvent event) {
+    final select = handleOneShotSelect(event, _toggleVoiceSearch);
+    if (select != KeyEventResult.ignored) return select;
     if (!PlatformDetection.isTV) {
       if (isActivateKey(event)) {
         _toggleVoiceSearch();
@@ -724,16 +781,13 @@ class _SearchScreenState extends State<SearchScreen>
       _searchFocus.requestFocus();
       return KeyEventResult.handled;
     }
-    if (event.logicalKey == LogicalKeyboardKey.enter ||
-        event.logicalKey == LogicalKeyboardKey.select) {
-      _toggleVoiceSearch();
-      return KeyEventResult.handled;
-    }
     return KeyEventResult.ignored;
   }
 
   KeyEventResult _onSearchKey(FocusNode node, KeyEvent event) {
-    if (!PlatformDetection.isTV) return KeyEventResult.ignored;
+    if (!PlatformDetection.isTV) {
+      return KeyEventResult.ignored;
+    }
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
@@ -765,7 +819,9 @@ class _SearchScreenState extends State<SearchScreen>
     }
     if (event.logicalKey == LogicalKeyboardKey.enter ||
         event.logicalKey == LogicalKeyboardKey.select) {
-      if (!_searchFocus.hasFocus) _searchFocus.requestFocus();
+      if (!_searchFocus.hasFocus) {
+        _searchFocus.requestFocus();
+      }
       _searchTvFieldKey.currentState?.openKeyboard();
       return KeyEventResult.handled;
     }
@@ -780,7 +836,9 @@ class _SearchScreenState extends State<SearchScreen>
       return KeyEventResult.ignored;
     }
     if (event.logicalKey.isDownKey) {
-      if (_tabCount == 0) return KeyEventResult.ignored;
+      if (_tabCount == 0) {
+        return KeyEventResult.ignored;
+      }
       _tabsFocusNode.requestFocus();
       return KeyEventResult.handled;
     }
@@ -829,7 +887,9 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   String? _subtitle(AggregatedItem item) {
-    if (item.type == 'Audio') return item.albumArtist ?? item.album;
+    if (item.type == 'Audio') {
+      return item.albumArtist ?? item.album;
+    }
     return item.subtitle;
   }
 
@@ -860,9 +920,8 @@ class _SearchScreenState extends State<SearchScreen>
               ? SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(iconColor),
+                  child: LoadingThrobber(
+                    color: iconColor,
                   ),
                 )
               : Icon(
@@ -876,7 +935,11 @@ class _SearchScreenState extends State<SearchScreen>
 
     // TV handles directional focus itself. Other layouts use normal traversal
     // and also take activation from a connected remote.
-    return Focus(
+    return Semantics(
+      label: 'Voice Search',
+      button: true,
+      focused: hasFocus,
+      child: Focus(
       focusNode: _voiceFocus,
       onKeyEvent: _onVoiceKey,
       child: Stack(
@@ -887,6 +950,7 @@ class _SearchScreenState extends State<SearchScreen>
             _ListeningPulse(size: size),
           button,
         ],
+      ),
       ),
     );
   }
@@ -941,8 +1005,7 @@ class _SearchScreenState extends State<SearchScreen>
           child: Column(
             children: [
               const SizedBox(height: 30),
-              if (topbar || !PlatformDetection.isTV)
-                const SizedBox(height: 50),
+              if (topbar || !PlatformDetection.isTV) const SizedBox(height: 50),
               Center(
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
@@ -954,8 +1017,8 @@ class _SearchScreenState extends State<SearchScreen>
                         ? Focus(
                             focusNode: _searchFocus,
                             onKeyEvent: _onSearchKey,
-                            child: SizedBox(
-                              height: searchHeight,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(minHeight: searchHeight),
                               child: CustomTVTextField(
                                 key: _searchTvFieldKey,
                                 controller: _searchController,
@@ -1052,7 +1115,15 @@ class _SearchScreenState extends State<SearchScreen>
                   ),
                 ),
               ),
-              Expanded(child: _buildBody()),
+              Expanded(
+                child: PlatformDetection.isTV
+                    ? TvAsyncContent(
+                        ready: _vm.state != SearchState.loading,
+                        requestFocusWhenReady: false,
+                        child: _buildBody(),
+                      )
+                    : _buildBody(),
+              ),
             ],
           ),
         ),
@@ -1068,14 +1139,16 @@ class _SearchScreenState extends State<SearchScreen>
         return const SizedBox.shrink();
       case SearchState.loading:
         if (_vm.results.isEmpty) {
-          return const SkeletonLibraryGrid(
-            aspectRatio: 2 / 3,
-            itemCount: 18,
-          );
+          return const SkeletonLibraryGrid(aspectRatio: 2 / 3, itemCount: 18);
         }
         return _buildResults();
       case SearchState.ready
           when _vm.results.isEmpty && _vm.seerrResults.isEmpty:
+        if (PlatformDetection.isTV) {
+          return TvStatusView(
+            message: AppLocalizations.of(context).noResultsForQuery(_vm.query),
+          );
+        }
         return Center(
           child: Text(
             AppLocalizations.of(context).noResultsForQuery(_vm.query),
@@ -1089,6 +1162,12 @@ class _SearchScreenState extends State<SearchScreen>
         return _buildResults();
       case SearchState.error:
         final l10n = AppLocalizations.of(context);
+        if (PlatformDetection.isTV) {
+          return TvStatusView(
+            message: l10n.searchFailedError(describeError(_vm.error!, l10n)),
+            onRetry: () => _vm.searchImmediate(_vm.query),
+          );
+        }
         return Center(
           child: Text(
             l10n.searchFailedError(describeError(_vm.error!, l10n)),
@@ -1099,9 +1178,15 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   int _currentTabItemCount() {
-    if (_tabIsAll(_selectedTab)) return 0;
-    if (_tabIsSeerr(_selectedTab)) return _vm.seerrResults.length;
-    if (_tabIsGames(_selectedTab)) return _vm.gameResults.length;
+    if (_tabIsAll(_selectedTab)) {
+      return 0;
+    }
+    if (_tabIsSeerr(_selectedTab)) {
+      return _vm.seerrResults.length;
+    }
+    if (_tabIsGames(_selectedTab)) {
+      return _vm.gameResults.length;
+    }
     final gi = _groupIndex(_selectedTab);
     if (gi >= 0 && gi < _vm.results.length) {
       return _vm.results[gi].items.length;
@@ -1111,8 +1196,12 @@ class _SearchScreenState extends State<SearchScreen>
 
   Widget _buildResults() {
     final tabCount = _tabCount;
-    if (tabCount == 0) return const SizedBox.shrink();
-    if (_selectedTab >= tabCount) _selectedTab = tabCount - 1;
+    if (tabCount == 0) {
+      return const SizedBox.shrink();
+    }
+    if (_selectedTab >= tabCount) {
+      _selectedTab = tabCount - 1;
+    }
 
     final l10n = AppLocalizations.of(context);
     final seerrLabel = GetIt.instance<SeerrPreferences>().labelOrDefault(
@@ -1152,7 +1241,9 @@ class _SearchScreenState extends State<SearchScreen>
             focusNode: _tabsFocusNode,
             onExitLeft: _tryFocusSidebar,
             onVerticalNavigation: (isUp) {
-              if (_moveVertical(tabsIndex, isUp)) return true;
+              if (_moveVertical(tabsIndex, isUp)) {
+                return true;
+              }
               if (!isUp) {
                 _focusFirstResult();
                 return true;
@@ -1182,7 +1273,9 @@ class _SearchScreenState extends State<SearchScreen>
       _allRowKeys.putIfAbsent(_allRowIds[row], () => GlobalKey());
 
   void _focusAllCard(int row, int col, {bool changedRow = true}) {
-    if (row >= _allRowIds.length) return;
+    if (row >= _allRowIds.length) {
+      return;
+    }
     final node = _allCardNode(row, col);
     final rowKey = _allRowKey(row);
     if (node.context != null) {
@@ -1191,7 +1284,9 @@ class _SearchScreenState extends State<SearchScreen>
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       if (node.canRequestFocus) {
         node.requestFocus();
         _ensureAllCardVisible(rowKey, node, changedRow: changedRow);
@@ -1211,7 +1306,9 @@ class _SearchScreenState extends State<SearchScreen>
     if (cardContext != null) {
       _revealInNearestScrollable(cardContext, alignment: 0.5);
     }
-    if (!changedRow) return;
+    if (!changedRow) {
+      return;
+    }
     final rowContext = rowKey.currentContext;
     if (rowContext != null) {
       unawaited(
@@ -1235,7 +1332,9 @@ class _SearchScreenState extends State<SearchScreen>
   }) {
     final scrollable = Scrollable.maybeOf(context);
     final renderObject = context.findRenderObject();
-    if (scrollable == null || renderObject == null) return;
+    if (scrollable == null || renderObject == null) {
+      return;
+    }
     final position = scrollable.position;
     final target = RenderAbstractViewport.of(renderObject)
         .getOffsetToReveal(renderObject, alignment)
@@ -1256,7 +1355,9 @@ class _SearchScreenState extends State<SearchScreen>
     List<int> rowLens,
     KeyEvent event,
   ) {
-    if (!event.isActionable) return KeyEventResult.ignored;
+    if (!event.isActionable) {
+      return KeyEventResult.ignored;
+    }
     final key = event.logicalKey;
     if (key.isLeftKey) {
       if (col == 0) {
@@ -1319,7 +1420,7 @@ class _SearchScreenState extends State<SearchScreen>
     for (var r = 0; r < groups.length; r++) {
       final group = groups[r];
       final ar = MediaCard.aspectRatioForType(group.items.first.type);
-      final cardWidth = (ar == 2/3) ? 108.0 : 150.0;
+      final cardWidth = (ar == 2 / 3) ? 108.0 : 150.0;
       rows.add(
         LibraryRow(
           key: _allRowKey(r),
@@ -1391,11 +1492,14 @@ class _SearchScreenState extends State<SearchScreen>
 
     return BottomNavPadded(
       fallback: 32,
-      builder: (context, bottom) => ListView(
+      builder: (context, bottom) {
+        final list = ListView(
         controller: _resultsScrollController,
-        padding: EdgeInsets.fromLTRB(horizontalPadding, 8, 0, bottom),
+        padding: EdgeInsets.fromLTRB(horizontalPadding, 8, PlatformDetection.isTV ? horizontalPadding : 0, bottom),
         children: rows,
-      ),
+      );
+      return PlatformDetection.isTV ? ScrollEdgeFade(child: list) : list;
+      },
     );
   }
 
@@ -1533,7 +1637,9 @@ class _SearchScreenState extends State<SearchScreen>
         context,
         item,
         onChanged: () {
-          if (mounted) setState(() {});
+          if (mounted) {
+            setState(() {});
+          }
         },
       ),
     );
@@ -1568,8 +1674,9 @@ class _SearchScreenState extends State<SearchScreen>
       onKeyEvent: onNavKey,
       onTap: () => switch (item.mediaType) {
         'person' => context.push(Destinations.seerrPerson(item.id.toString())),
-        'collection' =>
-          context.push(Destinations.seerrCollection(item.id.toString())),
+        'collection' => context.push(
+          Destinations.seerrCollection(item.id.toString()),
+        ),
         _ => context.push(
           Destinations.seerrMedia(
             item.id.toString(),
@@ -1587,7 +1694,9 @@ class _SearchScreenState extends State<SearchScreen>
     final isSeerr = _tabIsSeerr(_selectedTab);
     final isGames = _tabIsGames(_selectedTab);
     final count = _currentTabItemCount();
-    if (count == 0) return const SizedBox.shrink();
+    if (count == 0) {
+      return const SizedBox.shrink();
+    }
 
     final imageAspect = (isSeerr || isGames)
         ? 2 / 3
@@ -1598,7 +1707,7 @@ class _SearchScreenState extends State<SearchScreen>
     return LayoutBuilder(
       builder: (context, constraints) {
         const spacing = 12.0;
-        final targetWidth = (imageAspect == 2/3) ? 108.0 : 150.0;
+        final targetWidth = (imageAspect == 2 / 3) ? 108.0 : 150.0;
         final available = constraints.maxWidth - horizontalPadding * 2;
         final columns = ((available + spacing) / (targetWidth + spacing))
             .floor()
@@ -1724,9 +1833,8 @@ class _SearchScreenState extends State<SearchScreen>
       cardFocusExpansion: cardFocusExpansion,
       focusNode: focusNode,
       onKeyEvent: onNavKey,
-      onTap: () => context.push(
-        Destinations.gameDetailOf(result.libraryId, game.id),
-      ),
+      onTap: () =>
+          context.push(Destinations.gameDetailOf(result.libraryId, game.id)),
     );
   }
 

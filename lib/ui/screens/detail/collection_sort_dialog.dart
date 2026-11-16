@@ -4,7 +4,10 @@ import 'package:moonfin_design/moonfin_design.dart';
 import '../../../data/viewmodels/item_detail_view_model.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../util/focus/dpad_keys.dart';
+import '../../../util/platform_detection.dart';
+import '../../tv/tv_modal.dart';
 import '../../widgets/overlay_sheet.dart';
+import '../../widgets/track_selector_dialog.dart';
 
 String getCollectionSortLabel(
   CollectionSortOption option,
@@ -19,12 +22,42 @@ String getCollectionSortLabel(
   };
 }
 
+Future<CollectionSortOption?> showTvCollectionSortDialog(
+  BuildContext context,
+  CollectionSortOption selected,
+) => showStyledPlayerDialog<CollectionSortOption>(
+  context,
+  title: AppLocalizations.of(context).playlistSortOptions,
+  builder: (dialogContext) => SingleChildScrollView(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final option in CollectionSortOption.values)
+          TvMenuRow(
+            label: getCollectionSortLabel(
+              option,
+              AppLocalizations.of(dialogContext),
+            ),
+            selected: option == selected,
+            autofocus: option == selected,
+            onPressed: () => Navigator.of(dialogContext).pop(option),
+          ),
+      ],
+    ),
+  ),
+);
+
 Future<void> showCollectionSortDialog(
   BuildContext context, {
   required ItemDetailViewModel vm,
-}) {
+}) async {
+  if (PlatformDetection.isTV) {
+    final option = await showTvCollectionSortDialog(context, vm.collectionSort);
+    if (option != null) vm.setCollectionSort(option);
+    return;
+  }
   final l10n = AppLocalizations.of(context);
-  return showFocusRestoringDialog<void>(
+  await showFocusRestoringDialog<void>(
     context: context,
     builder: (dialogContext) {
       return AlertDialog(

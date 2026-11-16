@@ -1,3 +1,5 @@
+import '../../config/app_features.dart';
+
 import 'dart:async';
 
 import 'package:custom_tv_text_field/custom_tv_text_field.dart';
@@ -70,7 +72,6 @@ enum SessionState { ready, restoring, switching }
 
 class SessionRepository {
   static const List<String> _baseSupportedRemoteCommands = [
-    'DisplayMessage',
     'SetVolume',
     'Mute',
     'Unmute',
@@ -180,7 +181,9 @@ class SessionRepository {
   String? autoLoginTargetDisplayName() {
     final serverId = _authPrefs.savedAutoLoginServerId;
     final userId = _authPrefs.savedAutoLoginUserId;
-    if (serverId.isEmpty || userId.isEmpty) return null;
+    if (serverId.isEmpty || userId.isEmpty) {
+      return null;
+    }
     return _authStore.getUser(serverId, userId)?.name;
   }
 
@@ -245,7 +248,8 @@ class SessionRepository {
     _remoteNavigationGeneration++;
     _remoteSearch?.close();
     _pluginSyncService.resetState();
-    if (GetIt.instance.isRegistered<AchievementsService>()) {
+    if (AppFeatures.has(AppFeature.social) &&
+        GetIt.instance.isRegistered<AchievementsService>()) {
       GetIt.instance<AchievementsService>().reset();
     }
     if (GetIt.instance.isRegistered<ServerMessagesService>()) {
@@ -290,7 +294,9 @@ class SessionRepository {
       baseUrl: address,
     );
     // A client kept from an earlier session still has the old address.
-    if (address != server.address) client.baseUrl = address;
+    if (address != server.address) {
+      client.baseUrl = address;
+    }
 
     client.accessToken = accessToken;
     client.userId = userId;
@@ -382,7 +388,9 @@ class SessionRepository {
       server.candidateAddresses,
       server.id,
     );
-    if (best == null || best == server.address) return server.address;
+    if (best == null || best == server.address) {
+      return server.address;
+    }
     await _serverRepository.saveServer(server.copyWith(address: best));
     return best;
   }
@@ -450,18 +458,23 @@ class SessionRepository {
     // The settings entry and the friends button stay hidden until this
     // answers. It doesn't wait for the settings sync, which on a first
     // connection can take long enough to leave them hidden on the home screen.
-    if (GetIt.instance.isRegistered<AchievementsService>()) {
+    if (AppFeatures.has(AppFeature.social) &&
+        GetIt.instance.isRegistered<AchievementsService>()) {
       final achievements = GetIt.instance<AchievementsService>();
       unawaited(
         achievements.refreshAvailability(client).then((available) {
-          if (available) achievements.startPolling(client);
+          if (available) {
+            achievements.startPolling(client);
+          }
         }),
       );
     }
 
     // Plugin sync, push enrollment and Seerr all need the Moonbase plugin,
     // which only runs on Jellyfin and Emby.
-    if (client.serverType == ServerType.plex) return;
+    if (client.serverType == ServerType.plex) {
+      return;
+    }
 
     await _pluginSyncService.syncOnLogin(client, serverId: serverId);
 
@@ -508,7 +521,9 @@ class SessionRepository {
     }
     _socketSuspended = false;
     final serverId = _activeServerId;
-    if (serverId == null) return;
+    if (serverId == null) {
+      return;
+    }
     final client = _clientFactory.getClientIfExists(serverId);
     if (client != null) {
       _socketHandler.connectTo(client);
@@ -518,7 +533,9 @@ class SessionRepository {
   /// Called when the device regains a network, so a socket part way through
   /// its backoff reconnects now rather than at the end of the wait.
   void onNetworkRegained() {
-    if (_socketSuspended) return;
+    if (_socketSuspended) {
+      return;
+    }
     _socketHandler.retryNow();
   }
 
@@ -545,7 +562,9 @@ class SessionRepository {
   /// stays null or detached. Treat inactive as having a UI to avoid false
   /// positives.
   bool _isHeadlessAndroidBoot() {
-    if (!PlatformDetection.isAndroid) return false;
+    if (!PlatformDetection.isAndroid) {
+      return false;
+    }
     final lifecycle = WidgetsBinding.instance.lifecycleState;
     return lifecycle == null || lifecycle == AppLifecycleState.detached;
   }
@@ -576,7 +595,9 @@ class SessionRepository {
   // the sign-in screen has no mini player to stop it. Running before the token
   // changes reports the stop for that user.
   Future<void> _stopPlaybackForSessionChange() async {
-    if (!GetIt.instance.isRegistered<PlaybackManager>()) return;
+    if (!GetIt.instance.isRegistered<PlaybackManager>()) {
+      return;
+    }
     try {
       await GetIt.instance<PlaybackManager>().stop(userInitiated: false);
     } catch (_) {}
@@ -604,7 +625,8 @@ class SessionRepository {
     }
 
     _pluginSyncService.resetState();
-    if (GetIt.instance.isRegistered<AchievementsService>()) {
+    if (AppFeatures.has(AppFeature.social) &&
+        GetIt.instance.isRegistered<AchievementsService>()) {
       GetIt.instance<AchievementsService>().reset();
     }
     if (GetIt.instance.isRegistered<ServerMessagesService>()) {
@@ -672,7 +694,9 @@ class SessionRepository {
         GetIt.instance<MoonfinAudioHandler>().notifyChildrenChanged();
       }
       if (GetIt.instance.isRegistered<CarPlayService>()) {
-        GetIt.instance<CarPlayService>().notifySignInChanged(signedIn: signedIn);
+        GetIt.instance<CarPlayService>().notifySignInChanged(
+          signedIn: signedIn,
+        );
       }
     } catch (_) {}
   }
@@ -725,7 +749,7 @@ class SessionRepository {
   Future<void> _reportRemoteCapabilities(MediaServerClient client) async {
     try {
       await client.sessionApi.reportCapabilities({
-        'PlayableMediaTypes': const ['Audio', 'Video'],
+        'PlayableMediaTypes': const ['Video'],
         'SupportsMediaControl': true,
         'SupportedCommands': _supportedRemoteCommands,
       });
@@ -781,7 +805,9 @@ class SessionRepository {
   Future<void> _setLocalVolume(PlaybackManager manager, double volume) async {
     final clamped = volume.clamp(0, 100).toDouble();
     final backend = manager.backend;
-    if (backend == null) return;
+    if (backend == null) {
+      return;
+    }
     if (PlatformDetection.isMobile) {
       // Mobile playback keeps player gain at full and adjusts system volume.
       await VolumeController.instance.setVolume(clamped / 100);
@@ -799,7 +825,9 @@ class SessionRepository {
         reportImmediately: true,
       );
     }
-    if (manager.volume > 0) _lastUnmutedVolume = manager.volume;
+    if (manager.volume > 0) {
+      _lastUnmutedVolume = manager.volume;
+    }
   }
 
   Future<void> _setRemoteMuted(PlaybackManager manager, bool muted) async {
@@ -818,7 +846,9 @@ class SessionRepository {
       : manager.volume;
 
   void _wakeRemoteScreen() {
-    if (!GetIt.instance.isRegistered<ScreensaverController>()) return;
+    if (!GetIt.instance.isRegistered<ScreensaverController>()) {
+      return;
+    }
     final screensaver = GetIt.instance<ScreensaverController>();
     screensaver.dismissIfVisible();
     screensaver.notifyInteraction();
@@ -838,7 +868,9 @@ class SessionRepository {
     if (!handled && key == GamepadNavKey.select) {
       // Cupertino's default shortcuts don't map the TV Select key.
       final context = FocusManager.instance.primaryFocus?.context;
-      if (context != null) Actions.maybeInvoke(context, const ActivateIntent());
+      if (context != null) {
+        Actions.maybeInvoke(context, const ActivateIntent());
+      }
     }
     if (!handled && key == GamepadNavKey.back) {
       await _router.routerDelegate.navigatorKey.currentState?.maybePop();
@@ -847,7 +879,9 @@ class SessionRepository {
 
   double? _normalizeVolume(String raw) {
     final parsed = double.tryParse(raw);
-    if (parsed == null || !parsed.isFinite) return null;
+    if (parsed == null || !parsed.isFinite) {
+      return null;
+    }
     // Session commands send a percentage, so 1 means 1%. Only a value between
     // 0 and 1 is read as a fraction.
     if (parsed > 0 && parsed < 1) {
@@ -910,6 +944,7 @@ class SessionRepository {
       }),
     );
     final items = loaded.whereType<AggregatedItem>().toList(growable: false);
+    if (items.any((item) => !AppFeatures.allowsItem(item.type))) return;
 
     if (items.isEmpty) {
       return;
@@ -1069,6 +1104,7 @@ class SessionRepository {
     final manager = GetIt.instance<PlaybackManager>();
     switch (message.name.toLowerCase()) {
       case 'displaymessage':
+        if (!AppFeatures.has(AppFeature.serverMessages)) return;
         final text = message.arguments['Text'];
         if (text != null && text.trim().isNotEmpty) {
           await _showRemoteMessage(text, message.arguments['Header']);
@@ -1077,7 +1113,9 @@ class SessionRepository {
         final raw = message.arguments['Volume'];
         if (raw != null) {
           final volume = _normalizeVolume(raw);
-          if (volume != null) await _setLocalVolume(manager, volume);
+          if (volume != null) {
+            await _setLocalVolume(manager, volume);
+          }
         }
       case 'mute':
         await _setRemoteMuted(manager, true);
@@ -1106,7 +1144,9 @@ class SessionRepository {
       case 'back':
         _remoteNavigationGeneration++;
         // An attached Search ends with its route. Back may only hide a keyboard.
-        if (_remoteSearch?.opening == true) _remoteSearch?.close();
+        if (_remoteSearch?.opening == true) {
+          _remoteSearch?.close();
+        }
         await _navigateRemote('back', GamepadNavKey.back);
       case 'setaudiostreamindex':
         final index = _parseIntArg(message.arguments, 'Index');
@@ -1145,11 +1185,19 @@ class SessionRepository {
         if (OverlaySheetController.hasOpenSheet) {
           await OverlaySheetController.closeAllSheets();
         }
-        if (generation != _remoteNavigationGeneration) return;
+        if (generation != _remoteNavigationGeneration) {
+          return;
+        }
         await manager.stop(userInitiated: false);
-        if (generation != _remoteNavigationGeneration) return;
-        if (backend is NativeApplePlayerBackend) await backend.dismissPlayer();
-        if (generation != _remoteNavigationGeneration) return;
+        if (generation != _remoteNavigationGeneration) {
+          return;
+        }
+        if (backend is NativeApplePlayerBackend) {
+          await backend.dismissPlayer();
+        }
+        if (generation != _remoteNavigationGeneration) {
+          return;
+        }
         _router.go(Destinations.home);
       case 'gotosearch':
         await _openRemoteSearch(
@@ -1170,8 +1218,7 @@ class SessionRepository {
           // Another controller's text has no Search to land in yet, so it
           // opens one. Edits from a phone whose input session ended stay
           // dropped.
-          final opened = RemoteSearchSession(null)
-            ..receive(message.arguments);
+          final opened = RemoteSearchSession(null)..receive(message.arguments);
           await _openRemoteSearch(manager, opened);
         }
       default:
@@ -1199,13 +1246,21 @@ class SessionRepository {
       if (OverlaySheetController.hasOpenSheet) {
         await OverlaySheetController.closeAllSheets();
       }
-      if (!search.active) return;
+      if (!search.active) {
+        return;
+      }
       await manager.stop(userInitiated: false);
-      if (!search.active) return;
+      if (!search.active) {
+        return;
+      }
       // Native tvOS playback is presented above Flutter's routes.
       final backend = manager.backend;
-      if (backend is NativeApplePlayerBackend) await backend.dismissPlayer();
-      if (!search.active) return;
+      if (backend is NativeApplePlayerBackend) {
+        await backend.dismissPlayer();
+      }
+      if (!search.active) {
+        return;
+      }
       final path = _remoteRoutePath;
       if (path == Destinations.search || Destinations.isPlayerRoute(path)) {
         unawaited(_router.pushReplacement(Destinations.search, extra: search));
@@ -1224,10 +1279,14 @@ class SessionRepository {
   Future<void> _showRemoteMessage(String text, String? header) async {
     final delivered = await GetIt.instance<DownloadNotificationService>()
         .showRemoteMessage(text: text, header: header);
-    if (delivered) return;
+    if (delivered) {
+      return;
+    }
 
     final context = appRouter.routerDelegate.navigatorKey.currentContext;
-    if (context == null || !context.mounted) return;
+    if (context == null || !context.mounted) {
+      return;
+    }
     final l10n = currentAppLocalizations();
     FloatingNotification.show(
       context,
