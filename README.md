@@ -10,7 +10,7 @@ Shared colours, spacing, radii and focus geometry live in `packages/design/lib/s
 
 Startup uses the shared animated CRT-style loading glow on black. Home reveals navigation and content together after its first rows, banner response and decoded artwork are ready; a five-second artwork timeout releases a stalled page. Refreshes preserve visible content. Scroll edges mask content to transparency. Detail pages expose Back from the action row, offer a remote-scrollable full synopsis, merge repeated cast credits and omit Chapters. Playback retains local transport, episode selection, audio/subtitle controls and quality/information menus. Feature policy lives in `lib/config/app_features.dart` and applies to navigation, catalogue queries, actions and startup services. Losing connectivity shows request recovery rather than switching to the omitted downloads catalogue. The TV screensaver uses library artwork and a clock, with shared reveal motion.
 
-The browser preview exercises the shared TV UI. Android/Google TV and native Samsung Tizen have had sampled hardware checks, not full platform certification. The current Retro controls release still needs actual remote/playback checks and the reported Chromecast subtitle desynchronization needs same-scene comparison. Native Mac and the separate native Apple player remain unverified; browser checks do not establish native playback, HDR or performance.
+The browser preview exercises the shared TV UI. Android/Google TV and native Samsung Tizen have had sampled hardware playback and Retro remote-control checks, not full platform certification. A viewer confirmed English subtitle timing in current Chromecast Retro playback and a Batman Begins preview-path seek/reopen test; the historical intermittent desynchronization was not reproduced. Native Mac and the separate native Apple player remain unverified; browser checks do not establish native playback, HDR or performance.
 
 ## Local TV preview on macOS
 
@@ -56,7 +56,10 @@ HDR, surround routing, crop/stretch and sustained surfing need device-specific
 verification; a build or Flutter capture does not prove hardware picture quality.
 
 Retro TV reuses normal audio/subtitle controls while retaining scheduled channel
-positions and preview watch-history semantics. See
+positions and preview watch-history semantics. Open Options with OK or Right to
+choose Audio or Subtitles. Subtitle timing opens above the caption region and
+offers earlier/later steps and Reset; available controls follow the active backend.
+See
 [Retro TV programming](RETRO_TV_PROGRAMMING.md).
 
 ---
