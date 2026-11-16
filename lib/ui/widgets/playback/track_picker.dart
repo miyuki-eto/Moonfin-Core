@@ -112,6 +112,7 @@ abstract final class TrackPicker {
                 streams.any((stream) {
                   final index = stream['Index'];
                   return index is int &&
+                      isAllowedSubtitleStream(stream) &&
                       index != manager.subtitleStreamIndex &&
                       manager.canUseAsSecondarySubtitle(index);
                 })));
@@ -378,7 +379,7 @@ abstract final class TrackPicker {
         onSubtitlesChanged?.call();
         return;
       }
-      if (canDownloadRemote && result - 1 == streams.length) {
+      if (canDownloadRemote && result - 1 == choices.optionStreams.length) {
         await _downloadRemoteSubtitles(
           context,
           manager: manager,
@@ -564,7 +565,7 @@ abstract final class TrackPicker {
       );
       if (!context.mounted) return;
 
-      if (newStream != null) {
+      if (newStream != null && isAllowedSubtitleStream(newStream)) {
         final streamIndex = newStream['Index'] as int?;
         if (streamIndex != null) {
           unawaited(

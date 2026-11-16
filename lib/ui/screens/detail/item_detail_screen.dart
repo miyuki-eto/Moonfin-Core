@@ -8628,12 +8628,15 @@ class DetailActionButtonsState extends State<DetailActionButtons> {
       activeAudioLanguage = activeAudioStream['Language'] as String?;
     }
 
+    subtitleStreams = subtitleStreams.where(isAllowedSubtitleStream).toList();
     // Only for the item on screen. Callers naming a different episode want it
     // resolved against that episode's own streams, where an index picked here
     // means nothing.
-    if (item == null && _selectedSubtitleIndex != null) {
-      return _selectedSubtitleIndex;
-    }
+    final selected = allowedSubtitleIndex(
+      subtitleStreams,
+      _selectedSubtitleIndex,
+    );
+    if (item == null && selected != null) return selected;
 
     final targetItem = item ?? widget.viewModel.item;
     var preferredLanguage = prefs.get(UserPreferences.defaultSubtitleLanguage);
@@ -10837,7 +10840,7 @@ class DetailActionButtonsState extends State<DetailActionButtons> {
         return;
       }
 
-      if (newStream != null) {
+      if (newStream != null && isAllowedSubtitleStream(newStream)) {
         setState(() => _selectedSubtitleIndex = newStream['Index'] as int?);
         trySnackBar(
           messenger,
@@ -10889,7 +10892,9 @@ class DetailActionButtonsState extends State<DetailActionButtons> {
     final prefs = GetIt.instance<UserPreferences>();
     _syncSubtitleSelectionFromActivePlayback();
     final canDownloadRemote = _canDownloadRemoteSubtitles(item);
-    final displayStreams = sortedSubtitleStreams(streams);
+    final displayStreams = sortedSubtitleStreams(
+      streams.where(isAllowedSubtitleStream).toList(),
+    );
     final effectiveSubtitleIndex = _effectiveSubtitleStreamIndex(
       streams,
       audioStreams,

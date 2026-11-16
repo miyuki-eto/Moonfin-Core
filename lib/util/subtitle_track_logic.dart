@@ -3,6 +3,26 @@ import '../data/models/series_track_preference.dart';
 import '../preference/preference_constants.dart';
 import 'language_matching.dart';
 
+/// Subtitle menus and automatic selection share the same supported languages.
+/// Keep the original stream maps and indices for playback and saved identities.
+bool isAllowedSubtitleLanguage(String? value) {
+  final language = toIso3Language(normalizeLanguage(value));
+  return language == 'eng' || language == 'kor';
+}
+
+bool isAllowedSubtitleStream(Map<String, dynamic> stream) =>
+    isAllowedSubtitleLanguage(stream['Language'] as String?);
+
+/// Preserve Off and a permitted stream; ignore stale or hidden selections.
+int? allowedSubtitleIndex(List<Map<String, dynamic>> streams, int? index) {
+  if (index == -1) return -1;
+  return index != null &&
+          streams.any((stream) =>
+              stream['Index'] == index && isAllowedSubtitleStream(stream))
+      ? index
+      : null;
+}
+
 bool isExternalSubtitleStream(Map<String, dynamic> stream) {
   if (stream['IsExternal'] == true) {
     return true;
@@ -131,8 +151,14 @@ int? computeEffectiveSubtitleIndex({
     return languageMatchesPreferred(streamLang, targetNormalized, targetIso3);
   }
 
-  if (selectedSubtitleIndex != null) return selectedSubtitleIndex;
-  if (activePlaybackSubtitleIndex != null) return activePlaybackSubtitleIndex;
+  subtitleStreams = subtitleStreams.where(isAllowedSubtitleStream).toList();
+  final selected = allowedSubtitleIndex(subtitleStreams, selectedSubtitleIndex);
+  if (selected != null) return selected;
+  final active = allowedSubtitleIndex(
+    subtitleStreams,
+    activePlaybackSubtitleIndex,
+  );
+  if (active != null) return active;
 
   if (subtitleMode == SubtitleMode.none) {
     return -1;

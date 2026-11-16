@@ -59,6 +59,10 @@ Retro TV reuses normal audio/subtitle controls while retaining scheduled channel
 positions and preview watch-history semantics. Open Options with OK or Right to
 choose Audio or Subtitles. Subtitle timing opens above the caption region and
 offers earlier/later steps and Reset; available controls follow the active backend.
+Subtitle menus offer Off and English/Korean tracks only, including full, SDH and
+forced variants. Other languages and unknown tags stay in the original media and
+metadata but are hidden from selectors. Saved hidden-language choices fall back
+to the current permitted preferences or Off; audio choices are unchanged.
 See
 [Retro TV programming](RETRO_TV_PROGRAMMING.md).
 

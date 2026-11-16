@@ -48,11 +48,12 @@ class TrackChoices {
         (offlineMeta?['MediaStreams'] as List?)?.cast<Map<String, dynamic>>() ??
         const <Map<String, dynamic>>[];
     final streams = allStreams.where((s) => s['Type'] == streamType).toList();
+    final subtitleOptions = streams.where(isAllowedSubtitleStream).toList();
     final optionStreams = audio
         ? streams
         : secondary
         ? rankSecondarySubtitleStreams(
-            sortedSubtitleStreams(streams).where((stream) {
+            sortedSubtitleStreams(subtitleOptions).where((stream) {
               final index = stream['Index'] as int?;
               return index != null &&
                   index != manager.subtitleStreamIndex &&
@@ -60,7 +61,7 @@ class TrackChoices {
             }).toList(),
             preferredSecondaryLanguage,
           )
-        : sortedSubtitleStreams(streams);
+        : sortedSubtitleStreams(subtitleOptions);
 
     final int? currentStreamIndex;
     if (audio) {

@@ -84,7 +84,7 @@ void main() {
       expect(
         computeEffectiveSubtitleIndex(
           subtitleStreams: streams,
-          selectedSubtitleIndex: 99,
+          selectedSubtitleIndex: 4,
           activePlaybackSubtitleIndex: null,
           subtitleMode: SubtitleMode.always,
           preferredLanguage: 'eng',
@@ -95,7 +95,7 @@ void main() {
           preferredAudioLanguage: '',
           activeAudioLanguage: null,
         ),
-        99,
+        4,
       );
     });
     test('returns activePlaybackSubtitleIndex when no selection', () {
@@ -626,7 +626,7 @@ void main() {
         2, // English track (Index 2) preferred over default Japanese track in flagged mode
       );
     });
-    test('falls back to fallbackSubtitleLanguage when preferred language is not found', () {
+    test('falls back to English when both requested languages are hidden', () {
       expect(
         computeEffectiveSubtitleIndex(
           subtitleStreams: streams,
@@ -641,7 +641,7 @@ void main() {
           preferredAudioLanguage: '',
           activeAudioLanguage: null,
         ),
-        9, // Index 9 is ces (Czech)
+        3, // Full English fallback; Czech remains in the raw catalogue.
       );
     });
     test('SubtitleMode.forced only selects forced tracks', () {
@@ -718,7 +718,7 @@ void main() {
         3, // Index 3 is preferred english track
       );
     });
-    test('cs matches ces correctly and prefers it over non-matching languages', () {
+    test('a Czech two-letter preference cannot select a hidden track', () {
       expect(
         computeEffectiveSubtitleIndex(
           subtitleStreams: streams,
@@ -733,10 +733,10 @@ void main() {
           preferredAudioLanguage: '',
           activeAudioLanguage: null,
         ),
-        9, // Index 9 is ces (Czech) which matches 'cs'
+        3, // Full English fallback; Czech remains in the raw catalogue.
       );
     });
-    test('ces matches ces directly and prefers it over non-matching languages', () {
+    test('a Czech three-letter preference cannot select a hidden track', () {
       expect(
         computeEffectiveSubtitleIndex(
           subtitleStreams: streams,
@@ -751,7 +751,7 @@ void main() {
           preferredAudioLanguage: '',
           activeAudioLanguage: null,
         ),
-        9, // Index 9 is ces (Czech)
+        3, // Full English fallback; Czech remains in the raw catalogue.
       );
     });
   });
@@ -852,32 +852,32 @@ void main() {
       expect(pick(foreignForced, SubtitleMode.flagged), -1);
     });
 
-    test('a forced track in the subtitle language is picked', () {
+    test('a foreign forced track stays hidden despite subtitle preference', () {
       final streams = [
         ...foreignForced,
         {'Index': 4, 'Language': 'deu', 'Title': 'Forced', 'IsForced': true},
       ];
-      expect(pick(streams, SubtitleMode.forced), 4);
+      expect(pick(streams, SubtitleMode.forced), -1);
     });
 
-    test('a forced track in the audio language is picked', () {
-      expect(pick(foreignForced, SubtitleMode.forced, audio: 'spa'), 2);
+    test('a foreign forced track stays hidden despite audio language', () {
+      expect(pick(foreignForced, SubtitleMode.forced, audio: 'spa'), -1);
     });
 
-    test('a track tagged with the older ger code still counts as German', () {
+    test('a bibliographic German alias is still a hidden language', () {
       final streams = [
         ...foreignForced,
         {'Index': 5, 'Language': 'ger', 'Title': 'Forced', 'IsForced': true},
       ];
-      expect(pick(streams, SubtitleMode.forced), 5);
+      expect(pick(streams, SubtitleMode.forced), -1);
     });
 
-    test('an untagged forced track is kept', () {
+    test('an untagged forced track is not selected', () {
       final streams = [
         ...foreignForced,
         {'Index': 6, 'Title': 'Forced', 'IsForced': true},
       ];
-      expect(pick(streams, SubtitleMode.forced), 6);
+      expect(pick(streams, SubtitleMode.forced), -1);
     });
   });
   group('mapSubtitleResultToStreamIndex', () {

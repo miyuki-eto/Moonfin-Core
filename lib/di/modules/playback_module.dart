@@ -460,6 +460,7 @@ void registerPlaybackModule() {
       isCompatible: (stream) {
         final index = stream['Index'];
         return index is int &&
+            isAllowedSubtitleStream(stream) &&
             index != manager.subtitleStreamIndex &&
             manager.canUseAsSecondarySubtitle(index);
       },
@@ -665,7 +666,9 @@ void registerPlaybackModule() {
 
   manager.subtitleTrackSelector =
       (currentItem, subtitleStreams, audioStreams, explicitIndex, preview) {
-        if (explicitIndex != null) return explicitIndex;
+        subtitleStreams = subtitleStreams.where(isAllowedSubtitleStream).toList();
+        final explicit = allowedSubtitleIndex(subtitleStreams, explicitIndex);
+        if (explicit != null) return explicit;
 
         String? seriesId;
         if (currentItem is AggregatedItem) {
@@ -722,13 +725,15 @@ void registerPlaybackModule() {
             ? SubtitleMode.none
             : prefs.get(UserPreferences.subtitleMode);
 
-        var preferredLanguage = preview
-            ? null
-            : manager.lastExplicitSubtitleLanguage;
+        var preferredLanguage = !preview &&
+                isAllowedSubtitleLanguage(manager.lastExplicitSubtitleLanguage)
+            ? manager.lastExplicitSubtitleLanguage
+            : null;
         // No track in this episode carries the remembered one, so fall back to its
         // language and make sure subtitles are on to show it. A remembered track
         // with no language tag has nothing to fall back to.
-        if (preferredLanguage == null && seriesSubPref.language.isNotEmpty) {
+        if (preferredLanguage == null &&
+            isAllowedSubtitleLanguage(seriesSubPref.language)) {
           preferredLanguage = seriesSubPref.language;
           if (subtitleMode == SubtitleMode.none) {
             subtitleMode = SubtitleMode.always;

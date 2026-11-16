@@ -60,8 +60,11 @@ int? highlightedSubtitleIndex({
   int? activePlaybackIndex,
   int? activeAudioIndex,
 }) {
-  if (selectedIndex != null) return selectedIndex;
-  if (activePlaybackIndex != null) return activePlaybackIndex;
+  subtitleStreams = subtitleStreams.where(isAllowedSubtitleStream).toList();
+  final selected = allowedSubtitleIndex(subtitleStreams, selectedIndex);
+  if (selected != null) return selected;
+  final active = allowedSubtitleIndex(subtitleStreams, activePlaybackIndex);
+  if (active != null) return active;
   if (subtitleStreams.isEmpty) return -1;
 
   final prefs = GetIt.instance<UserPreferences>();
@@ -90,8 +93,12 @@ int? highlightedSubtitleIndex({
 
   // No track here carries the remembered one, so fall back to its language and
   // turn subtitles on to show it.
-  var preferredLanguage = manager.lastExplicitSubtitleLanguage;
-  if (preferredLanguage == null && seriesPref.language.isNotEmpty) {
+  var preferredLanguage =
+      isAllowedSubtitleLanguage(manager.lastExplicitSubtitleLanguage)
+      ? manager.lastExplicitSubtitleLanguage
+      : null;
+  if (preferredLanguage == null &&
+      isAllowedSubtitleLanguage(seriesPref.language)) {
     preferredLanguage = seriesPref.language;
     if (subtitleMode == SubtitleMode.none) {
       subtitleMode = SubtitleMode.always;

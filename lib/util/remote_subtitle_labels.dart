@@ -4,6 +4,8 @@ import 'package:server_core/server_core.dart';
 
 import '../l10n/app_localizations.dart';
 import '../preference/user_preferences.dart';
+import 'subtitle_track_logic.dart';
+import 'language_matching.dart';
 
 /// The flags the provider sets on an upload - machine or AI translated,
 /// hearing impaired, forced, a hash match against this exact file.
@@ -142,14 +144,14 @@ String remoteSubtitleLanguage(
       .get(UserPreferences.defaultSubtitleLanguage)
       .trim()
       .toLowerCase();
-  if (preferred.isNotEmpty && preferred != 'auto' && preferred != 'none') {
-    return preferred;
+  if (isAllowedSubtitleLanguage(preferred)) {
+    return toIso3Language(normalizeLanguage(preferred));
   }
 
   for (final stream in [...subtitleStreams, ...audioStreams]) {
     final language = (stream['Language'] as String?)?.trim();
-    if (language != null && language.isNotEmpty) {
-      return language;
+    if (language != null && isAllowedSubtitleLanguage(language)) {
+      return toIso3Language(normalizeLanguage(language));
     }
   }
 
@@ -169,8 +171,8 @@ List<String> remoteSubtitleLanguages(
   final picked = GetIt.instance<UserPreferences>()
       .get(UserPreferences.subtitleDownloadLanguages)
       .split(',')
-      .map((code) => code.trim().toLowerCase())
-      .where((code) => code.isNotEmpty)
+      .map((code) => toIso3Language(normalizeLanguage(code)))
+      .where(isAllowedSubtitleLanguage)
       .toSet()
       .take(maxSubtitleDownloadLanguages)
       .toList();
@@ -198,7 +200,15 @@ Future<List<Map<String, dynamic>>> searchRemoteSubtitlesIn(
           }),
     ),
   );
-  final results = [for (final found in perLanguage) ...found];
+  final results = [
+    for (final found in perLanguage)
+      ...found.where(
+        (result) => isAllowedSubtitleLanguage(
+          result['ThreeLetterISOLanguageName'] as String? ??
+              result['Language'] as String?,
+        ),
+      ),
+  ];
   if (results.isEmpty && firstError != null) throw firstError!;
   return results;
 }

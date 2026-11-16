@@ -29,6 +29,8 @@ String normalizeLanguage(String? language) {
 }
 
 String toIso3Language(String language) {
+  if (language == 'english') return 'eng';
+  if (language == 'korean') return 'kor';
   if (language.length == 3) {
     return _bibliographicCodes[language] ?? language;
   }

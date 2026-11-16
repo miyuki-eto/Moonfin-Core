@@ -20,6 +20,13 @@ class _Items extends Fake implements ItemsApi {
   bool empty = false;
   int searches = 0;
   int downloads = 0;
+  List<Map<String, dynamic>> refreshedStreams = [];
+  @override
+  Future<Map<String, dynamic>> getItem(
+    String itemId, {
+    String? mediaSourceId,
+    String? fields,
+  }) async => {'Id': itemId, 'MediaStreams': refreshedStreams};
   @override
   Future<List<Map<String, dynamic>>> searchRemoteSubtitles(
     String itemId, {
@@ -31,7 +38,7 @@ class _Items extends Fake implements ItemsApi {
     return empty
         ? []
         : [
-            {'Id': 'sub-1', 'Name': 'English subtitles'},
+            {'Id': 'sub-1', 'Name': 'English subtitles', 'Language': 'eng'},
           ];
   }
 
@@ -47,8 +54,28 @@ class _Client extends Fake implements MediaServerClient {
   final ItemsApi itemsApi;
 }
 
+class _Manager extends PlaybackManager {
+  List<Map<String, dynamic>> streams = [];
+  final selections = <int>[];
+  @override
+  StreamResolutionResult get currentResolution => StreamResolutionResult(
+    streamUrl: 'https://example.invalid/movie',
+    mediaSourceId: 'source',
+    playMethod: StreamPlayMethod.directPlay,
+    mediaStreams: streams,
+  );
+  @override
+  Future<int?> getSubtitleStreamIndexAsync() async => -1;
+  @override
+  Future<void> changeSubtitleTrack(
+    int index, {
+    bool userInitiated = true,
+    bool refreshStreams = false,
+  }) async => selections.add(index);
+}
+
 void main() {
-  late PlaybackManager manager;
+  late _Manager manager;
   late _Items items;
   setUp(() async {
     PlatformDetection.setTvMode(true);
@@ -68,7 +95,7 @@ void main() {
       ),
     );
     GetIt.instance.registerSingleton<UserRepository>(users);
-    manager = PlaybackManager();
+    manager = _Manager();
     manager.queueService.setQueue([
       AggregatedItem(
         id: 'movie',
@@ -91,7 +118,7 @@ void main() {
     await GetIt.instance.reset();
   });
 
-  Future<void> search(WidgetTester tester) async {
+  Future<void> search(WidgetTester tester, {int rowsBeforeDownload = 1}) async {
     await tester.binding.setSurfaceSize(const Size(1145, 644));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
@@ -117,13 +144,34 @@ void main() {
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-    await tester.pumpAndSettle();
+    for (var i = 0; i < rowsBeforeDownload; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+    }
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     expect(items.searches, greaterThan(0));
     expect(tester.takeException(), isNull);
   }
+
+  testWidgets('filtered download row keeps raw existing indices', (
+    tester,
+  ) async {
+    manager.streams = [
+      {'Type': 'Subtitle', 'Index': 2, 'Language': 'est'},
+      {'Type': 'Subtitle', 'Index': 19, 'Language': 'eng'},
+      {'Type': 'Subtitle', 'Index': 70, 'Language': 'jpn'},
+    ];
+    items.refreshedStreams = [
+      ...manager.streams,
+      {'Type': 'Subtitle', 'Index': 103, 'Language': 'eng'},
+    ];
+    await search(tester, rowsBeforeDownload: 2);
+    await tester.tap(find.text('English subtitles').first);
+    await tester.pumpAndSettle();
+    expect(items.downloads, 1);
+    expect(manager.selections, [103]);
+  });
 
   testWidgets('remote subtitle results cancel without downloading', (
     tester,
