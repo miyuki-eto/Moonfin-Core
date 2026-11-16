@@ -440,6 +440,7 @@ abstract final class TrackPicker {
     context: context,
     useRootNavigator: useRootNavigator,
     barrierColor: Colors.transparent,
+    blurBackground: false,
     builder: (_) => Dialog(
       alignment: audio ? Alignment.bottomCenter : Alignment.topCenter,
       insetPadding: const EdgeInsets.all(24),

@@ -8,6 +8,7 @@ import 'package:moonfin/playback/media_kit_player_backend.dart';
 import 'package:moonfin/preference/user_preferences.dart';
 import 'package:moonfin/ui/widgets/playback/track_picker.dart';
 import 'package:moonfin/ui/widgets/playback/delay_footer.dart';
+import 'package:moonfin/util/platform_detection.dart';
 import 'package:playback_core/playback_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -193,19 +194,31 @@ void main() {
     testWidgets(
       'subtitle timing leaves lower captions visible (secondary=$secondary)',
       (tester) async {
+        PlatformDetection.setTvMode(true);
+        addTearDown(() => PlatformDetection.setTvMode(false));
         await tester.binding.setSurfaceSize(const Size(1280, 720));
         addTearDown(() => tester.binding.setSurfaceSize(null));
         final manager = _Manager(_Backend());
         addTearDown(manager.dispose);
         await openPicker(tester, manager, audio: false, secondary: secondary);
+        const lowerCaptionRegion = Rect.fromLTWH(160, 540, 960, 160);
+        expect(
+          tester.widgetList<BackdropFilter>(find.byType(BackdropFilter)).any(
+            (filter) => tester.getRect(find.byWidget(filter)).overlaps(lowerCaptionRegion),
+          ),
+          isTrue,
+        );
         await tester.tap(find.text(l10n.subtitleDelay));
         await tester.pumpAndSettle();
 
         final panel = tester.getRect(find.byType(DelayFooter));
-        const lowerCaptionRegion = Rect.fromLTWH(160, 540, 960, 160);
         expect(panel.overlaps(lowerCaptionRegion), isFalse);
         expect(panel.bottom, lessThan(360));
-        expect(find.byType(AnimatedModalBarrier), findsNothing);
+        // A transparent scrim alone still left the TV modal's full-screen
+        // backdrop blur active, making Flutter-rendered captions unreadable.
+        final backdropRects = tester.widgetList<BackdropFilter>(find.byType(BackdropFilter))
+            .map((filter) => tester.getRect(find.byWidget(filter)));
+        expect(backdropRects.where((rect) => rect.overlaps(lowerCaptionRegion)), isEmpty);
         await tester.tap(find.text('Reset'));
         await tester.pump();
         expect(find.byType(DelayFooter), findsOneWidget);

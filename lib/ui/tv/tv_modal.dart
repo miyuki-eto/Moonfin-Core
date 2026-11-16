@@ -15,8 +15,12 @@ Widget tvModalTransition(
   BuildContext context,
   Animation<double> animation,
   Animation<double> secondaryAnimation,
-  Widget child,
-) {
+  Widget child, {
+  bool blurBackground = true,
+}) {
+  if (!blurBackground) {
+    return TvRevealTransition(animation: animation, child: child);
+  }
   return AnimatedBuilder(
     animation: animation,
     child: child,

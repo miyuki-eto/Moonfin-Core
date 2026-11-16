@@ -98,6 +98,8 @@ Future<T?> showFocusRestoringDialog<T>({
   Color? barrierColor,
   bool useRootNavigator = true,
   bool useSafeArea = true,
+  // Timing controls must leave the picture and captions readable behind them.
+  bool blurBackground = true,
   RouteSettings? routeSettings,
   String? barrierLabel,
 }) {
@@ -143,7 +145,14 @@ Future<T?> showFocusRestoringDialog<T>({
       transitionDuration: MediaQuery.disableAnimationsOf(context)
           ? Duration.zero
           : TvRevealTransition.duration,
-      transitionBuilder: tvModalTransition,
+      transitionBuilder: (context, animation, secondaryAnimation, child) =>
+          tvModalTransition(
+            context,
+            animation,
+            secondaryAnimation,
+            child,
+            blurBackground: blurBackground,
+          ),
       pageBuilder: (dialogContext, _, _) {
         final child = guardedBuilder(dialogContext);
         return useSafeArea ? SafeArea(child: child) : child;
