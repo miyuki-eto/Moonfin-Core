@@ -140,15 +140,14 @@ void main() {
 
     tearDown(() => GetIt.instance.unregister<UserPreferences>());
 
-    test('the preference wins when it names a language', () async {
+    test('a hidden saved preference falls back to English', () async {
       await prefs.set(UserPreferences.defaultSubtitleLanguage, 'ger');
 
       expect(
-        remoteSubtitleLanguage(
-          [<String, dynamic>{'Language': 'fre'}],
-          const [],
-        ),
-        'ger',
+        remoteSubtitleLanguage([
+          <String, dynamic>{'Language': 'fre'},
+        ], const []),
+        'eng',
       );
     });
 
@@ -157,26 +156,28 @@ void main() {
         await prefs.set(UserPreferences.defaultSubtitleLanguage, sentinel);
 
         expect(
-          remoteSubtitleLanguage(
-            [<String, dynamic>{'Language': 'fre'}],
-            const [],
-          ),
-          'fre',
+          remoteSubtitleLanguage([
+            <String, dynamic>{'Language': 'fre'},
+          ], const []),
+          'eng',
           reason: '$sentinel names a setting, not a language to search for',
         );
       }
     });
 
-    test('falls back to what the item already carries', () async {
-      await prefs.set(UserPreferences.defaultSubtitleLanguage, '');
+    test(
+      'foreign audio does not become the subtitle download language',
+      () async {
+        await prefs.set(UserPreferences.defaultSubtitleLanguage, '');
 
-      expect(
-        remoteSubtitleLanguage(const [], [
-          <String, dynamic>{'Language': 'jpn'},
-        ]),
-        'jpn',
-      );
-    });
+        expect(
+          remoteSubtitleLanguage(const [], [
+            <String, dynamic>{'Language': 'jpn'},
+          ]),
+          'eng',
+        );
+      },
+    );
 
     test('is English when nothing else says otherwise', () async {
       await prefs.set(UserPreferences.defaultSubtitleLanguage, '');
@@ -200,27 +201,43 @@ void main() {
 
     tearDown(() => GetIt.instance.unregister<UserPreferences>());
 
-    test('the picked languages replace the single guess', () async {
-      await prefs.set(UserPreferences.subtitleDownloadLanguages, 'hrv, ger');
+    test(
+      'hidden saved download languages fall back to a permitted guess',
+      () async {
+        await prefs.set(UserPreferences.subtitleDownloadLanguages, 'hrv, ger');
 
-      expect(remoteSubtitleLanguages(const [], const []), ['hrv', 'ger']);
-    });
+        expect(remoteSubtitleLanguages(const [], const []), ['eng']);
+      },
+    );
+
+    test(
+      'regional aliases use canonical ISO3 and deduplicate in order',
+      () async {
+        await prefs.set(
+          UserPreferences.subtitleDownloadLanguages,
+          'ko_KR,Korean,eng,en-US,English,est',
+        );
+        expect(remoteSubtitleLanguages(const [], const []), ['kor', 'eng']);
+        await prefs.set(UserPreferences.defaultSubtitleLanguage, 'en-US');
+        expect(remoteSubtitleLanguage(const [], const []), 'eng');
+      },
+    );
 
     test('none picked searches the single guess', () {
       expect(remoteSubtitleLanguages(const [], const []), ['eng']);
     });
 
-    test('never searches more than the cap', () async {
-      await prefs.set(
-        UserPreferences.subtitleDownloadLanguages,
-        'eng,ger,hrv,fre,spa,ita,jpn',
-      );
+    test(
+      'mixed saved download languages retain only English and Korean',
+      () async {
+        await prefs.set(
+          UserPreferences.subtitleDownloadLanguages,
+          'eng,ger,hrv,fre,spa,ita,jpn,kor',
+        );
 
-      expect(
-        remoteSubtitleLanguages(const [], const []),
-        hasLength(maxSubtitleDownloadLanguages),
-      );
-    });
+        expect(remoteSubtitleLanguages(const [], const []), ['eng', 'kor']);
+      },
+    );
   });
 
   group('searchRemoteSubtitlesIn', () {
@@ -229,41 +246,68 @@ void main() {
     setUp(() => api = _ItemsApi());
 
     void answer(String language, Future<List<Map<String, dynamic>>> result) {
-      when(
-        () => api.searchRemoteSubtitles('item', language: language),
-      ).thenAnswer((_) => result);
+      when(() => api.searchRemoteSubtitles('item', language: language))
+          .thenAnswer((_) => result);
     }
 
     test('lists the results language by language in the order given', () async {
-      answer('hrv', Future.value([<String, dynamic>{'Id': 'h1'}]));
-      answer('ger', Future.value([<String, dynamic>{'Id': 'g1'}]));
+      answer(
+        'eng',
+        Future.value([
+          <String, dynamic>{'Id': 'h1', 'Language': 'eng'},
+        ]),
+      );
+      answer(
+        'kor',
+        Future.value([
+          <String, dynamic>{'Id': 'g1', 'Language': 'kor'},
+        ]),
+      );
 
       final results = await searchRemoteSubtitlesIn(api, 'item', [
-        'hrv',
-        'ger',
+        'eng',
+        'kor',
       ]);
 
       expect(results.map((r) => r['Id']), ['h1', 'g1']);
     });
 
+    test('foreign and unknown provider results stay hidden', () async {
+      answer(
+        'eng',
+        Future.value([
+          {'Id': 'english', 'ThreeLetterISOLanguageName': 'eng'},
+          {'Id': 'foreign', 'Language': 'est'},
+          {'Id': 'unknown'},
+        ]),
+      );
+      final results = await searchRemoteSubtitlesIn(api, 'item', ['eng']);
+      expect(results.map((r) => r['Id']), ['english']);
+    });
+
     test('a failed language still shows the others', () async {
-      answer('hrv', Future.error(Exception('rate limited')));
-      answer('ger', Future.value([<String, dynamic>{'Id': 'g1'}]));
+      answer('eng', Future.error(Exception('rate limited')));
+      answer(
+        'kor',
+        Future.value([
+          <String, dynamic>{'Id': 'g1', 'Language': 'kor'},
+        ]),
+      );
 
       final results = await searchRemoteSubtitlesIn(api, 'item', [
-        'hrv',
-        'ger',
+        'eng',
+        'kor',
       ]);
 
       expect(results.map((r) => r['Id']), ['g1']);
     });
 
     test('nothing found with a failure reports the failure', () async {
-      answer('hrv', Future.error(Exception('rate limited')));
-      answer('ger', Future.value(const []));
+      answer('eng', Future.error(Exception('rate limited')));
+      answer('kor', Future.value(const []));
 
       await expectLater(
-        searchRemoteSubtitlesIn(api, 'item', ['hrv', 'ger']),
+        searchRemoteSubtitlesIn(api, 'item', ['eng', 'kor']),
         throwsException,
       );
     });

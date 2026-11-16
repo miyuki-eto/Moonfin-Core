@@ -302,7 +302,7 @@ void main() {
     expect(backend.audioDelays, [0.1]);
   });
 
-  testWidgets('unnamed subtitle slots show labels and keep controls above the track list', (tester) async {
+  testWidgets('subtitle slots show language labels and keep controls above the track list', (tester) async {
     final manager = _Manager(
       _Backend(secondaryStyle: true)..subtitleDelaySeconds = 1.25,
       primaryIndex: 2,
@@ -312,15 +312,15 @@ void main() {
         mediaSourceId: 'source',
         playMethod: StreamPlayMethod.directPlay,
         mediaStreams: [
-          {'Type': 'Subtitle', 'Index': 2, 'Codec': 'subrip'},
-          {'Type': 'Subtitle', 'Index': 3, 'Codec': 'subrip'},
+          {'Type': 'Subtitle', 'Index': 2, 'Codec': 'subrip', 'Language': 'eng'},
+          {'Type': 'Subtitle', 'Index': 3, 'Codec': 'subrip', 'Language': 'kor'},
         ],
       ),
     );
     addTearDown(manager.dispose);
     await openPicker(tester, manager, audio: false);
-    expect(find.text(l10n.streamTypeFallback('Subtitle', 1)), findsOneWidget);
-    expect(find.text(l10n.streamTypeFallback('Subtitle', 2)), findsOneWidget);
+    expect(find.text('eng'), findsOneWidget);
+    expect(find.text('kor'), findsOneWidget);
     expect(find.text(l10n.off), findsNothing);
     expect(find.text('+1250 ms'), findsOneWidget);
     expect(find.text(l10n.subtitleSize), findsOneWidget);
@@ -330,7 +330,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text(l10n.subtitleSize), findsNothing);
     expect(find.text(l10n.subtitleDelay), findsNothing);
-    expect(find.textContaining(l10n.streamTypeFallback('Subtitle', 1)), findsOneWidget);
+    expect(find.textContaining('eng'), findsOneWidget);
   });
 
   testWidgets('the primary and secondary step waits for the setting', (tester) async {
@@ -342,15 +342,15 @@ void main() {
         mediaSourceId: 'source',
         playMethod: StreamPlayMethod.directPlay,
         mediaStreams: [
-          {'Type': 'Subtitle', 'Index': 2, 'Codec': 'subrip'},
-          {'Type': 'Subtitle', 'Index': 3, 'Codec': 'subrip'},
+          {'Type': 'Subtitle', 'Index': 2, 'Codec': 'subrip', 'Language': 'eng'},
+          {'Type': 'Subtitle', 'Index': 3, 'Codec': 'subrip', 'Language': 'kor'},
         ],
       ),
     );
     addTearDown(manager.dispose);
     await openPicker(tester, manager, audio: false);
     expect(find.text(l10n.secondarySubtitleSlot), findsNothing);
-    expect(find.textContaining(l10n.streamTypeFallback('Subtitle', 2)), findsOneWidget);
+    expect(find.textContaining('kor'), findsOneWidget);
     Navigator.of(tester.element(find.byType(Dialog))).pop();
     await tester.pumpAndSettle();
 
@@ -404,8 +404,8 @@ void main() {
           mediaSourceId: 'source',
           playMethod: StreamPlayMethod.directPlay,
           mediaStreams: [
-            {'Type': 'Subtitle', 'Index': 2, 'Codec': 'PGSSUB'},
-            {'Type': 'Subtitle', 'Index': 3, 'Codec': 'subrip'},
+            {'Type': 'Subtitle', 'Index': 2, 'Codec': 'PGSSUB', 'Language': 'eng'},
+            {'Type': 'Subtitle', 'Index': 3, 'Codec': 'subrip', 'Language': 'kor'},
           ],
         ),
       );
@@ -430,7 +430,7 @@ void main() {
         mediaSourceId: 'source',
         playMethod: StreamPlayMethod.directPlay,
         mediaStreams: [
-          {'Type': 'Subtitle', 'Index': 2, 'Codec': 'subrip'},
+          {'Type': 'Subtitle', 'Index': 2, 'Codec': 'subrip', 'Language': 'eng'},
         ],
       ),
     );
@@ -459,7 +459,7 @@ void main() {
         mediaSourceId: 'source',
         playMethod: StreamPlayMethod.directPlay,
         mediaStreams: [
-          {'Type': 'Subtitle', 'Index': 2, 'Codec': 'subrip'},
+          {'Type': 'Subtitle', 'Index': 2, 'Codec': 'subrip', 'Language': 'eng'},
         ],
       ),
     );
